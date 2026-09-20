@@ -27,25 +27,33 @@ Cindara.sln
 - **Cindara.Desktop** is the Avalonia composition root. A platform playback
   implementation will eventually use LibVLCSharp or libmpv behind
   `IPlaybackNegotiator`.
-- **Cindara.Xbox** will be a native UWP/XAML shell using `MediaPlayerElement`.
-  It will consume the same core contracts and prefer direct play, falling back
-  to Jellyfin HLS transcoding when Xbox codecs require it.
+- **Cindara.Xbox** will use Microsoft's supported Xbox development and
+  publishing path. The primary direction is a GDK/Win32 shell or an applicable
+  Xbox Managed Program, with the final platform boundary selected after
+  onboarding with Microsoft. It will preserve the same server, session, and
+  playback semantics as the shared core, prefer direct play, and fall back to
+  Jellyfin HLS transcoding when Xbox codecs require it.
 
 The Xbox project is intentionally not scaffolded yet: the current environment
-did not have Visual Studio or UWP build tools installed, so a generated project
-could not be validated. To add it correctly, install **Visual Studio 2022** with
-the **Universal Windows Platform development** workload
-(`Microsoft.VisualStudio.Workload.Universal`), a Windows 10 SDK, and the C# UWP
-tools. Deploying to a retail Xbox additionally requires activating Developer
-Mode and pairing through Xbox Device Portal.
+does not have an approved Xbox toolchain that could produce and validate a
+submission-ready project. New Xbox products should pursue the **Microsoft Game
+Development Kit (GDK)** with Win32 or the appropriate **Xbox Managed Program**.
+Console GDK access and publishing require enrollment and approval through
+Microsoft's Xbox developer programs; install the GDK and its documented Visual
+Studio components after access is granted.
+
+UWP remains technically compatible with Xbox Series X|S for existing and
+backward-compatible apps, but Microsoft has deprecated UWP as a target for new
+Xbox Creators Program submissions. It is therefore not Cindara's default Xbox
+architecture.
 
 ## Prerequisites
 
 - [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0), as pinned
   by `global.json`
 - Windows, Linux, or macOS supported by Avalonia
-- Visual Studio 2022 with the UWP workload only when developing the future Xbox
-  shell
+- For Xbox development, approved access to the GDK or applicable Xbox Managed
+  Program and the Visual Studio components specified by that program
 
 ## Build
 
@@ -67,6 +75,6 @@ dotnet format --verify-no-changes
 1. Authenticate users and persist encrypted sessions for multiple servers.
 2. Browse Jellyfin libraries with responsive, controller-friendly navigation.
 3. Negotiate desktop playback through LibVLCSharp or libmpv.
-4. Add the validated UWP/XAML Xbox shell and `MediaPlayerElement` playback with
-   HLS transcoding fallback.
+4. Complete Xbox program onboarding, validate the GDK/Win32 or managed
+   architecture, and add native playback with HLS transcoding fallback.
 5. Add packaging, accessibility, localization, and release automation.
