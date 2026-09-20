@@ -36,6 +36,10 @@ Cindara.sln
 Xbox-native support is out of scope. A compact Bazzite or SteamOS device
 connected to a TV is the reference ten-foot experience.
 
+The shared ten-foot visual tokens, reusable Avalonia component styles, viewport
+scaling rules, screen wireframes, and controller focus graphs are documented in
+[the Cindara design system](docs/design-system.md).
+
 ## Prerequisites
 
 - [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0), as pinned

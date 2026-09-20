@@ -1,0 +1,118 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Cindara.Desktop.Views.DesignGalleryView"
+             d:DesignWidth="1280"
+             d:DesignHeight="720"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <ScrollViewer Background="{DynamicResource Cindara.Brush.Background}">
+        <Grid Margin="{DynamicResource Cindara.Space.Safe1080}"
+              ColumnDefinitions="220,*"
+              ColumnSpacing="32">
+            <Border Grid.Column="0"
+                    Padding="12"
+                    Background="{DynamicResource Cindara.Brush.Surface}"
+                    CornerRadius="{DynamicResource Cindara.Radius.Medium}">
+                <StackPanel Spacing="8">
+                    <TextBlock Margin="12,8,12,20"
+                               Classes="title"
+                               Text="Cindara" />
+                    <Button Classes="nav selected" Content="Home" />
+                    <Button Classes="nav" Content="Libraries" />
+                    <Button Classes="nav" Content="Search" />
+                    <Button Classes="nav" Content="Downloads" />
+                    <Button Classes="nav" Content="Settings" />
+                </StackPanel>
+            </Border>
+
+            <StackPanel Grid.Column="1" Spacing="32">
+                <Border Classes="hero">
+                    <StackPanel Width="560"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Bottom"
+                                Spacing="12">
+                        <TextBlock Classes="caption" Text="FEATURED COLLECTION" />
+                        <TextBlock Classes="display" Text="Stories after dark" />
+                        <TextBlock Classes="secondary"
+                                   Text="A cinematic hero keeps context and the primary action within one controller move."
+                                   TextWrapping="Wrap" />
+                        <Button Width="180"
+                                Classes="primary"
+                                HorizontalAlignment="Left"
+                                Content="Explore" />
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="heading" Text="Landscape rail" />
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <Button Width="260" Height="146" Classes="card">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Text="Landscape" />
+                        </Button>
+                        <Button Width="260" Height="146" Classes="card selected">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Text="Selected" />
+                        </Button>
+                        <Button Width="260" Height="146" Classes="card error">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Text="Error" />
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Spacing="14">
+                    <TextBlock Classes="heading" Text="Poster grid and states" />
+                    <WrapPanel Orientation="Horizontal">
+                        <Button Width="160" Height="240" Margin="0,0,16,16" Classes="card">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Text="Poster" />
+                        </Button>
+                        <Button Width="160" Height="240" Margin="0,0,16,16" Classes="card loading">
+                            <StackPanel VerticalAlignment="Center" Spacing="12">
+                                <Border Width="96" Height="12" Classes="skeleton" />
+                                <Border Width="120" Height="12" Classes="skeleton" />
+                                <TextBlock Classes="caption" Text="Loading" />
+                            </StackPanel>
+                        </Button>
+                        <Button Width="160" Height="240" Margin="0,0,16,16" Classes="card" IsEnabled="False">
+                            <TextBlock Text="Disabled" />
+                        </Button>
+                    </WrapPanel>
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="24">
+                    <Border Grid.Column="0" Classes="dialog">
+                        <StackPanel Spacing="16">
+                            <TextBlock Classes="heading" Text="Dialog" />
+                            <TextBlock Classes="secondary"
+                                       Text="Focus is trapped until Save or Back."
+                                       TextWrapping="Wrap" />
+                            <Button Classes="primary" Content="Save" />
+                        </StackPanel>
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="16">
+                        <Border Classes="toast">
+                            <TextBlock Text="Added to your library" />
+                        </Border>
+                        <Border Padding="32"
+                                BorderBrush="{DynamicResource Cindara.Brush.Border}"
+                                BorderThickness="1"
+                                CornerRadius="{DynamicResource Cindara.Radius.Medium}">
+                            <StackPanel Spacing="12">
+                                <TextBlock Classes="heading" Text="Nothing here yet" />
+                                <TextBlock Classes="secondary"
+                                           Text="Empty states explain the next available action." />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>
