@@ -40,6 +40,7 @@ public partial class MainWindow : Window
 
         if (DataContext is MainViewModel viewModel)
         {
+            viewModel.InitializeCommand.Execute(null);
             viewModel.SetControllerStatus(
                 _controllerInput.IsAvailable
                     ? "Controller ready: D-pad or left stick navigates, A selects, and Start toggles fullscreen."

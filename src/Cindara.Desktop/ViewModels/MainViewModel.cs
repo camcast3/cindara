@@ -1,4 +1,7 @@
+using System.Collections.ObjectModel;
+using Cindara.Core.Authentication;
 using Cindara.Core.Jellyfin;
+using Cindara.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -7,11 +10,18 @@ namespace Cindara.Desktop.ViewModels;
 public partial class MainViewModel : ViewModelBase
 {
     private readonly IJellyfinServerClient _serverClient;
+    private readonly IAuthenticationService _authenticationService;
+    private AuthenticatedSession? _currentSession;
 
-    public MainViewModel(IJellyfinServerClient serverClient)
+    public MainViewModel(
+        IJellyfinServerClient serverClient,
+        IAuthenticationService authenticationService)
     {
         _serverClient = serverClient;
+        _authenticationService = authenticationService;
     }
+
+    public ObservableCollection<SessionProfile> SavedSessions { get; } = [];
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
@@ -19,13 +29,44 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
-    private bool _isConnecting;
+    [NotifyCanExecuteChangedFor(nameof(SignInCommand))]
+    [NotifyCanExecuteChangedFor(nameof(UseSavedSessionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSavedSessionCommand))]
+    private bool _isBusy;
 
     [ObservableProperty]
-    private string _statusMessage = "Connect to your Jellyfin server to get started.";
+    [NotifyCanExecuteChangedFor(nameof(SignInCommand))]
+    private string _username = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SignInCommand))]
+    private string _password = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UseSavedSessionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSavedSessionCommand))]
+    private SessionProfile? _selectedSavedSession;
+
+    [ObservableProperty]
+    private string _statusMessage = "Loading saved Jellyfin sessions...";
 
     [ObservableProperty]
     private string _controllerStatus = "Initializing controller input...";
+
+    [ObservableProperty]
+    private bool _isServerEntryVisible;
+
+    [ObservableProperty]
+    private bool _isSignInVisible;
+
+    [ObservableProperty]
+    private bool _areSavedSessionsVisible;
+
+    [ObservableProperty]
+    private bool _isAuthenticatedVisible;
+
+    [ObservableProperty]
+    private string _authenticatedAccount = string.Empty;
 
     public void SetControllerStatus(string status)
     {
@@ -33,18 +74,37 @@ public partial class MainViewModel : ViewModelBase
         ControllerStatus = status;
     }
 
-    private bool CanConnect() => !IsConnecting && !string.IsNullOrWhiteSpace(ServerAddress);
+    [RelayCommand]
+    private async Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RefreshSavedSessionsAsync(cancellationToken);
+            ShowSavedSessionsOrServerEntry();
+        }
+        catch (AuthenticationException exception)
+        {
+            ShowServerEntry();
+            StatusMessage = exception.Message;
+        }
+    }
+
+    private bool CanConnect() => !IsBusy && !string.IsNullOrWhiteSpace(ServerAddress);
 
     [RelayCommand(CanExecute = nameof(CanConnect))]
     private async Task ConnectAsync(CancellationToken cancellationToken)
     {
-        IsConnecting = true;
+        IsBusy = true;
         StatusMessage = "Checking server...";
 
         try
         {
             var server = await _serverClient.ConnectAsync(ServerAddress, cancellationToken);
-            StatusMessage = $"Connected to {server.DisplayName} (Jellyfin {server.Version}).";
+            CurrentServer = server;
+            Username = string.Empty;
+            Password = string.Empty;
+            ShowSignIn();
+            StatusMessage = $"Connected to {server.DisplayName}. Sign in with your Jellyfin account.";
         }
         catch (ServerConnectionException exception)
         {
@@ -52,7 +112,207 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
-            IsConnecting = false;
+            IsBusy = false;
         }
+    }
+
+    private ServerIdentity? CurrentServer { get; set; }
+
+    private bool CanSignIn() =>
+        !IsBusy
+        && CurrentServer is not null
+        && !string.IsNullOrWhiteSpace(Username)
+        && !string.IsNullOrWhiteSpace(Password);
+
+    [RelayCommand(CanExecute = nameof(CanSignIn))]
+    private async Task SignInAsync(CancellationToken cancellationToken)
+    {
+        if (CurrentServer is null)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = "Signing in...";
+        try
+        {
+            _currentSession = await _authenticationService.AuthenticateAsync(
+                new AuthenticationRequest(CurrentServer, Username, Password),
+                cancellationToken);
+            Password = string.Empty;
+            await RefreshSavedSessionsAsync(cancellationToken);
+            ShowAuthenticated(_currentSession);
+        }
+        catch (AuthenticationException exception)
+        {
+            Password = string.Empty;
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanUseSavedSession() => !IsBusy && SelectedSavedSession is not null;
+
+    [RelayCommand(CanExecute = nameof(CanUseSavedSession))]
+    private async Task UseSavedSessionAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedSavedSession is not { } profile)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = "Checking saved session...";
+        try
+        {
+            _currentSession = await _authenticationService.RestoreAsync(profile, cancellationToken);
+            ShowAuthenticated(_currentSession);
+        }
+        catch (AuthenticationException exception)
+        {
+            await RefreshSavedSessionsAsync(CancellationToken.None);
+            StatusMessage = exception.Message;
+            if (exception.Error == AuthenticationError.RevokedSession)
+            {
+                CurrentServer = profile.Server;
+                ServerAddress = profile.Server.BaseUri.ToString();
+                Username = profile.Username;
+                ShowSignIn();
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanRemoveSavedSession() => !IsBusy && SelectedSavedSession is not null;
+
+    [RelayCommand(CanExecute = nameof(CanRemoveSavedSession))]
+    private async Task RemoveSavedSessionAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedSavedSession is not { } profile)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            await _authenticationService.RemoveAsync(profile, cancellationToken);
+            await RefreshSavedSessionsAsync(cancellationToken);
+            StatusMessage = $"Removed {profile.DisplayName}.";
+            ShowSavedSessionsOrServerEntry();
+        }
+        catch (AuthenticationException exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task LogoutAsync(CancellationToken cancellationToken)
+    {
+        if (_currentSession is null)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        var profile = _currentSession.Profile;
+        try
+        {
+            await _authenticationService.LogoutAsync(_currentSession, cancellationToken);
+            StatusMessage = $"Signed out of {profile.DisplayName}.";
+        }
+        catch (AuthenticationException exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            _currentSession = null;
+            await RefreshSavedSessionsAsync(CancellationToken.None);
+            ShowSavedSessionsOrServerEntry(false);
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private void AddServer()
+    {
+        CurrentServer = null;
+        ServerAddress = string.Empty;
+        ShowServerEntry();
+        StatusMessage = "Enter the address of the Jellyfin server you want to add.";
+    }
+
+    [RelayCommand]
+    private void BackToSessions()
+    {
+        Password = string.Empty;
+        ShowSavedSessionsOrServerEntry();
+    }
+
+    private async Task RefreshSavedSessionsAsync(CancellationToken cancellationToken)
+    {
+        var profiles = await _authenticationService.GetSavedSessionsAsync(cancellationToken);
+        SavedSessions.Clear();
+        foreach (var profile in profiles)
+        {
+            SavedSessions.Add(profile);
+        }
+
+        SelectedSavedSession = SavedSessions.FirstOrDefault();
+    }
+
+    private void ShowSavedSessionsOrServerEntry(bool updateStatus = true)
+    {
+        if (SavedSessions.Count == 0)
+        {
+            ShowServerEntry();
+            if (updateStatus)
+            {
+                StatusMessage = "Connect to your Jellyfin server to get started.";
+            }
+        }
+        else
+        {
+            SetVisibleState(savedSessions: true);
+            if (updateStatus)
+            {
+                StatusMessage = "Choose a saved Jellyfin account or add another server.";
+            }
+        }
+    }
+
+    private void ShowServerEntry() => SetVisibleState(serverEntry: true);
+
+    private void ShowSignIn() => SetVisibleState(signIn: true);
+
+    private void ShowAuthenticated(AuthenticatedSession session)
+    {
+        AuthenticatedAccount = session.Profile.DisplayName;
+        StatusMessage = $"Signed in to {session.Server.DisplayName}.";
+        SetVisibleState(authenticated: true);
+    }
+
+    private void SetVisibleState(
+        bool serverEntry = false,
+        bool signIn = false,
+        bool savedSessions = false,
+        bool authenticated = false)
+    {
+        IsServerEntryVisible = serverEntry;
+        IsSignInVisible = signIn;
+        AreSavedSessionsVisible = savedSessions;
+        IsAuthenticatedVisible = authenticated;
     }
 }

@@ -32,20 +32,77 @@
                           FontSize="16"
                           Foreground="#AEBAD4"
                           Text="Your media. Native everywhere." />
-               <TextBlock FontWeight="SemiBold"
-                          Foreground="#E7ECF8"
-                          Text="Jellyfin server" />
-               <TextBox PlaceholderText="https://jellyfin.example.com"
-                        x:Name="ServerAddressTextBox"
-                        Text="{Binding ServerAddress}" />
-               <Button Padding="20,12"
-                       HorizontalAlignment="Stretch"
-                       HorizontalContentAlignment="Center"
-                       Command="{Binding ConnectCommand}"
-                       Content="Connect" />
+               <StackPanel IsVisible="{Binding IsServerEntryVisible}"
+                           Spacing="12">
+                   <TextBlock FontWeight="SemiBold"
+                              Foreground="#E7ECF8"
+                              Text="Jellyfin server" />
+                   <TextBox PlaceholderText="https://jellyfin.example.com"
+                            x:Name="ServerAddressTextBox"
+                            Text="{Binding ServerAddress}" />
+                   <Button Padding="20,12"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Center"
+                           Command="{Binding ConnectCommand}"
+                           Content="Connect" />
+               </StackPanel>
+               <StackPanel IsVisible="{Binding IsSignInVisible}"
+                           Spacing="12">
+                   <TextBlock FontWeight="SemiBold"
+                              Foreground="#E7ECF8"
+                              Text="Jellyfin sign in" />
+                   <TextBox PlaceholderText="Username"
+                            Text="{Binding Username}" />
+                   <TextBox PasswordChar="*"
+                            PlaceholderText="Password"
+                            Text="{Binding Password}" />
+                   <Button Padding="20,12"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Center"
+                           Command="{Binding SignInCommand}"
+                           Content="Sign in" />
+                   <Button Command="{Binding BackToSessionsCommand}"
+                           Content="Back" />
+               </StackPanel>
+               <StackPanel IsVisible="{Binding AreSavedSessionsVisible}"
+                           Spacing="12">
+                   <TextBlock FontWeight="SemiBold"
+                              Foreground="#E7ECF8"
+                              Text="Saved accounts" />
+                   <ComboBox ItemsSource="{Binding SavedSessions}"
+                             SelectedItem="{Binding SelectedSavedSession}">
+                       <ComboBox.ItemTemplate>
+                           <DataTemplate>
+                               <TextBlock Text="{Binding DisplayName}" />
+                           </DataTemplate>
+                       </ComboBox.ItemTemplate>
+                   </ComboBox>
+                   <Button Padding="20,12"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Center"
+                           Command="{Binding UseSavedSessionCommand}"
+                           Content="Continue" />
+                   <Button Command="{Binding RemoveSavedSessionCommand}"
+                           Content="Remove saved account" />
+                   <Button Command="{Binding AddServerCommand}"
+                           Content="Add another server" />
+               </StackPanel>
+               <StackPanel IsVisible="{Binding IsAuthenticatedVisible}"
+                           Spacing="12">
+                   <TextBlock FontSize="20"
+                              FontWeight="SemiBold"
+                              Foreground="#E7ECF8"
+                              Text="{Binding AuthenticatedAccount}" />
+                   <TextBlock Foreground="#AEBAD4"
+                              Text="Your secure Jellyfin session is ready." />
+                   <Button Command="{Binding LogoutCommand}"
+                           Content="Sign out" />
+                   <Button Command="{Binding BackToSessionsCommand}"
+                           Content="Switch account" />
+               </StackPanel>
                <ProgressBar Height="3"
-                            IsIndeterminate="{Binding IsConnecting}"
-                            IsVisible="{Binding IsConnecting}" />
+                            IsIndeterminate="{Binding IsBusy}"
+                            IsVisible="{Binding IsBusy}" />
                <Border Padding="14"
                        Background="#202A43"
                        CornerRadius="8">
@@ -55,7 +112,7 @@
                </Border>
                <TextBlock FontSize="12"
                           Foreground="#7F8CA8"
-                          Text="Cindara checks the public Jellyfin system endpoint. No credentials are sent."
+                          Text="Passwords are never saved. Access tokens use your operating system's protected credential storage."
                           TextWrapping="Wrap" />
                <TextBlock FontSize="12"
                           Foreground="#7F8CA8"

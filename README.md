@@ -7,11 +7,14 @@ the primary target. It is early-stage, public, and licensed under the
 
 ## Current vertical slice
 
-The Avalonia desktop shell accepts a Jellyfin server address and validates it
-against Jellyfin's unauthenticated `System/Info/Public` endpoint. The shared
-core normalizes server URLs, returns a stable server identity, and exposes
-specific failures for invalid addresses, unreachable servers, timeouts,
-authorization failures, HTTP errors, and malformed responses.
+The Avalonia desktop shell validates a Jellyfin server, authenticates a user,
+and restores independent saved accounts across servers. Passwords are never
+persisted. Access tokens are stored with Secret Service on Linux, DPAPI on
+Windows, or Keychain on macOS; rejected tokens remove only the affected
+account and return it to sign-in.
+
+Credential-bearing requests require HTTPS. Plain HTTP is accepted only for
+loopback development servers.
 
 ## Architecture
 
@@ -43,6 +46,8 @@ connected to a TV is the reference ten-foot experience.
 - Windows, Linux, or macOS supported by Avalonia
 - On Linux, a desktop session with graphics and controller access. SDL3 native
   runtimes are bundled by NuGet; no system SDL package is required.
+- On Linux, a Secret Service provider and the `secret-tool` command (commonly
+  provided by `libsecret-tools`) are required to persist Jellyfin sessions.
 
 ## Build
 
