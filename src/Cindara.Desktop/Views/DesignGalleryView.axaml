@@ -107,7 +107,11 @@
                             <StackPanel Spacing="12">
                                 <TextBlock Classes="heading" Text="Nothing here yet" />
                                 <TextBlock Classes="secondary"
-                                           Text="Empty states explain the next available action." />
+                                           Text="This library has no media yet."
+                                           TextWrapping="Wrap" />
+                                <Button Classes="primary"
+                                        HorizontalAlignment="Left"
+                                        Content="Browse libraries" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

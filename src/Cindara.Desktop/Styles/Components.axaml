@@ -43,7 +43,7 @@
     </Style>
     <Style Selector="Button.primary">
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Accent}" />
-        <Setter Property="Foreground" Value="#07100F" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.OnAccent}" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
@@ -89,7 +89,7 @@
     <Style Selector="Button.card:focus /template/ ContentPresenter">
         <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.AccentStrong}" />
         <Setter Property="BorderThickness" Value="4" />
-        <Setter Property="BoxShadow" Value="0 12 32 0 #A6000000" />
+        <Setter Property="BoxShadow" Value="{DynamicResource Cindara.Elevation.Focused}" />
     </Style>
     <Style Selector="Button.card.selected /template/ ContentPresenter">
         <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Accent}" />
