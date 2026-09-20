@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:automation="using:Avalonia.Automation"
         xmlns:vm="using:Cindara.Desktop.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -14,8 +15,11 @@
         MinHeight="480"
         Title="Cindara">
 
-    <Grid Background="{DynamicResource Cindara.Brush.Background}">
+    <ScrollViewer Background="{DynamicResource Cindara.Brush.Background}"
+                  HorizontalScrollBarVisibility="Auto"
+                  VerticalScrollBarVisibility="Auto">
         <Border Width="600"
+               Margin="{DynamicResource Cindara.Space.Safe1080}"
                Padding="{DynamicResource Cindara.Space.Safe1080}"
                HorizontalAlignment="Center"
                VerticalAlignment="Center"
@@ -48,6 +52,7 @@
                        Classes="toast"
                        CornerRadius="{DynamicResource Cindara.Radius.Small}">
                    <TextBlock Foreground="{DynamicResource Cindara.Brush.Text}"
+                              automation:AutomationProperties.LiveSetting="Polite"
                               Text="{Binding StatusMessage}"
                               TextWrapping="Wrap" />
                </Border>
@@ -59,5 +64,5 @@
                           TextWrapping="Wrap" />
             </StackPanel>
         </Border>
-    </Grid>
+    </ScrollViewer>
 </Window>

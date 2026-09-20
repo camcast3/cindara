@@ -7,7 +7,7 @@
     <Color x:Key="Cindara.Color.AccentStrong">#9AF3E8</Color>
     <Color x:Key="Cindara.Color.Text">#F5F8FC</Color>
     <Color x:Key="Cindara.Color.TextSecondary">#B3BED0</Color>
-    <Color x:Key="Cindara.Color.TextMuted">#7F8BA0</Color>
+    <Color x:Key="Cindara.Color.TextMuted">#8490A5</Color>
     <Color x:Key="Cindara.Color.Border">#344056</Color>
     <Color x:Key="Cindara.Color.Error">#FF8795</Color>
     <Color x:Key="Cindara.Color.Warning">#F8C56A</Color>

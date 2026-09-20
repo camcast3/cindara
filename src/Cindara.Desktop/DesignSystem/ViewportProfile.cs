@@ -9,8 +9,21 @@ public sealed record ViewportProfile(double Scale, double SafeArea, double Minim
 
     public static ViewportProfile Create(double width, double height)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        if (!double.IsFinite(width) || width <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(width),
+                width,
+                "Viewport width must be finite and greater than zero.");
+        }
+
+        if (!double.IsFinite(height) || height <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(height),
+                height,
+                "Viewport height must be finite and greater than zero.");
+        }
 
         var scale = Math.Min(width / ReferenceWidth, height / ReferenceHeight);
         return new ViewportProfile(

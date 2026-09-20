@@ -37,6 +37,7 @@
 
     <Style Selector="Button">
         <Setter Property="MinHeight" Value="48" />
+        <Setter Property="MinWidth" Value="48" />
         <Setter Property="Padding" Value="18,12" />
         <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Small}" />
     </Style>
@@ -96,6 +97,8 @@
     </Style>
     <Style Selector="Button.card.loading">
         <Setter Property="Opacity" Value="0.55" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsHitTestVisible" Value="False" />
     </Style>
     <Style Selector="Button.card.error /template/ ContentPresenter">
         <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Error}" />

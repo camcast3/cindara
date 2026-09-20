@@ -26,6 +26,10 @@ public sealed class ViewportProfileTests
     [InlineData(0, 1080)]
     [InlineData(1920, 0)]
     [InlineData(-1, 1080)]
+    [InlineData(double.NaN, 1080)]
+    [InlineData(1920, double.NaN)]
+    [InlineData(double.PositiveInfinity, 1080)]
+    [InlineData(1920, double.NegativeInfinity)]
     public void CreateRejectsInvalidDimensions(double width, double height)
     {
         Assert.Throws<ArgumentOutOfRangeException>(
