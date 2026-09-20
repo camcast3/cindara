@@ -24,6 +24,15 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _statusMessage = "Connect to your Jellyfin server to get started.";
 
+    [ObservableProperty]
+    private string _controllerStatus = "Initializing controller input...";
+
+    public void SetControllerStatus(string status)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(status);
+        ControllerStatus = status;
+    }
+
     private bool CanConnect() => !IsConnecting && !string.IsNullOrWhiteSpace(ServerAddress);
 
     [RelayCommand(CanExecute = nameof(CanConnect))]

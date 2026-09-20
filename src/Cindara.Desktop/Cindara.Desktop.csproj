@@ -18,9 +18,17 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="SDL3-CS" />
+    <PackageReference Include="SDL3-CS.Linux" />
+    <PackageReference Include="SDL3-CS.MacOS" />
+    <PackageReference Include="SDL3-CS.Windows" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Cindara.Core\Cindara.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Cindara.Desktop.Tests" />
   </ItemGroup>
 </Project>

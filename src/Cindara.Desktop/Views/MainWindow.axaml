@@ -36,6 +36,7 @@
                           Foreground="#E7ECF8"
                           Text="Jellyfin server" />
                <TextBox PlaceholderText="https://jellyfin.example.com"
+                        x:Name="ServerAddressTextBox"
                         Text="{Binding ServerAddress}" />
                <Button Padding="20,12"
                        HorizontalAlignment="Stretch"
@@ -55,6 +56,10 @@
                <TextBlock FontSize="12"
                           Foreground="#7F8CA8"
                           Text="Cindara checks the public Jellyfin system endpoint. No credentials are sent."
+                          TextWrapping="Wrap" />
+               <TextBlock FontSize="12"
+                          Foreground="#7F8CA8"
+                          Text="{Binding ControllerStatus}"
                           TextWrapping="Wrap" />
             </StackPanel>
         </Border>

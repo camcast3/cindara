@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Cindara.Core.Jellyfin;
+using Cindara.Desktop.Input;
 using Cindara.Desktop.ViewModels;
 using Cindara.Desktop.Views;
 
@@ -23,7 +24,7 @@ public partial class App : Application
                 Timeout = TimeSpan.FromSeconds(15),
             };
 
-            desktop.MainWindow = new MainWindow
+            desktop.MainWindow = new MainWindow(new SdlGamepadInputSource())
             {
                 DataContext = new MainViewModel(new JellyfinServerClient(httpClient)),
             };
