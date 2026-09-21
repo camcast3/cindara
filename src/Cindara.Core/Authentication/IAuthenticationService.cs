@@ -17,6 +17,10 @@ public interface IAuthenticationService
         AuthenticatedSession session,
         CancellationToken cancellationToken = default);
 
+    // Removes a rejected token locally without contacting the server or deleting a newer credential.
+    // Cleanup must complete even if the request that discovered the rejection was cancelled.
+    Task InvalidateAsync(AuthenticatedSession session);
+
     Task RemoveAsync(
         SessionProfile profile,
         CancellationToken cancellationToken = default);

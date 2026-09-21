@@ -1,130 +1,132 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:automation="using:Avalonia.Automation"
         xmlns:vm="using:Cindara.Desktop.ViewModels"
+        xmlns:views="using:Cindara.Desktop.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        d:DesignWidth="960"
-        d:DesignHeight="620"
+        d:DesignWidth="1280"
+        d:DesignHeight="720"
         x:Class="Cindara.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Width="960"
-        Height="620"
+        Width="1280"
+        Height="720"
         MinWidth="720"
         MinHeight="480"
+        WindowState="FullScreen"
         Title="Cindara">
 
-    <Grid Background="#0B1020">
-        <Border Width="560"
-               Padding="48"
-               HorizontalAlignment="Center"
-               VerticalAlignment="Center"
-               Background="#161D31"
-               BorderBrush="#28334F"
-               BorderThickness="1"
-               CornerRadius="20">
-            <StackPanel Spacing="18">
-               <TextBlock FontSize="38"
-                          FontWeight="Bold"
-                          Foreground="#F7F9FF"
-                          Text="Cindara" />
-               <TextBlock Margin="0,-10,0,12"
-                          FontSize="16"
-                          Foreground="#AEBAD4"
-                          Text="Your media. Native everywhere." />
-               <StackPanel IsVisible="{Binding IsServerEntryVisible}"
-                           Spacing="12">
-                   <TextBlock FontWeight="SemiBold"
-                              Foreground="#E7ECF8"
-                              Text="Jellyfin server" />
-                   <TextBox PlaceholderText="https://jellyfin.example.com"
-                            x:Name="ServerAddressTextBox"
-                            Text="{Binding ServerAddress}" />
-                   <Button Padding="20,12"
-                           HorizontalAlignment="Stretch"
-                           HorizontalContentAlignment="Center"
-                           Command="{Binding ConnectCommand}"
-                           Content="Connect" />
-               </StackPanel>
-               <StackPanel IsVisible="{Binding IsSignInVisible}"
-                           Spacing="12">
-                   <TextBlock FontWeight="SemiBold"
-                              Foreground="#E7ECF8"
-                              Text="Jellyfin sign in" />
-                   <TextBox AutomationProperties.Name="Jellyfin username"
-                            x:Name="UsernameTextBox"
-                            PlaceholderText="Username"
-                            Text="{Binding Username}" />
-                   <TextBox AutomationProperties.Name="Jellyfin password"
-                            PasswordChar="*"
-                            PlaceholderText="Password"
-                            Text="{Binding Password}" />
-                   <Button Padding="20,12"
-                           HorizontalAlignment="Stretch"
-                           HorizontalContentAlignment="Center"
-                           Command="{Binding SignInCommand}"
-                           Content="Sign in" />
-                   <Button Command="{Binding BackToSessionsCommand}"
-                           Content="Back" />
-               </StackPanel>
-               <StackPanel IsVisible="{Binding AreSavedSessionsVisible}"
-                           Spacing="12">
-                   <TextBlock FontWeight="SemiBold"
-                              Foreground="#E7ECF8"
-                              Text="Saved accounts" />
-                   <ComboBox AutomationProperties.Name="Saved Jellyfin account"
-                             x:Name="SavedSessionsComboBox"
-                             ItemsSource="{Binding SavedSessions}"
-                             SelectedItem="{Binding SelectedSavedSession}">
-                       <ComboBox.ItemTemplate>
-                           <DataTemplate>
-                               <TextBlock Text="{Binding DisplayName}" />
-                           </DataTemplate>
-                       </ComboBox.ItemTemplate>
-                   </ComboBox>
-                   <Button Padding="20,12"
-                           HorizontalAlignment="Stretch"
-                           HorizontalContentAlignment="Center"
-                           Command="{Binding UseSavedSessionCommand}"
-                           Content="Continue" />
-                   <Button Command="{Binding RemoveSavedSessionCommand}"
-                           Content="Remove saved account" />
-                   <Button Command="{Binding AddServerCommand}"
-                           Content="Add another server" />
-               </StackPanel>
-               <StackPanel IsVisible="{Binding IsAuthenticatedVisible}"
-                           Spacing="12">
-                   <TextBlock FontSize="20"
-                              FontWeight="SemiBold"
-                              Foreground="#E7ECF8"
-                              Text="{Binding AuthenticatedAccount}" />
-                   <TextBlock Foreground="#AEBAD4"
-                              Text="Your secure Jellyfin session is ready." />
-                   <Button x:Name="LogoutButton"
-                           Command="{Binding LogoutCommand}"
-                           Content="Sign out" />
-                   <Button Command="{Binding BackToSessionsCommand}"
-                           Content="Switch account" />
-               </StackPanel>
-               <ProgressBar Height="3"
-                            IsIndeterminate="{Binding IsBusy}"
-                            IsVisible="{Binding IsBusy}" />
-               <Border Padding="14"
-                       Background="#202A43"
-                       CornerRadius="8">
-                   <TextBlock Foreground="#C9D3E8"
-                              Text="{Binding StatusMessage}"
-                              TextWrapping="Wrap" />
-               </Border>
-               <TextBlock FontSize="12"
-                          Foreground="#7F8CA8"
-                          Text="Passwords are never saved. Access tokens use your operating system's protected credential storage."
-                          TextWrapping="Wrap" />
-               <TextBlock FontSize="12"
-                          Foreground="#7F8CA8"
-                          Text="{Binding ControllerStatus}"
-                          TextWrapping="Wrap" />
-            </StackPanel>
-        </Border>
+    <Grid Background="{DynamicResource Cindara.Brush.Background}">
+        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto"
+                      IsVisible="{Binding !IsDesignGalleryVisible}">
+            <Border Width="600"
+                    Margin="{DynamicResource Cindara.Space.Safe1080}"
+                    Padding="{DynamicResource Cindara.Space.Safe1080}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource Cindara.Brush.Surface}"
+                    BorderBrush="{DynamicResource Cindara.Brush.Border}"
+                    BorderThickness="1"
+                    CornerRadius="{DynamicResource Cindara.Radius.Large}"
+                    BoxShadow="0 20 60 0 #73000000">
+                <StackPanel Spacing="18">
+                    <TextBlock Classes="display" Text="Cindara" />
+                    <TextBlock Margin="0,-10,0,12"
+                               Classes="secondary"
+                               Text="Your media. Native everywhere." />
+                    <StackPanel IsVisible="{Binding IsServerEntryVisible}" Spacing="12">
+                        <TextBlock Classes="label" Text="Jellyfin server" />
+                        <TextBox PlaceholderText="https://jellyfin.example.com"
+                                 x:Name="ServerAddressTextBox"
+                                 Text="{Binding ServerAddress}" />
+                        <Button Classes="primary"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Command="{Binding ConnectCommand}"
+                                Content="Connect" />
+                    </StackPanel>
+                    <StackPanel IsVisible="{Binding IsSignInVisible}" Spacing="12">
+                        <TextBlock Classes="label" Text="Jellyfin sign in" />
+                        <TextBox AutomationProperties.Name="Jellyfin username"
+                                 x:Name="UsernameTextBox"
+                                 PlaceholderText="Username"
+                                 Text="{Binding Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox AutomationProperties.Name="Jellyfin password"
+                                 PasswordChar="*"
+                                 PlaceholderText="Password"
+                                 Text="{Binding Password, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button Classes="primary"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Command="{Binding SignInCommand}"
+                                Content="Sign in" />
+                        <Button Command="{Binding BackToSessionsCommand}" Content="Back" />
+                    </StackPanel>
+                    <StackPanel IsVisible="{Binding AreSavedSessionsVisible}" Spacing="12">
+                        <TextBlock Classes="label" Text="Saved accounts" />
+                        <ComboBox AutomationProperties.Name="Saved Jellyfin account"
+                                  x:Name="SavedSessionsComboBox"
+                                  ItemsSource="{Binding SavedSessions}"
+                                  SelectedItem="{Binding SelectedSavedSession}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Classes="primary"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                Command="{Binding UseSavedSessionCommand}"
+                                Content="Continue" />
+                        <Button Command="{Binding RemoveSavedSessionCommand}"
+                                Content="Remove saved account" />
+                        <Button Command="{Binding AddServerCommand}"
+                                Content="Add another server" />
+                    </StackPanel>
+                    <StackPanel IsVisible="{Binding IsAuthenticatedVisible}" Spacing="12">
+                        <TextBlock Classes="heading" Text="{Binding AuthenticatedAccount}" />
+                        <TextBlock Classes="secondary"
+                                   Text="Your secure Jellyfin session is ready." />
+                        <Button x:Name="PreviewButton"
+                                Classes="primary"
+                                Command="{Binding ShowDesignGalleryCommand}"
+                                Content="Preview my media" />
+                        <Button x:Name="LogoutButton"
+                                Command="{Binding LogoutCommand}"
+                                Content="Sign out" />
+                        <Button Command="{Binding BackToSessionsCommand}"
+                                Content="Switch account" />
+                    </StackPanel>
+                    <ProgressBar Height="3"
+                                 IsIndeterminate="{Binding IsBusy}"
+                                 IsVisible="{Binding IsBusy}" />
+                    <Border Classes="toast">
+                        <TextBlock Foreground="{DynamicResource Cindara.Brush.Text}"
+                                   automation:AutomationProperties.LiveSetting="Polite"
+                                   Text="{Binding StatusMessage}"
+                                   TextWrapping="Wrap" />
+                    </Border>
+                    <TextBlock Classes="caption"
+                               Text="Passwords are never saved. Access tokens use your operating system's protected credential storage."
+                               TextWrapping="Wrap" />
+                    <TextBlock Classes="caption"
+                               Text="{Binding ControllerStatus}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </ScrollViewer>
+
+        <Grid IsVisible="{Binding IsDesignGalleryVisible}">
+            <views:DesignGalleryView x:Name="GalleryView" DataContext="{Binding DesignGallery}" />
+            <Button x:Name="GalleryBackButton"
+                    Margin="0,24,24,0"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Command="{Binding HideDesignGalleryCommand}"
+                    Content="Back to account" />
+        </Grid>
     </Grid>
 </Window>

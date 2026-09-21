@@ -34,19 +34,30 @@ public partial class App : Application
             var sessionStore = new PersistentSessionStore(
                 Path.Combine(applicationData, "sessions.json"),
                 new OsSecureCredentialStore(Path.Combine(applicationData, "credentials")));
+            var clientIdentity = new JellyfinClientIdentity(
+                "Cindara",
+                Environment.MachineName,
+                deviceId,
+                Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0");
             var authenticationService = new JellyfinAuthenticationService(
                 sessionStore,
-                new JellyfinClientIdentity(
-                    "Cindara",
-                    Environment.MachineName,
-                    deviceId,
-                    Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0"));
+                clientIdentity);
+            var mediaPreviewClient = new JellyfinMediaPreviewClient(clientIdentity);
+            var viewModel = new MainViewModel(
+                new JellyfinServerClient(httpClient),
+                authenticationService,
+                mediaPreviewClient);
+            desktop.Exit += (_, _) =>
+            {
+                viewModel.Dispose();
+                mediaPreviewClient.Dispose();
+                authenticationService.Dispose();
+                httpClient.Dispose();
+            };
 
             desktop.MainWindow = new MainWindow(new SdlGamepadInputSource())
             {
-                DataContext = new MainViewModel(
-                    new JellyfinServerClient(httpClient),
-                    authenticationService),
+                DataContext = viewModel,
             };
         }
 

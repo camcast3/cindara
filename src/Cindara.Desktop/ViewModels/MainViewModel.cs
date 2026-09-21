@@ -7,18 +7,32 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Cindara.Desktop.ViewModels;
 
-public partial class MainViewModel : ViewModelBase
+public partial class MainViewModel : ViewModelBase, IDisposable
 {
     private readonly IJellyfinServerClient _serverClient;
     private readonly IAuthenticationService _authenticationService;
+    private readonly IJellyfinMediaPreviewClient? _mediaPreviewClient;
+    private readonly Func<MediaPreviewHome, DesignGalleryViewModel> _createGallery;
     private AuthenticatedSession? _currentSession;
 
     public MainViewModel(
         IJellyfinServerClient serverClient,
-        IAuthenticationService authenticationService)
+        IAuthenticationService authenticationService,
+        IJellyfinMediaPreviewClient? mediaPreviewClient = null)
+        : this(serverClient, authenticationService, mediaPreviewClient, DesignGalleryViewModel.Create)
+    {
+    }
+
+    internal MainViewModel(
+        IJellyfinServerClient serverClient,
+        IAuthenticationService authenticationService,
+        IJellyfinMediaPreviewClient? mediaPreviewClient,
+        Func<MediaPreviewHome, DesignGalleryViewModel> createGallery)
     {
         _serverClient = serverClient;
         _authenticationService = authenticationService;
+        _mediaPreviewClient = mediaPreviewClient;
+        _createGallery = createGallery;
     }
 
     public ObservableCollection<SessionProfile> SavedSessions { get; } = [];
@@ -36,6 +50,7 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(BackToSessionsCommand))]
     [NotifyCanExecuteChangedFor(nameof(LogoutCommand))]
     [NotifyCanExecuteChangedFor(nameof(InitializeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ShowDesignGalleryCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -71,6 +86,12 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _authenticatedAccount = string.Empty;
+
+    [ObservableProperty]
+    private bool _isDesignGalleryVisible;
+
+    [ObservableProperty]
+    private DesignGalleryViewModel? _designGallery;
 
     public void SetControllerStatus(string status)
     {
@@ -145,7 +166,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             _currentSession = await _authenticationService.AuthenticateAsync(
-                new AuthenticationRequest(CurrentServer, Username, Password),
+                new AuthenticationRequest(CurrentServer, Username.Trim(), Password),
                 cancellationToken);
             Password = string.Empty;
             await RefreshSavedSessionsAsync(cancellationToken);
@@ -184,14 +205,7 @@ public partial class MainViewModel : ViewModelBase
             StatusMessage = exception.Message;
             if (exception.Error == AuthenticationError.RevokedSession)
             {
-                _currentSession = null;
-                SavedSessions.Remove(profile);
-                SelectedSavedSession = SavedSessions.FirstOrDefault();
-                CurrentServer = profile.Server;
-                ServerAddress = profile.Server.BaseUri.ToString();
-                Username = profile.Username;
-                Password = string.Empty;
-                ShowSignIn();
+                PrepareForReauthentication(profile);
             }
 
             try
@@ -278,6 +292,77 @@ public partial class MainViewModel : ViewModelBase
 
     private bool CanNavigate() => !IsBusy;
 
+    private bool CanShowDesignGallery() =>
+        !IsBusy && _currentSession is not null && _mediaPreviewClient is not null;
+
+    [RelayCommand(CanExecute = nameof(CanShowDesignGallery))]
+    private async Task ShowDesignGalleryAsync(CancellationToken cancellationToken)
+    {
+        if (_currentSession is not { } session || _mediaPreviewClient is null)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = "Loading your Jellyfin media preview...";
+        try
+        {
+            var home = await _mediaPreviewClient.GetHomeAsync(session, cancellationToken);
+            var gallery = _createGallery(home);
+            ClearDesignGallery();
+            DesignGallery = gallery;
+            IsDesignGalleryVisible = true;
+            StatusMessage = "Authenticated media preview loaded.";
+        }
+        catch (MediaPreviewException exception)
+        {
+            StatusMessage = exception.Message;
+            if (exception.Error == MediaPreviewError.AccessDenied)
+            {
+                PrepareForReauthentication(session.Profile);
+                StatusMessage = $"{exception.Message} Sign in again to continue.";
+                try
+                {
+                    await _authenticationService.InvalidateAsync(session);
+                }
+                catch (AuthenticationException invalidationException)
+                {
+                    StatusMessage = $"{StatusMessage} {invalidationException.Message}";
+                }
+
+                try
+                {
+                    await RefreshSavedSessionsAsync(CancellationToken.None);
+                }
+                catch (AuthenticationException refreshException)
+                {
+                    StatusMessage = $"{StatusMessage} {refreshException.Message}";
+                }
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private void HideDesignGallery() => IsDesignGalleryVisible = false;
+
+    private void PrepareForReauthentication(SessionProfile profile)
+    {
+        _currentSession = null;
+        AuthenticatedAccount = string.Empty;
+        SavedSessions.Remove(profile);
+        SelectedSavedSession = SavedSessions.FirstOrDefault();
+        CurrentServer = profile.Server;
+        ServerAddress = profile.Server.BaseUri.ToString();
+        Username = profile.Username;
+        Password = string.Empty;
+        ShowSignIn();
+        ShowDesignGalleryCommand.NotifyCanExecuteChanged();
+    }
+
     [RelayCommand(CanExecute = nameof(CanNavigate))]
     private void AddServer()
     {
@@ -332,9 +417,11 @@ public partial class MainViewModel : ViewModelBase
 
     private void ShowAuthenticated(AuthenticatedSession session)
     {
+        ClearDesignGallery();
         AuthenticatedAccount = session.Profile.DisplayName;
         StatusMessage = $"Signed in to {session.Server.DisplayName}.";
         SetVisibleState(authenticated: true);
+        ShowDesignGalleryCommand.NotifyCanExecuteChanged();
     }
 
     private void SetVisibleState(
@@ -347,5 +434,26 @@ public partial class MainViewModel : ViewModelBase
         IsSignInVisible = signIn;
         AreSavedSessionsVisible = savedSessions;
         IsAuthenticatedVisible = authenticated;
+        if (!authenticated)
+        {
+            _currentSession = null;
+            AuthenticatedAccount = string.Empty;
+            ClearDesignGallery();
+            ShowDesignGalleryCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private void ClearDesignGallery()
+    {
+        IsDesignGalleryVisible = false;
+        var gallery = DesignGallery;
+        DesignGallery = null;
+        gallery?.Dispose();
+    }
+
+    public void Dispose()
+    {
+        ClearDesignGallery();
+        GC.SuppressFinalize(this);
     }
 }

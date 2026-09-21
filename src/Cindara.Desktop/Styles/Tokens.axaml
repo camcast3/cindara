@@ -1,0 +1,54 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Color x:Key="Cindara.Color.Background">#080B12</Color>
+    <Color x:Key="Cindara.Color.Surface">#131925</Color>
+    <Color x:Key="Cindara.Color.SurfaceRaised">#1C2535</Color>
+    <Color x:Key="Cindara.Color.Accent">#64D8CB</Color>
+    <Color x:Key="Cindara.Color.AccentStrong">#9AF3E8</Color>
+    <Color x:Key="Cindara.Color.OnAccent">#07100F</Color>
+    <Color x:Key="Cindara.Color.Text">#F5F8FC</Color>
+    <Color x:Key="Cindara.Color.TextSecondary">#B3BED0</Color>
+    <Color x:Key="Cindara.Color.TextMuted">#8490A5</Color>
+    <Color x:Key="Cindara.Color.Border">#344056</Color>
+    <Color x:Key="Cindara.Color.Error">#FF8795</Color>
+    <Color x:Key="Cindara.Color.Warning">#F8C56A</Color>
+    <Color x:Key="Cindara.Color.Success">#72D7A1</Color>
+
+    <SolidColorBrush x:Key="Cindara.Brush.Background" Color="{DynamicResource Cindara.Color.Background}" />
+    <SolidColorBrush x:Key="Cindara.Brush.Surface" Color="{DynamicResource Cindara.Color.Surface}" />
+    <SolidColorBrush x:Key="Cindara.Brush.SurfaceRaised" Color="{DynamicResource Cindara.Color.SurfaceRaised}" />
+    <SolidColorBrush x:Key="Cindara.Brush.Accent" Color="{DynamicResource Cindara.Color.Accent}" />
+    <SolidColorBrush x:Key="Cindara.Brush.AccentStrong" Color="{DynamicResource Cindara.Color.AccentStrong}" />
+    <SolidColorBrush x:Key="Cindara.Brush.OnAccent" Color="{DynamicResource Cindara.Color.OnAccent}" />
+    <SolidColorBrush x:Key="Cindara.Brush.Text" Color="{DynamicResource Cindara.Color.Text}" />
+    <SolidColorBrush x:Key="Cindara.Brush.TextSecondary" Color="{DynamicResource Cindara.Color.TextSecondary}" />
+    <SolidColorBrush x:Key="Cindara.Brush.TextMuted" Color="{DynamicResource Cindara.Color.TextMuted}" />
+    <SolidColorBrush x:Key="Cindara.Brush.Border" Color="{DynamicResource Cindara.Color.Border}" />
+    <SolidColorBrush x:Key="Cindara.Brush.Error" Color="{DynamicResource Cindara.Color.Error}" />
+    <SolidColorBrush x:Key="Cindara.Brush.Warning" Color="{DynamicResource Cindara.Color.Warning}" />
+    <SolidColorBrush x:Key="Cindara.Brush.Success" Color="{DynamicResource Cindara.Color.Success}" />
+
+    <x:Double x:Key="Cindara.Type.Display">48</x:Double>
+    <x:Double x:Key="Cindara.Type.Title">32</x:Double>
+    <x:Double x:Key="Cindara.Type.Heading">24</x:Double>
+    <x:Double x:Key="Cindara.Type.Body">18</x:Double>
+    <x:Double x:Key="Cindara.Type.Caption">14</x:Double>
+
+    <Thickness x:Key="Cindara.Space.Safe1080">48</Thickness>
+    <Thickness x:Key="Cindara.Space.Safe4K">96</Thickness>
+    <x:Double x:Key="Cindara.Space.XSmall">4</x:Double>
+    <x:Double x:Key="Cindara.Space.Small">8</x:Double>
+    <x:Double x:Key="Cindara.Space.Medium">16</x:Double>
+    <x:Double x:Key="Cindara.Space.Large">24</x:Double>
+    <x:Double x:Key="Cindara.Space.XLarge">40</x:Double>
+
+    <CornerRadius x:Key="Cindara.Radius.Small">8</CornerRadius>
+    <CornerRadius x:Key="Cindara.Radius.Medium">14</CornerRadius>
+    <CornerRadius x:Key="Cindara.Radius.Large">24</CornerRadius>
+
+    <x:Double x:Key="Cindara.Elevation.Rest">0</x:Double>
+    <BoxShadows x:Key="Cindara.Elevation.Focused">0 12 32 0 #A6000000</BoxShadows>
+    <x:TimeSpan x:Key="Cindara.Motion.Fast">0:0:0.12</x:TimeSpan>
+    <x:TimeSpan x:Key="Cindara.Motion.Standard">0:0:0.2</x:TimeSpan>
+    <x:TimeSpan x:Key="Cindara.Motion.Deliberate">0:0:0.32</x:TimeSpan>
+</ResourceDictionary>

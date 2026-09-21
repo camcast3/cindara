@@ -82,7 +82,8 @@ public partial class MainWindow : Window
         if (eventArgs.PropertyName is nameof(MainViewModel.IsServerEntryVisible)
             or nameof(MainViewModel.IsSignInVisible)
             or nameof(MainViewModel.AreSavedSessionsVisible)
-            or nameof(MainViewModel.IsAuthenticatedVisible))
+            or nameof(MainViewModel.IsAuthenticatedVisible)
+            or nameof(MainViewModel.IsDesignGalleryVisible))
         {
             Dispatcher.UIThread.Post(FocusCurrentState, DispatcherPriority.Loaded);
         }
@@ -103,9 +104,13 @@ public partial class MainWindow : Window
         {
             SavedSessionsComboBox.Focus();
         }
+        else if (_viewModel.IsDesignGalleryVisible)
+        {
+            GalleryView.FocusTopNavigation();
+        }
         else if (_viewModel.IsAuthenticatedVisible)
         {
-            LogoutButton.Focus();
+            PreviewButton.Focus();
         }
         else if (_viewModel.IsServerEntryVisible)
         {
@@ -156,15 +161,24 @@ public partial class MainWindow : Window
             case ControllerAction.Accept:
                 ActivateFocusedControl();
                 break;
-            case ControllerAction.Back when WindowState == WindowState.FullScreen:
-                WindowState = WindowState.Normal;
-                break;
             case ControllerAction.Menu:
                 WindowState = WindowState == WindowState.FullScreen
                     ? WindowState.Normal
                     : WindowState.FullScreen;
                 break;
             case ControllerAction.Back:
+                switch (ControllerBackNavigation.Resolve(
+                    _viewModel?.IsDesignGalleryVisible is true,
+                    WindowState == WindowState.FullScreen))
+                {
+                    case ControllerBackDestination.Account:
+                        _viewModel!.HideDesignGalleryCommand.Execute(null);
+                        break;
+                    case ControllerBackDestination.Windowed:
+                        WindowState = WindowState.Normal;
+                        break;
+                }
+
                 break;
             default:
                 throw new ArgumentOutOfRangeException(
@@ -176,6 +190,11 @@ public partial class MainWindow : Window
 
     private void MoveFocus(NavigationDirection direction)
     {
+        if (_viewModel?.IsDesignGalleryVisible is true && GalleryView.TryMoveGalleryFocus(direction))
+        {
+            return;
+        }
+
         FocusManager?.TryMoveFocus(
             direction,
             new FindNextElementOptions

@@ -1,0 +1,143 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style Selector="Window">
+        <Setter Property="FontFamily" Value="avares://Avalonia.Fonts.Inter/Assets#Inter" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.Text}" />
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Background}" />
+    </Style>
+
+    <Style Selector="TextBlock.display">
+        <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Display}" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.Text}" />
+    </Style>
+    <Style Selector="TextBlock.title">
+        <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Title}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.Text}" />
+    </Style>
+    <Style Selector="TextBlock.heading">
+        <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Heading}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.Text}" />
+    </Style>
+    <Style Selector="TextBlock.label">
+        <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Body}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.Text}" />
+    </Style>
+    <Style Selector="TextBlock.secondary">
+        <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Body}" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.TextSecondary}" />
+    </Style>
+    <Style Selector="TextBlock.caption">
+        <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.TextMuted}" />
+    </Style>
+
+    <Style Selector="Button">
+        <Setter Property="MinHeight" Value="48" />
+        <Setter Property="MinWidth" Value="48" />
+        <Setter Property="Padding" Value="18,12" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Small}" />
+    </Style>
+    <Style Selector="Button.primary">
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Accent}" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.OnAccent}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.AccentStrong}" />
+    </Style>
+    <Style Selector="Button.primary:focus /template/ ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Text}" />
+        <Setter Property="BorderThickness" Value="3" />
+    </Style>
+    <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+        <Setter Property="Opacity" Value="0.82" />
+    </Style>
+    <Style Selector="Button:disabled">
+        <Setter Property="Opacity" Value="0.42" />
+    </Style>
+
+    <Style Selector="Button.nav">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.TextSecondary}" />
+    </Style>
+    <Style Selector="Button.nav.header-tab">
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.nav.selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.AccentStrong}" />
+    </Style>
+    <Style Selector="Button.nav:focus /template/ ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Accent}" />
+        <Setter Property="BorderThickness" Value="3" />
+    </Style>
+
+    <Style Selector="Button.card">
+        <Setter Property="Padding" Value="0" />
+        <!-- The rounded :focus border below replaces the default rectangular focus adorner. -->
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Surface}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Medium}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.card:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
+    </Style>
+    <Style Selector="Button.card:focus /template/ ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.AccentStrong}" />
+        <Setter Property="BorderThickness" Value="4" />
+        <Setter Property="BoxShadow" Value="{DynamicResource Cindara.Elevation.Focused}" />
+    </Style>
+    <Style Selector="Button.card.selected /template/ ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Accent}" />
+        <Setter Property="BorderThickness" Value="3" />
+    </Style>
+    <Style Selector="Button.card.loading">
+        <Setter Property="Opacity" Value="0.55" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="Button.card.error /template/ ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Error}" />
+        <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <Style Selector="Border.hero">
+        <Setter Property="MinHeight" Value="280" />
+        <Setter Property="Padding" Value="40" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Large}" />
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
+    </Style>
+    <Style Selector="Border.dialog">
+        <Setter Property="MaxWidth" Value="640" />
+        <Setter Property="Padding" Value="32" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Large}" />
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BoxShadow" Value="0 24 80 0 #B3000000" />
+    </Style>
+    <Style Selector="Border.toast">
+        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Small}" />
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.skeleton">
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Small}" />
+        <Setter Property="Opacity" Value="0.65" />
+    </Style>
+</Styles>

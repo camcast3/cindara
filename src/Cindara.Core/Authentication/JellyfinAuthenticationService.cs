@@ -136,7 +136,7 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            await RemoveIgnoringCancellationAsync(session.Profile, session.AccessToken).ConfigureAwait(false);
+            await InvalidateAsync(session).ConfigureAwait(false);
             throw new AuthenticationException(
                 AuthenticationError.RevokedSession,
                 "This Jellyfin session is no longer valid. Sign in again to continue.");
@@ -204,10 +204,18 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
         }
     }
 
+    public Task InvalidateAsync(AuthenticatedSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return RemoveIgnoringCancellationAsync(session.Profile, session.AccessToken);
+    }
+
     private HttpRequestMessage CreateRequest(HttpMethod method, Uri uri)
     {
         var request = new HttpRequestMessage(method, uri);
-        request.Headers.TryAddWithoutValidation("Authorization", BuildAuthorizationHeader());
+        request.Headers.TryAddWithoutValidation(
+            "Authorization",
+            _clientIdentity.CreateAuthorizationHeader());
         return request;
     }
 
@@ -216,16 +224,13 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
         Uri uri,
         string accessToken)
     {
-        var request = CreateRequest(method, uri);
+        var request = new HttpRequestMessage(method, uri);
+        request.Headers.TryAddWithoutValidation(
+            "Authorization",
+            _clientIdentity.CreateAuthorizationHeader(accessToken));
         request.Headers.TryAddWithoutValidation("X-Emby-Token", accessToken);
         return request;
     }
-
-    private string BuildAuthorizationHeader() =>
-        $"MediaBrowser Client=\"{Escape(_clientIdentity.ClientName)}\", "
-        + $"Device=\"{Escape(_clientIdentity.DeviceName)}\", "
-        + $"DeviceId=\"{Escape(_clientIdentity.DeviceId)}\", "
-        + $"Version=\"{Escape(_clientIdentity.Version)}\"";
 
     private async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
@@ -373,19 +378,13 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
     private static void EnsureSecureConnection(Uri serverUri)
     {
-        var isSecure = serverUri.Scheme == Uri.UriSchemeHttps;
-        var isLoopbackHttp = serverUri.Scheme == Uri.UriSchemeHttp && serverUri.IsLoopback;
-        if (!isSecure && !isLoopbackHttp)
+        if (!CredentialTransportPolicy.IsAllowed(serverUri))
         {
             throw new AuthenticationException(
                 AuthenticationError.InsecureConnection,
                 "Sign-in requires HTTPS so passwords and access tokens are not exposed on the network.");
         }
     }
-
-    private static string Escape(string value) =>
-        value.Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("\"", "\\\"", StringComparison.Ordinal);
 
     private sealed record AuthenticationResponse(string? AccessToken, UserResult? User);
 
