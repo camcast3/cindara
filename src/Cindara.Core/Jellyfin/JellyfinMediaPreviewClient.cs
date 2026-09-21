@@ -43,6 +43,12 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
+        if (!CredentialTransportPolicy.IsAllowed(session.Server.BaseUri))
+        {
+            throw new MediaPreviewException(
+                MediaPreviewError.InsecureConnection,
+                "The media preview requires HTTPS or local HTTP loopback to protect your access token.");
+        }
 
         var resumeTask = GetWrappedItemsAsync(
             session,

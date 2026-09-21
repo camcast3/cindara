@@ -1,4 +1,4 @@
-using Avalonia.Media.Imaging;
+using Avalonia.Media;
 using Cindara.Core.Jellyfin;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -8,6 +8,7 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
 {
     private readonly MediaPreviewCardViewModel? _initialFeatured;
     private MediaPreviewCardViewModel? _featured;
+    private bool _disposed;
 
     private DesignGalleryViewModel(
         MediaPreviewCardViewModel? featured,
@@ -34,20 +35,55 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
 
     public void SelectFeatured(MediaPreviewCardViewModel item)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(item);
         Featured = item;
     }
 
     public static DesignGalleryViewModel Create(MediaPreviewHome home) =>
-        new(
-            home.Featured is null ? null : new MediaPreviewCardViewModel(home.Featured),
-            home.ContinueWatching.Select(item => new MediaPreviewCardViewModel(item)).ToArray(),
-            home.RecentlyAddedLibraries
-                .Select(rail => new MediaPreviewRailViewModel(rail))
-                .ToArray());
+        Create(home, PreviewImage.Decode);
+
+    internal static DesignGalleryViewModel Create(MediaPreviewHome home, Func<byte[], PreviewImage> decode)
+    {
+        var createdCards = new List<MediaPreviewCardViewModel>();
+        var completed = false;
+        MediaPreviewCardViewModel CreateCard(MediaPreviewItem item)
+        {
+            var card = new MediaPreviewCardViewModel(item, decode);
+            createdCards.Add(card);
+            return card;
+        }
+
+        try
+        {
+            var gallery = new DesignGalleryViewModel(
+                home.Featured is null ? null : CreateCard(home.Featured),
+                home.ContinueWatching.Select(CreateCard).ToArray(),
+                home.RecentlyAddedLibraries.Select(rail => new MediaPreviewRailViewModel(
+                    rail.Title, rail.Items.Select(CreateCard).ToArray())).ToArray());
+            completed = true;
+            return gallery;
+        }
+        finally
+        {
+            if (!completed)
+            {
+                foreach (var card in createdCards)
+                {
+                    card.Dispose();
+                }
+            }
+        }
+    }
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         _initialFeatured?.Dispose();
         foreach (var item in ContinueWatching)
         {
@@ -63,10 +99,10 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
 
 public sealed class MediaPreviewRailViewModel : IDisposable
 {
-    public MediaPreviewRailViewModel(MediaPreviewRail rail)
+    internal MediaPreviewRailViewModel(string title, IReadOnlyList<MediaPreviewCardViewModel> items)
     {
-        Title = rail.Title;
-        Items = rail.Items.Select(item => new MediaPreviewCardViewModel(item)).ToArray();
+        Title = title;
+        Items = items;
     }
 
     public string Title { get; }
@@ -84,7 +120,15 @@ public sealed class MediaPreviewRailViewModel : IDisposable
 
 public sealed class MediaPreviewCardViewModel : IDisposable
 {
+    private readonly PreviewImage? _artwork;
+    private readonly PreviewImage? _backdrop;
+
     public MediaPreviewCardViewModel(MediaPreviewItem item)
+        : this(item, PreviewImage.Decode)
+    {
+    }
+
+    internal MediaPreviewCardViewModel(MediaPreviewItem item, Func<byte[], PreviewImage> decode)
     {
         Name = item.Name;
         Subtitle = item.Subtitle;
@@ -93,8 +137,21 @@ public sealed class MediaPreviewCardViewModel : IDisposable
         Overview = item.Overview ?? string.Empty;
         Details = item.Details;
         PlaybackProgress = item.PlaybackProgress ?? 0;
-        Artwork = item.Artwork is null ? null : new Bitmap(new MemoryStream(item.Artwork));
-        Backdrop = item.Backdrop is null ? null : new Bitmap(new MemoryStream(item.Backdrop));
+        var completed = false;
+        try
+        {
+            _artwork = item.Artwork is null ? null : decode(item.Artwork);
+            _backdrop = item.Backdrop is null ? null : decode(item.Backdrop);
+            completed = true;
+        }
+        finally
+        {
+            if (!completed)
+            {
+                _artwork?.Dispose();
+                _backdrop?.Dispose();
+            }
+        }
     }
 
     public string Name { get; }
@@ -113,13 +170,13 @@ public sealed class MediaPreviewCardViewModel : IDisposable
 
     public bool HasPlaybackProgress => PlaybackProgress > 0;
 
-    public Bitmap? Artwork { get; }
+    public IImage? Artwork => _artwork?.Source;
 
-    public Bitmap? Backdrop { get; }
+    public IImage? Backdrop => _backdrop?.Source;
 
     public void Dispose()
     {
-        Artwork?.Dispose();
-        Backdrop?.Dispose();
+        _artwork?.Dispose();
+        _backdrop?.Dispose();
     }
 }

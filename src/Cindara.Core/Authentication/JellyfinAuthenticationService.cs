@@ -378,9 +378,7 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
     private static void EnsureSecureConnection(Uri serverUri)
     {
-        var isSecure = serverUri.Scheme == Uri.UriSchemeHttps;
-        var isLoopbackHttp = serverUri.Scheme == Uri.UriSchemeHttp && serverUri.IsLoopback;
-        if (!isSecure && !isLoopbackHttp)
+        if (!CredentialTransportPolicy.IsAllowed(serverUri))
         {
             throw new AuthenticationException(
                 AuthenticationError.InsecureConnection,

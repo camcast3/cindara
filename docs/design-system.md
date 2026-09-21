@@ -45,12 +45,30 @@ translation, shorten fades to 80 ms, and keep the focus outline instantaneous.
 
 ## TV viewport behavior
 
-Design at 1920x1080 logical pixels with a 48-pixel safe margin on every edge.
-At 3840x2160, scale dimensions and safe margins to 2x (96 pixels); do not fit
-more content merely because physical pixels doubled. Other 16:9 sizes scale
-from the 1080p reference. `ViewportProfile` provides the deterministic scale,
-safe area, and focus-target calculation. Keep critical text and actions inside
-the safe area to tolerate overscan.
+`ViewportProfile` defines the production reference: 1920x1080 logical pixels
+with a 48-pixel safe margin. Its uniform scale is
+`min(width / 1920, height / 1080)`: 0.667 at 1280x720 and 2 at 3840x2160.
+This supplies reference safe areas and focus targets; it is not the density
+policy used by the approved non-production gallery.
+
+`GalleryViewportProfile` deliberately preserves the density approved on the
+monitor and TV. Cards, their captions, and gutters use
+`clamp(logicalWidth / 1600, 1, 1.55)` to avoid oversized posters. Hero text,
+header text, and text spacing use `clamp(ViewportProfile.Scale, 1, 2)` for
+couch readability. Hero height is `clamp(logicalHeight * 0.48, 420, 1080)`.
+The minimum scale keeps small-window text legible; these intentional caps mean
+cards and hero text do not scale uniformly with one another.
+
+| Logical viewport | Card scale | Hero text scale | Hero height |
+| --- | --- | --- | --- |
+| 1280x720 | 1 | 1 | 420 |
+| 1920x1080 | 1.2 | 1 | 518.4 |
+| 3440x1440 | 1.55 | 1.333 | 691.2 |
+| 3840x2160 | 1.55 | 2 | 1036.8 |
+
+All inputs are Avalonia logical dimensions. A physical 3840x2160 TV at 200%
+OS scaling therefore uses the 1920x1080 row; the OS applies the remaining 2x,
+not the gallery. Overscan-safe margins remain the production shell's target.
 
 Poster cards use a 2:3 ratio; landscape cards use 16:9. Home rails reveal part
 of the next card as an affordance. Library grids maximize complete columns
@@ -148,10 +166,17 @@ This gallery intentionally caps rows at 20 items and preloads a bounded subset
 of recently-added backdrops, falling back to card artwork elsewhere. Header and
 sidebar destinations, playback, mutations, paging, and production image caching
 are not implemented here. Session tokens are sent only in authenticated headers;
-the preview transport rejects redirects rather than forwarding those headers.
+the preview transport requires HTTPS (or HTTP loopback) before sending any
+request and rejects redirects rather than forwarding those headers.
 Rejected preview sessions clear the active gallery, invalidate only the rejected
 saved token, and return the account to sign-in. Other accounts and any replacement
 token saved during the request are preserved; storage failures are surfaced.
+Malformed or unsupported artwork reports an invalid-response error and releases
+partially decoded images. Gallery replacement is transactional: a failed load
+does not dispose the previous gallery before the replacement is ready. Ending
+authentication, switching accounts/servers, or exiting the app disposes and
+clears the old gallery; merely returning from the preview to the same account
+retains it until replacement or authentication ends.
 
 ### Library
 

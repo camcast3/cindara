@@ -43,8 +43,13 @@ public partial class App : Application
                 sessionStore,
                 clientIdentity);
             var mediaPreviewClient = new JellyfinMediaPreviewClient(clientIdentity);
+            var viewModel = new MainViewModel(
+                new JellyfinServerClient(httpClient),
+                authenticationService,
+                mediaPreviewClient);
             desktop.Exit += (_, _) =>
             {
+                viewModel.Dispose();
                 mediaPreviewClient.Dispose();
                 authenticationService.Dispose();
                 httpClient.Dispose();
@@ -52,10 +57,7 @@ public partial class App : Application
 
             desktop.MainWindow = new MainWindow(new SdlGamepadInputSource())
             {
-                DataContext = new MainViewModel(
-                    new JellyfinServerClient(httpClient),
-                    authenticationService,
-                    mediaPreviewClient),
+                DataContext = viewModel,
             };
         }
 

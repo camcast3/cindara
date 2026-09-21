@@ -7,4 +7,5 @@ public enum MediaPreviewError
     TimedOut,
     InvalidResponse,
     UnexpectedStatus,
+    InsecureConnection,
 }

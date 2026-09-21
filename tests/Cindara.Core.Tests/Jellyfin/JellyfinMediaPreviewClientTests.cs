@@ -17,6 +17,61 @@ public sealed class JellyfinMediaPreviewClientTests
     }
 
     [Fact]
+    public async Task GetHomeAsyncRejectsRelativeAddressBeforeSendingAnyRequest()
+    {
+        var handler = new PreviewHandler();
+        using var client = CreateClient(handler);
+        var session = Session with { Server = Session.Server with { BaseUri = new Uri("jellyfin/", UriKind.Relative) } };
+
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetHomeAsync(session));
+
+        Assert.Equal(MediaPreviewError.InsecureConnection, exception.Error);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData("http://media.example.com/jellyfin/")]
+    [InlineData("http://192.0.2.10/jellyfin/")]
+    [InlineData("http://[2001:db8::1]/jellyfin/")]
+    [InlineData("http://localhost.example.com/jellyfin/")]
+    [InlineData("ftp://localhost/jellyfin/")]
+    [InlineData("file:///jellyfin/")]
+    public async Task GetHomeAsyncRejectsInsecureAddressBeforeSendingAnyRequest(string address)
+    {
+        var handler = new PreviewHandler();
+        using var client = CreateClient(handler);
+        var session = Session with { Server = Session.Server with { BaseUri = new Uri(address) } };
+
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetHomeAsync(session));
+
+        Assert.Equal(MediaPreviewError.InsecureConnection, exception.Error);
+        Assert.Empty(handler.Requests);
+        Assert.DoesNotContain(session.AccessToken, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("https://media.example.com/jellyfin/")]
+    [InlineData("http://localhost/jellyfin/")]
+    [InlineData("http://127.0.0.1/jellyfin/")]
+    [InlineData("http://[::1]/jellyfin/")]
+    public async Task GetHomeAsyncAllowsHttpsAndHttpLoopbackForAllRequests(string address)
+    {
+        var handler = new PreviewHandler();
+        using var client = CreateClient(handler);
+        var session = Session with { Server = Session.Server with { BaseUri = new Uri(address) } };
+
+        await client.GetHomeAsync(session);
+
+        Assert.NotEmpty(handler.Requests);
+        Assert.All(handler.Requests, request =>
+        {
+            Assert.Equal(session.Server.BaseUri.Scheme, request.Uri.Scheme);
+            Assert.Equal(session.Server.BaseUri.Host, request.Uri.Host);
+            Assert.Equal(session.AccessToken, request.Token);
+        });
+    }
+
+    [Fact]
     public async Task GetHomeAsyncLoadsAuthenticatedMediaAndArtwork()
     {
         var handler = new PreviewHandler();

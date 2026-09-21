@@ -7,21 +7,32 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Cindara.Desktop.ViewModels;
 
-public partial class MainViewModel : ViewModelBase
+public partial class MainViewModel : ViewModelBase, IDisposable
 {
     private readonly IJellyfinServerClient _serverClient;
     private readonly IAuthenticationService _authenticationService;
     private readonly IJellyfinMediaPreviewClient? _mediaPreviewClient;
+    private readonly Func<MediaPreviewHome, DesignGalleryViewModel> _createGallery;
     private AuthenticatedSession? _currentSession;
 
     public MainViewModel(
         IJellyfinServerClient serverClient,
         IAuthenticationService authenticationService,
         IJellyfinMediaPreviewClient? mediaPreviewClient = null)
+        : this(serverClient, authenticationService, mediaPreviewClient, DesignGalleryViewModel.Create)
+    {
+    }
+
+    internal MainViewModel(
+        IJellyfinServerClient serverClient,
+        IAuthenticationService authenticationService,
+        IJellyfinMediaPreviewClient? mediaPreviewClient,
+        Func<MediaPreviewHome, DesignGalleryViewModel> createGallery)
     {
         _serverClient = serverClient;
         _authenticationService = authenticationService;
         _mediaPreviewClient = mediaPreviewClient;
+        _createGallery = createGallery;
     }
 
     public ObservableCollection<SessionProfile> SavedSessions { get; } = [];
@@ -297,8 +308,9 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var home = await _mediaPreviewClient.GetHomeAsync(session, cancellationToken);
-            DesignGallery?.Dispose();
-            DesignGallery = DesignGalleryViewModel.Create(home);
+            var gallery = _createGallery(home);
+            ClearDesignGallery();
+            DesignGallery = gallery;
             IsDesignGalleryVisible = true;
             StatusMessage = "Authenticated media preview loaded.";
         }
@@ -348,9 +360,6 @@ public partial class MainViewModel : ViewModelBase
         Username = profile.Username;
         Password = string.Empty;
         ShowSignIn();
-        var gallery = DesignGallery;
-        DesignGallery = null;
-        gallery?.Dispose();
         ShowDesignGalleryCommand.NotifyCanExecuteChanged();
     }
 
@@ -408,6 +417,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void ShowAuthenticated(AuthenticatedSession session)
     {
+        ClearDesignGallery();
         AuthenticatedAccount = session.Profile.DisplayName;
         StatusMessage = $"Signed in to {session.Server.DisplayName}.";
         SetVisibleState(authenticated: true);
@@ -426,7 +436,24 @@ public partial class MainViewModel : ViewModelBase
         IsAuthenticatedVisible = authenticated;
         if (!authenticated)
         {
-            IsDesignGalleryVisible = false;
+            _currentSession = null;
+            AuthenticatedAccount = string.Empty;
+            ClearDesignGallery();
+            ShowDesignGalleryCommand.NotifyCanExecuteChanged();
         }
+    }
+
+    private void ClearDesignGallery()
+    {
+        IsDesignGalleryVisible = false;
+        var gallery = DesignGallery;
+        DesignGallery = null;
+        gallery?.Dispose();
+    }
+
+    public void Dispose()
+    {
+        ClearDesignGallery();
+        GC.SuppressFinalize(this);
     }
 }

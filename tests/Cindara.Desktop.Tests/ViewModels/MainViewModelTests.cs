@@ -383,6 +383,94 @@ public sealed class MainViewModelTests
         Assert.Equal("Preview failed.", viewModel.StatusMessage);
     }
 
+    [Theory]
+    [InlineData("Logout")]
+    [InlineData("AddServer")]
+    [InlineData("BackToSessions")]
+    [InlineData("SwitchAccount")]
+    [InlineData("Dispose")]
+    public async Task LeavingAccountReleasesAllGalleryArtwork(string action)
+    {
+        var authentication = new TestAuthenticationService();
+        var preview = new TestMediaPreviewClient { Home = HomeWithArtwork() };
+        var decoder = new TestPreviewImageDecoder();
+        var viewModel = new MainViewModel(new StubServerClient(), authentication, preview,
+            home => DesignGalleryViewModel.Create(home, decoder.Decode));
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        var initial = Assert.IsType<SessionProfile>(viewModel.SelectedSavedSession);
+        await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+        await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
+        Assert.NotEmpty(decoder.Resources);
+        Assert.All(decoder.Resources, resource => Assert.Equal(0, resource.DisposeCount));
+
+        switch (action)
+        {
+            case "Logout":
+                await viewModel.LogoutCommand.ExecuteAsync(null);
+                break;
+            case "AddServer":
+                viewModel.AddServerCommand.Execute(null);
+                break;
+            case "BackToSessions":
+                viewModel.BackToSessionsCommand.Execute(null);
+                break;
+            case "SwitchAccount":
+                viewModel.SelectedSavedSession = initial with { UserId = "other-user", Username = "other" };
+                await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+                break;
+            case "Dispose":
+                viewModel.Dispose();
+                break;
+        }
+
+        Assert.Null(viewModel.DesignGallery);
+        Assert.False(viewModel.IsDesignGalleryVisible);
+        Assert.All(decoder.Resources, resource => Assert.Equal(1, resource.DisposeCount));
+        viewModel.Dispose();
+        Assert.All(decoder.Resources, resource => Assert.Equal(1, resource.DisposeCount));
+    }
+
+    [Fact]
+    public async Task CorruptArtworkShowsAnErrorWithoutDiscardingPreviousGallery()
+    {
+        var decoder = new TestPreviewImageDecoder();
+        var preview = new TestMediaPreviewClient { Home = HomeWithArtwork() };
+        using var viewModel = new MainViewModel(new StubServerClient(), new TestAuthenticationService(), preview,
+            home => DesignGalleryViewModel.Create(home, decoder.Decode));
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+        await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
+        var previous = Assert.IsType<DesignGalleryViewModel>(viewModel.DesignGallery);
+        var initialCount = decoder.Resources.Count;
+        viewModel.HideDesignGalleryCommand.Execute(null);
+        decoder.FailOnCall = initialCount + 2;
+
+        await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
+
+        Assert.Same(previous, viewModel.DesignGallery);
+        Assert.False(viewModel.IsBusy);
+        Assert.False(viewModel.IsDesignGalleryVisible);
+        Assert.True(viewModel.IsAuthenticatedVisible);
+        Assert.True(viewModel.ShowDesignGalleryCommand.CanExecute(null));
+        Assert.Contains("could not be decoded", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.All(decoder.Resources.Take(initialCount), resource => Assert.Equal(0, resource.DisposeCount));
+        Assert.All(decoder.Resources.Skip(initialCount), resource => Assert.Equal(1, resource.DisposeCount));
+
+        decoder.FailOnCall = null;
+        await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
+
+        Assert.NotSame(previous, viewModel.DesignGallery);
+        Assert.True(viewModel.IsDesignGalleryVisible);
+        Assert.All(decoder.Resources.Take(initialCount), resource => Assert.Equal(1, resource.DisposeCount));
+    }
+
+    private static MediaPreviewHome HomeWithArtwork()
+    {
+        var item = new MediaPreviewItem("movie", "Movie", "2026", "Movie",
+            Artwork: [1], Backdrop: [2], Overview: "Overview", Details: "2026", PlaybackProgress: null);
+        return new MediaPreviewHome(item, [], [new MediaPreviewRail("movies", "Movies", [item])]);
+    }
+
     private static readonly ServerIdentity Server = new(
         "server-1",
         new Uri("https://media.example.com/"),
@@ -473,7 +561,7 @@ public sealed class MainViewModelTests
                 throw new AuthenticationException(error, "Could not restore the saved session.");
             }
 
-            return _session;
+            return _session with { Server = profile.Server, UserId = profile.UserId, Username = profile.Username };
         }
 
         public Task LogoutAsync(
@@ -507,6 +595,8 @@ public sealed class MainViewModelTests
 
         public MediaPreviewError? Error { get; set; }
 
+        public MediaPreviewHome? Home { get; set; }
+
         public Task<MediaPreviewHome> GetHomeAsync(
             AuthenticatedSession session,
             CancellationToken cancellationToken = default)
@@ -515,6 +605,11 @@ public sealed class MainViewModelTests
             if (Error is { } error)
             {
                 throw new MediaPreviewException(error, "Preview failed.");
+            }
+
+            if (Home is not null)
+            {
+                return Task.FromResult(Home);
             }
 
             var item = new MediaPreviewItem(

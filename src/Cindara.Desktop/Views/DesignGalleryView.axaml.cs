@@ -45,12 +45,10 @@ public partial class DesignGalleryView : UserControl
 
     private void OnSizeChanged(object? sender, SizeChangedEventArgs eventArgs)
     {
-        var scale = Math.Clamp(eventArgs.NewSize.Width / 1600, 1, 1.55);
-        var heroScale = Math.Clamp(
-            ViewportProfile.Create(eventArgs.NewSize.Width, eventArgs.NewSize.Height).Scale,
-            1,
-            2);
-        var heroHeight = Math.Clamp(eventArgs.NewSize.Height * 0.48, 420, 1080);
+        var profile = GalleryViewportProfile.Create(eventArgs.NewSize.Width, eventArgs.NewSize.Height);
+        var scale = profile.CardScale;
+        var heroScale = profile.HeroScale;
+        var heroHeight = profile.HeroHeight;
         _heroHeight = heroHeight;
         Resources["Gallery.HeroHeight"] = heroHeight;
         Resources["Gallery.HeroContentWidth"] = Math.Min(
