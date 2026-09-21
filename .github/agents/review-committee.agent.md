@@ -1,10 +1,10 @@
 ---
 name: review-committee
 description: Run a local, read-only pull request review with three independent model families and a verified consensus report.
-argument-hint: "Review the current branch or PR against its base branch."
+argument-hint: "Attach a PR diff with base and head identifiers for review."
 user-invocable: true
 tools: ['agent', 'read', 'search']
-target: vscode
+agents: ['Review Correctness', 'Review Integration', 'Review Adversarial']
 ---
 
 # Review Committee
@@ -16,26 +16,26 @@ commit, push, post comments, submit reviews, or resolve threads.
 ## Review target
 
 1. Read repository instructions before reviewing.
-2. Prefer the current pull request and its base branch when one exists.
-3. Otherwise compare the current branch with the repository default branch.
-4. Include committed, staged, and unstaged changes that belong to the requested
-   work. State the exact comparison used.
-5. If there is no reviewable diff, stop and say so.
+2. Require the user to attach or provide the pull request diff or changed-files
+   context, including the base and head identifiers. The read-only tools cannot
+   discover Git branch state or generate a diff.
+3. Use the supplied diff as the authoritative review boundary. Read surrounding
+   workspace files only to validate behavior.
+4. State the exact supplied comparison used.
+5. If no diff or changed-files context is supplied, stop and request it.
 
 ## Committee
 
-Launch three generic subagents concurrently with the `agent` tool. Do not name a
-custom or built-in agent when invoking them; put each seat's review role in its
-prompt. Give each reviewer the same complete target, base, diff scope, repository
-instructions, and requirement to report only actionable defects introduced by
-the change. Request the model for each reviewer using these exact model-picker
-names:
+Launch these three dedicated subagents concurrently with the `agent` tool. Give
+each reviewer the same complete supplied diff, base and head identifiers,
+repository instructions, and requirement to report only actionable defects
+introduced by the change. Each worker is read-only and pins its own model:
 
-| Seat | Model | Focus |
+| Agent | Model | Focus |
 | --- | --- | --- |
-| Correctness | `GPT-6 Astra` | Logic errors, regressions, concurrency, state, and error handling |
-| Integration | `Gemini 3.8 Flash` | API contracts, cross-component behavior, portability, and missing tests |
-| Adversarial | `MAI-Code-1.1-Flash` | Security, privacy, trust boundaries, abuse cases, and operational reliability |
+| `Review Correctness` | `GPT-6 Astra` | Logic errors, regressions, concurrency, state, and error handling |
+| `Review Integration` | `Gemini 3.8 Flash` | API contracts, cross-component behavior, portability, and missing tests |
+| `Review Adversarial` | `MAI-Code-1.1-Flash` | Security, privacy, trust boundaries, abuse cases, and operational reliability |
 
 Require every reviewer to:
 

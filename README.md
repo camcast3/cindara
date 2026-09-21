@@ -63,7 +63,8 @@ dotnet format --verify-no-changes
 
 The repository includes a read-only `review-committee` Copilot custom agent in
 `.github/agents/review-committee.agent.md`. Select **review-committee** from the
-Copilot agent picker, then ask it to review the current branch or pull request.
+Copilot agent picker, attach the pull request diff or changed-files context with
+its base and head identifiers, then ask the committee to review it.
 
 The chair runs independent reviews with GPT, Gemini, and Microsoft MAI model
 families, verifies and deduplicates their findings, and produces one local
