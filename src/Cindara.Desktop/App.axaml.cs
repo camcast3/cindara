@@ -1,7 +1,10 @@
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Cindara.Core.Authentication;
 using Cindara.Core.Jellyfin;
+using Cindara.Desktop.Authentication;
 using Cindara.Desktop.Input;
 using Cindara.Desktop.ViewModels;
 using Cindara.Desktop.Views;
@@ -23,10 +26,27 @@ public partial class App : Application
             {
                 Timeout = TimeSpan.FromSeconds(15),
             };
+            var applicationData = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Cindara");
+            var deviceId = DeviceIdentityProvider.GetOrCreate(
+                Path.Combine(applicationData, "device-id"));
+            var sessionStore = new PersistentSessionStore(
+                Path.Combine(applicationData, "sessions.json"),
+                new OsSecureCredentialStore(Path.Combine(applicationData, "credentials")));
+            var authenticationService = new JellyfinAuthenticationService(
+                sessionStore,
+                new JellyfinClientIdentity(
+                    "Cindara",
+                    Environment.MachineName,
+                    deviceId,
+                    Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0"));
 
             desktop.MainWindow = new MainWindow(new SdlGamepadInputSource())
             {
-                DataContext = new MainViewModel(new JellyfinServerClient(httpClient)),
+                DataContext = new MainViewModel(
+                    new JellyfinServerClient(httpClient),
+                    authenticationService),
             };
         }
 

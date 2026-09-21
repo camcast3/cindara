@@ -7,11 +7,26 @@ the primary target. It is early-stage, public, and licensed under the
 
 ## Current vertical slice
 
-The Avalonia desktop shell accepts a Jellyfin server address and validates it
-against Jellyfin's unauthenticated `System/Info/Public` endpoint. The shared
-core normalizes server URLs, returns a stable server identity, and exposes
-specific failures for invalid addresses, unreachable servers, timeouts,
-authorization failures, HTTP errors, and malformed responses.
+The Avalonia desktop shell validates a Jellyfin server, authenticates a user,
+and restores independent saved accounts across servers. Passwords are never
+persisted. Access tokens are stored with Secret Service on Linux, DPAPI on
+Windows, or Keychain on macOS; rejected tokens remove only the affected
+account and return it to sign-in.
+
+Credential-bearing requests require HTTPS. Plain HTTP is accepted only for
+loopback development servers.
+
+Each OS-protected credential binds its token to the canonical server URL
+(scheme, host, port, and base path), server ID, and user ID. The plaintext
+`sessions.json` index is used for account selection, not as authority for a
+token's destination. Restoration rejects metadata that differs from the protected
+binding before making any authenticated request. The entire protected credential
+is preserved when a save or removal is rolled back.
+
+Older, token-only credentials cannot be safely upgraded using the plaintext
+index. They are rejected without sending the token. Remove the saved account,
+reconnect using a verified server address, and sign in again. The same recovery
+applies when saved metadata and its protected credential disagree.
 
 ## Architecture
 
@@ -43,6 +58,8 @@ connected to a TV is the reference ten-foot experience.
 - Windows, Linux, or macOS supported by Avalonia
 - On Linux, a desktop session with graphics and controller access. SDL3 native
   runtimes are bundled by NuGet; no system SDL package is required.
+- On Linux, a Secret Service provider and the `secret-tool` command (commonly
+  provided by `libsecret-tools`) are required to persist Jellyfin sessions.
 
 ## Build
 

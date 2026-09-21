@@ -35,6 +35,7 @@ public sealed class JellyfinServerClientTests
     [Theory]
     [InlineData("")]
     [InlineData("ftp://media.example.com")]
+    [InlineData("https://proxy-user:proxy-password@media.example.com")]
     [InlineData("https://media.example.com?token=secret")]
     public async Task ConnectAsyncRejectsInvalidAddress(string address)
     {
