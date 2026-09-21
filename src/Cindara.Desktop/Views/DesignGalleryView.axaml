@@ -261,6 +261,8 @@
                                             <Button Width="{DynamicResource Gallery.ContinueWidth}"
                                                     Height="{DynamicResource Gallery.ContinueHeight}"
                                                     Classes="card continue-card"
+                                                    AutomationProperties.Name="{Binding Name}"
+                                                    AutomationProperties.HelpText="{Binding Subtitle}"
                                                     GotFocus="OnMediaCardFocused">
                                                 <Border ClipToBounds="True"
                                                         CornerRadius="{DynamicResource Cindara.Radius.Medium}">
@@ -319,6 +321,8 @@
                                                         <Button Width="{DynamicResource Gallery.PosterWidth}"
                                                                 Height="{DynamicResource Gallery.PosterHeight}"
                                                                 Classes="card media-card"
+                                                                AutomationProperties.Name="{Binding Name}"
+                                                                AutomationProperties.HelpText="{Binding Subtitle}"
                                                                 GotFocus="OnMediaCardFocused">
                                                             <Border ClipToBounds="True"
                                                                     CornerRadius="{DynamicResource Cindara.Radius.Medium}">

@@ -29,6 +29,21 @@ public sealed class GalleryNavigationMarkupTests
     }
 
     [Fact]
+    public void BothMediaCardTemplatesExposeTitleAndSubtitleToAssistiveTechnology()
+    {
+        var cards = LoadGallery().Descendants(Xaml + "Button")
+            .Where(button => ((string?)button.Attribute("Classes"))?.Split(' ').Contains("card") is true)
+            .ToArray();
+
+        Assert.Equal(2, cards.Length);
+        Assert.All(cards, card =>
+        {
+            Assert.Equal("{Binding Name}", (string?)card.Attribute("AutomationProperties.Name"));
+            Assert.Equal("{Binding Subtitle}", (string?)card.Attribute("AutomationProperties.HelpText"));
+        });
+    }
+
+    [Fact]
     public void SidebarLibraryOrderIsTvMoviesThenAnime()
     {
         var labels = LoadGallery().Descendants(Xaml + "Button")

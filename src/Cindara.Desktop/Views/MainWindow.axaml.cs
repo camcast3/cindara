@@ -161,18 +161,24 @@ public partial class MainWindow : Window
             case ControllerAction.Accept:
                 ActivateFocusedControl();
                 break;
-            case ControllerAction.Back when WindowState == WindowState.FullScreen:
-                WindowState = WindowState.Normal;
-                break;
             case ControllerAction.Menu:
                 WindowState = WindowState == WindowState.FullScreen
                     ? WindowState.Normal
                     : WindowState.FullScreen;
                 break;
-            case ControllerAction.Back when _viewModel?.IsDesignGalleryVisible is true:
-                _viewModel.HideDesignGalleryCommand.Execute(null);
-                break;
             case ControllerAction.Back:
+                switch (ControllerBackNavigation.Resolve(
+                    _viewModel?.IsDesignGalleryVisible is true,
+                    WindowState == WindowState.FullScreen))
+                {
+                    case ControllerBackDestination.Account:
+                        _viewModel!.HideDesignGalleryCommand.Execute(null);
+                        break;
+                    case ControllerBackDestination.Windowed:
+                        WindowState = WindowState.Normal;
+                        break;
+                }
+
                 break;
             default:
                 throw new ArgumentOutOfRangeException(

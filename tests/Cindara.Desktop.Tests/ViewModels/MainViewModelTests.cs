@@ -251,6 +251,138 @@ public sealed class MainViewModelTests
         Assert.False(viewModel.IsDesignGalleryVisible);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RejectedPreviewInvalidatesOnlyActiveAccountAndReturnsToSignIn(bool restoreSession)
+    {
+        var authentication = new TestAuthenticationService();
+        var preview = new TestMediaPreviewClient();
+        var viewModel = new MainViewModel(new StubServerClient(), authentication, preview);
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        var profile = Assert.IsType<SessionProfile>(viewModel.SelectedSavedSession);
+        var other = profile with { UserId = "other-user", Username = "other" };
+        var otherServer = profile with { Server = Server with { Id = "other-server" } };
+        authentication.SavedProfiles = [profile, other, otherServer];
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        if (restoreSession)
+        {
+            await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+        }
+        else
+        {
+            viewModel.ServerAddress = Server.BaseUri.ToString();
+            await viewModel.ConnectCommand.ExecuteAsync(null);
+            viewModel.Username = profile.Username;
+            await viewModel.SignInCommand.ExecuteAsync(null);
+        }
+
+        await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
+        Assert.NotNull(viewModel.DesignGallery);
+        viewModel.HideDesignGalleryCommand.Execute(null);
+        preview.Error = MediaPreviewError.AccessDenied;
+        viewModel.Password = "must-be-cleared";
+
+        await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
+
+        Assert.Equal(profile, authentication.InvalidatedSession?.Profile);
+        Assert.Equal("token", authentication.InvalidatedSession?.AccessToken);
+        Assert.DoesNotContain(profile, authentication.SavedProfiles!);
+        Assert.Collection(viewModel.SavedSessions,
+            saved => Assert.Equal(other, saved),
+            saved => Assert.Equal(otherServer, saved));
+        Assert.Equal(other, viewModel.SelectedSavedSession);
+        Assert.True(viewModel.IsSignInVisible);
+        Assert.False(viewModel.IsAuthenticatedVisible);
+        Assert.False(viewModel.IsDesignGalleryVisible);
+        Assert.False(viewModel.IsBusy);
+        Assert.Null(viewModel.DesignGallery);
+        Assert.Empty(viewModel.AuthenticatedAccount);
+        Assert.Empty(viewModel.Password);
+        Assert.Equal(profile.Username, viewModel.Username);
+        Assert.Equal(profile.Server.BaseUri.ToString(), viewModel.ServerAddress);
+        Assert.Contains("Sign in again", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.False(viewModel.ShowDesignGalleryCommand.CanExecute(null));
+        Assert.True(viewModel.SignInCommand.CanExecute(null));
+        await viewModel.SignInCommand.ExecuteAsync(null);
+        Assert.Equal(profile.Server, authentication.LastAuthenticationRequest?.Server);
+        Assert.Equal(profile.Username, authentication.LastAuthenticationRequest?.Username);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RejectedPreviewSurfacesCleanupFailuresWithoutKeepingActiveSession(
+        bool failInvalidation, bool failRefresh)
+    {
+        var authentication = new TestAuthenticationService();
+        var preview = new TestMediaPreviewClient { Error = MediaPreviewError.AccessDenied };
+        var viewModel = new MainViewModel(new StubServerClient(), authentication, preview);
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        var profile = Assert.IsType<SessionProfile>(viewModel.SelectedSavedSession);
+        var other = profile with { UserId = "other-user", Username = "other" };
+        authentication.SavedProfiles = [profile, other];
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+        authentication.InvalidationError = failInvalidation ? AuthenticationError.SecureStorageUnavailable : null;
+        authentication.FailRefresh = failRefresh;
+
+        await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsSignInVisible);
+        Assert.False(viewModel.IsAuthenticatedVisible);
+        Assert.False(viewModel.IsBusy);
+        Assert.False(viewModel.ShowDesignGalleryCommand.CanExecute(null));
+        Assert.Contains(other, viewModel.SavedSessions);
+        Assert.Contains("Preview failed", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal(failInvalidation,
+            viewModel.StatusMessage.Contains("Could not invalidate", StringComparison.Ordinal));
+        Assert.Equal(failRefresh,
+            viewModel.StatusMessage.Contains("could not be read", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RejectedPreviewReportsConcurrentReplacementAndPreservesSavedProfile()
+    {
+        var authentication = new TestAuthenticationService();
+        var preview = new TestMediaPreviewClient { Error = MediaPreviewError.AccessDenied };
+        var viewModel = new MainViewModel(new StubServerClient(), authentication, preview);
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        var profile = Assert.IsType<SessionProfile>(viewModel.SelectedSavedSession);
+        await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+        authentication.InvalidationError = AuthenticationError.SessionChanged;
+
+        await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
+
+        Assert.Contains(profile, viewModel.SavedSessions);
+        Assert.True(viewModel.IsSignInVisible);
+        Assert.False(viewModel.ShowDesignGalleryCommand.CanExecute(null));
+        Assert.Contains("Could not invalidate", viewModel.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(MediaPreviewError.Network)]
+    [InlineData(MediaPreviewError.TimedOut)]
+    [InlineData(MediaPreviewError.UnexpectedStatus)]
+    [InlineData(MediaPreviewError.InvalidResponse)]
+    public async Task OtherPreviewFailuresDoNotInvalidateCredentials(MediaPreviewError error)
+    {
+        var authentication = new TestAuthenticationService();
+        var preview = new TestMediaPreviewClient { Error = error };
+        var viewModel = new MainViewModel(new StubServerClient(), authentication, preview);
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+
+        await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
+
+        Assert.Null(authentication.InvalidatedSession);
+        Assert.True(viewModel.IsAuthenticatedVisible);
+        Assert.False(viewModel.IsSignInVisible);
+        Assert.True(viewModel.ShowDesignGalleryCommand.CanExecute(null));
+        Assert.Equal("Preview failed.", viewModel.StatusMessage);
+    }
+
     private static readonly ServerIdentity Server = new(
         "server-1",
         new Uri("https://media.example.com/"),
@@ -290,6 +422,23 @@ public sealed class MainViewModelTests
         public Task OperationGate { get; set; } = Task.CompletedTask;
 
         public AuthenticationRequest? LastAuthenticationRequest { get; private set; }
+
+        public AuthenticatedSession? InvalidatedSession { get; private set; }
+
+        public AuthenticationError? InvalidationError { get; set; }
+
+        public Task InvalidateAsync(AuthenticatedSession session)
+        {
+            InvalidatedSession = session;
+            if (InvalidationError is { } error)
+            {
+                throw new AuthenticationException(error, "Could not invalidate the rejected session.");
+            }
+
+            SavedProfiles = (SavedProfiles ?? [_session.Profile])
+                .Where(profile => profile != session.Profile).ToArray();
+            return Task.CompletedTask;
+        }
 
         public async Task<AuthenticatedSession> AuthenticateAsync(
             AuthenticationRequest request,
@@ -356,11 +505,18 @@ public sealed class MainViewModelTests
     {
         public int RequestCount { get; private set; }
 
+        public MediaPreviewError? Error { get; set; }
+
         public Task<MediaPreviewHome> GetHomeAsync(
             AuthenticatedSession session,
             CancellationToken cancellationToken = default)
         {
             RequestCount++;
+            if (Error is { } error)
+            {
+                throw new MediaPreviewException(error, "Preview failed.");
+            }
+
             var item = new MediaPreviewItem(
                 "movie-1",
                 "Moon Garden",

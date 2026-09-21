@@ -69,8 +69,10 @@ Directional links below describe the target production shell. **A/Enter/Space** 
 **B/Escape** returns or dismisses, and **Start/F11** toggles fullscreen. Mouse
 click maps to activation, pointer hover maps to hover (not keyboard focus), and
 wheel/trackpad scroll maps to rail or grid scrolling.
-The current preview implements header/rail directional navigation and controller
-Start/Back fullscreen toggling; the complete keyboard shortcuts, reduced-motion
+The current preview implements header/rail directional navigation. Controller
+Back closes the gallery without leaving fullscreen; outside the gallery it
+provides a fullscreen escape. Start toggles fullscreen in either context.
+The complete keyboard shortcuts, reduced-motion
 settings, modal behavior, and production destinations are follow-up shell and
 accessibility work.
 
@@ -147,6 +149,9 @@ of recently-added backdrops, falling back to card artwork elsewhere. Header and
 sidebar destinations, playback, mutations, paging, and production image caching
 are not implemented here. Session tokens are sent only in authenticated headers;
 the preview transport rejects redirects rather than forwarding those headers.
+Rejected preview sessions clear the active gallery, invalidate only the rejected
+saved token, and return the account to sign-in. Other accounts and any replacement
+token saved during the request are preserved; storage failures are surfaced.
 
 ### Library
 

@@ -136,7 +136,7 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            await RemoveIgnoringCancellationAsync(session.Profile, session.AccessToken).ConfigureAwait(false);
+            await InvalidateAsync(session).ConfigureAwait(false);
             throw new AuthenticationException(
                 AuthenticationError.RevokedSession,
                 "This Jellyfin session is no longer valid. Sign in again to continue.");
@@ -202,6 +202,12 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
         {
             throw MapStorageException(exception);
         }
+    }
+
+    public Task InvalidateAsync(AuthenticatedSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return RemoveIgnoringCancellationAsync(session.Profile, session.AccessToken);
     }
 
     private HttpRequestMessage CreateRequest(HttpMethod method, Uri uri)

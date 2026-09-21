@@ -99,6 +99,45 @@ public sealed class JellyfinAuthenticationServiceTests
     }
 
     [Fact]
+    public async Task InvalidateAsyncRemovesOnlyRejectedCredentialWithoutANetworkRequest()
+    {
+        var rejected = Session("user-1", "first", "rejected-token");
+        var retained = Session("user-2", "second", "valid-token");
+        var otherServer = rejected with { Server = Server with { Id = "other-server" } };
+        var store = new InMemorySessionStore();
+        await store.SaveAsync(rejected);
+        await store.SaveAsync(retained);
+        await store.SaveAsync(otherServer);
+        var handler = new QueueHttpMessageHandler();
+        using var service = CreateService(handler, store);
+
+        await service.InvalidateAsync(rejected);
+
+        Assert.Null(await store.GetAsync(rejected.Profile));
+        Assert.Equal(retained, await store.GetAsync(retained.Profile));
+        Assert.Equal(otherServer, await store.GetAsync(otherServer.Profile));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task InvalidateAsyncPreservesAReplacementTokenForTheSameAccount()
+    {
+        var rejected = Session("user-1", "viewer", "old-token");
+        var replacement = rejected with { AccessToken = "new-token" };
+        var store = new InMemorySessionStore();
+        await store.SaveAsync(replacement);
+        var handler = new QueueHttpMessageHandler();
+        using var service = CreateService(handler, store);
+
+        var exception = await Assert.ThrowsAsync<AuthenticationException>(
+            () => service.InvalidateAsync(rejected));
+
+        Assert.Equal(AuthenticationError.SessionChanged, exception.Error);
+        Assert.Equal(replacement, await store.GetAsync(replacement.Profile));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task RestoreAsyncRemovesOnlyRejectedSession()
     {
         var rejected = Session("user-1", "first", "rejected-token");

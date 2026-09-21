@@ -194,14 +194,7 @@ public partial class MainViewModel : ViewModelBase
             StatusMessage = exception.Message;
             if (exception.Error == AuthenticationError.RevokedSession)
             {
-                _currentSession = null;
-                SavedSessions.Remove(profile);
-                SelectedSavedSession = SavedSessions.FirstOrDefault();
-                CurrentServer = profile.Server;
-                ServerAddress = profile.Server.BaseUri.ToString();
-                Username = profile.Username;
-                Password = string.Empty;
-                ShowSignIn();
+                PrepareForReauthentication(profile);
             }
 
             try
@@ -312,6 +305,28 @@ public partial class MainViewModel : ViewModelBase
         catch (MediaPreviewException exception)
         {
             StatusMessage = exception.Message;
+            if (exception.Error == MediaPreviewError.AccessDenied)
+            {
+                PrepareForReauthentication(session.Profile);
+                StatusMessage = $"{exception.Message} Sign in again to continue.";
+                try
+                {
+                    await _authenticationService.InvalidateAsync(session);
+                }
+                catch (AuthenticationException invalidationException)
+                {
+                    StatusMessage = $"{StatusMessage} {invalidationException.Message}";
+                }
+
+                try
+                {
+                    await RefreshSavedSessionsAsync(CancellationToken.None);
+                }
+                catch (AuthenticationException refreshException)
+                {
+                    StatusMessage = $"{StatusMessage} {refreshException.Message}";
+                }
+            }
         }
         finally
         {
@@ -321,6 +336,23 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void HideDesignGallery() => IsDesignGalleryVisible = false;
+
+    private void PrepareForReauthentication(SessionProfile profile)
+    {
+        _currentSession = null;
+        AuthenticatedAccount = string.Empty;
+        SavedSessions.Remove(profile);
+        SelectedSavedSession = SavedSessions.FirstOrDefault();
+        CurrentServer = profile.Server;
+        ServerAddress = profile.Server.BaseUri.ToString();
+        Username = profile.Username;
+        Password = string.Empty;
+        ShowSignIn();
+        var gallery = DesignGallery;
+        DesignGallery = null;
+        gallery?.Dispose();
+        ShowDesignGalleryCommand.NotifyCanExecuteChanged();
+    }
 
     [RelayCommand(CanExecute = nameof(CanNavigate))]
     private void AddServer()
