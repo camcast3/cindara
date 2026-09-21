@@ -3,7 +3,8 @@ name: review-committee
 description: Run a local, read-only pull request review with three independent model families and a verified consensus report.
 argument-hint: "Review the current branch or PR against its base branch."
 user-invocable: true
-mode: primary
+tools: ['agent', 'read', 'search']
+target: vscode
 ---
 
 # Review Committee
@@ -23,16 +24,18 @@ commit, push, post comments, submit reviews, or resolve threads.
 
 ## Committee
 
-Launch all three reviewers concurrently with the `code-review` agent type. Give
-each reviewer the same complete target, base, diff scope, repository instructions,
-and requirement to report only actionable defects introduced by the change.
-Override the model for each reviewer exactly as follows:
+Launch three generic subagents concurrently with the `agent` tool. Do not name a
+custom or built-in agent when invoking them; put each seat's review role in its
+prompt. Give each reviewer the same complete target, base, diff scope, repository
+instructions, and requirement to report only actionable defects introduced by
+the change. Request the model for each reviewer using these exact model-picker
+names:
 
 | Seat | Model | Focus |
 | --- | --- | --- |
-| Correctness | `gpt-6-astra` | Logic errors, regressions, concurrency, state, and error handling |
-| Integration | `gemini-3.8-flash` | API contracts, cross-component behavior, portability, and missing tests |
-| Adversarial | `mai-code-1.1-flash` | Security, privacy, trust boundaries, abuse cases, and operational reliability |
+| Correctness | `GPT-6 Astra` | Logic errors, regressions, concurrency, state, and error handling |
+| Integration | `Gemini 3.8 Flash` | API contracts, cross-component behavior, portability, and missing tests |
+| Adversarial | `MAI-Code-1.1-Flash` | Security, privacy, trust boundaries, abuse cases, and operational reliability |
 
 Require every reviewer to:
 
