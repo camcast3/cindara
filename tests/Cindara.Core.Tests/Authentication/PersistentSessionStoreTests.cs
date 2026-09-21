@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Cindara.Core.Authentication;
 using Cindara.Core.Models;
 
@@ -25,6 +26,168 @@ public sealed class PersistentSessionStoreTests : IDisposable
         Assert.Equal(session, restored);
         Assert.DoesNotContain(session.AccessToken, index, StringComparison.Ordinal);
         Assert.Contains(session.Username, index, StringComparison.Ordinal);
+        using var protectedValue = JsonDocument.Parse(Assert.Single(vault.Secrets).Value);
+        Assert.Equal(1, protectedValue.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal(session.Server.BaseUri.AbsoluteUri, protectedValue.RootElement.GetProperty("serverAddress").GetString());
+        Assert.Equal(session.Server.Id, protectedValue.RootElement.GetProperty("serverId").GetString());
+        Assert.Equal(session.UserId, protectedValue.RootElement.GetProperty("userId").GetString());
+        Assert.Equal(session.AccessToken, protectedValue.RootElement.GetProperty("accessToken").GetString());
+    }
+
+    [Theory]
+    [InlineData("https://attacker.example.com/jellyfin/")]
+    [InlineData("https://media.example.com:8443/jellyfin/")]
+    [InlineData("https://media.example.com/other/")]
+    [InlineData("https://media.example.com/Jellyfin/")]
+    [InlineData("https://media.example.com/jellyfin")]
+    [InlineData("https://media.example.com/jellyfin/?destination=attacker")]
+    [InlineData("https://media.example.com/jellyfin/#attacker")]
+    [InlineData("http://localhost/jellyfin/")]
+    public async Task OfflineAddressTamperingCannotRedirectProtectedToken(string tamperedAddress)
+    {
+        var vault = new TestCredentialStore();
+        var original = CreateSession("protected-token");
+        var saved = original with
+        {
+            Server = original.Server with { BaseUri = new Uri("https://media.example.com/jellyfin/") },
+        };
+        using (var store = CreateStore(vault))
+        {
+            await store.SaveAsync(saved);
+        }
+
+        var secret = Assert.Single(vault.Secrets);
+        var tampered = saved.Profile with { Server = saved.Server with { BaseUri = new Uri(tamperedAddress) } };
+        await WriteIndexAsync(tampered);
+        using var reopened = CreateStore(vault);
+        var selected = Assert.Single(await reopened.GetProfilesAsync());
+        var handler = new RestoreHttpMessageHandler();
+        using var authentication = CreateAuthenticationService(reopened, handler);
+
+        var exception = await Assert.ThrowsAsync<AuthenticationException>(
+            () => authentication.RestoreAsync(selected));
+
+        Assert.Equal(AuthenticationError.SecureStorageUnavailable, exception.Error);
+        Assert.IsType<SessionStoreException>(exception.InnerException);
+        Assert.Contains("verified server address", exception.Message, StringComparison.Ordinal);
+        Assert.Null(handler.RequestUri);
+        Assert.Null(handler.AccessToken);
+        Assert.DoesNotContain(saved.AccessToken, exception.ToString(), StringComparison.Ordinal);
+        Assert.Equal(secret, Assert.Single(vault.Secrets));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TransplantedProtectedCredentialRejectsDifferentAccountIds(bool changeServerId)
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var original = CreateSession("original-secret");
+        await store.SaveAsync(original);
+        var protectedValue = Assert.Single(vault.Secrets).Value;
+        var other = changeServerId
+            ? original with { Server = original.Server with { Id = "other-server" }, AccessToken = "other-secret" }
+            : original with { UserId = "other-user", AccessToken = "other-secret" };
+        await store.SaveAsync(other);
+        var otherKey = vault.Secrets.Single(pair => pair.Value != protectedValue).Key;
+        vault.Secrets[otherKey] = protectedValue;
+        var handler = new RestoreHttpMessageHandler();
+        using var authentication = CreateAuthenticationService(store, handler);
+
+        var exception = await Assert.ThrowsAsync<AuthenticationException>(
+            () => authentication.RestoreAsync(other.Profile));
+
+        Assert.Equal(AuthenticationError.SecureStorageUnavailable, exception.Error);
+        Assert.Null(handler.RequestUri);
+        Assert.Equal(original, await store.GetAsync(original.Profile));
+    }
+
+    [Theory]
+    [InlineData("legacy-token")]
+    [InlineData("null")]
+    [InlineData("{}")]
+    [InlineData("""{"version":99,"serverId":"server-1","userId":"user-1","serverAddress":"https://media.example.com/","accessToken":"token"}""")]
+    [InlineData("""{"version":1,"serverId":"server-1","userId":"user-1","accessToken":"token"}""")]
+    public async Task UnboundOrInvalidCredentialsFailClosedAndCanBeExplicitlyRemoved(string secret)
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var session = CreateSession("token");
+        await store.SaveAsync(session);
+        var key = Assert.Single(vault.Secrets).Key;
+        vault.Secrets[key] = secret;
+        var handler = new RestoreHttpMessageHandler();
+        using var authentication = CreateAuthenticationService(store, handler);
+
+        var exception = await Assert.ThrowsAsync<AuthenticationException>(
+            () => authentication.RestoreAsync(session.Profile));
+
+        Assert.Equal(AuthenticationError.SecureStorageUnavailable, exception.Error);
+        Assert.Contains("protected server binding", exception.Message, StringComparison.Ordinal);
+        Assert.Null(handler.RequestUri);
+        Assert.Equal(secret, vault.Secrets[key]);
+        await authentication.RemoveAsync(session.Profile);
+        Assert.Empty(vault.Secrets);
+        Assert.Empty(await store.GetProfilesAsync());
+    }
+
+    [Fact]
+    public async Task CanonicalAddressEquivalentSpellingRestoresBoundToken()
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var saved = CreateSession("protected-token");
+        await store.SaveAsync(saved);
+        var equivalent = saved.Profile with
+        {
+            Server = saved.Server with { BaseUri = new Uri("https://MEDIA.EXAMPLE.COM:443/") },
+        };
+        await WriteIndexAsync(equivalent);
+
+        Assert.Equal(saved, await store.GetAsync(equivalent));
+    }
+
+    [Fact]
+    public async Task RemovingTamperedProfileDoesNotSendTokenAndKeepsOtherAccounts()
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var saved = CreateSession("token");
+        var other = saved with { UserId = "other-user", AccessToken = "other-token" };
+        await store.SaveAsync(saved);
+        await store.SaveAsync(other);
+        var tampered = saved.Profile with
+        {
+            Server = saved.Server with { BaseUri = new Uri("https://attacker.example.com/") },
+        };
+        await WriteIndexAsync(tampered, other.Profile);
+        var handler = new RestoreHttpMessageHandler();
+        using var authentication = CreateAuthenticationService(store, handler);
+
+        await authentication.RemoveAsync(tampered);
+
+        Assert.Null(handler.RequestUri);
+        Assert.Equal(other, await store.GetAsync(other.Profile));
+        Assert.Equal(other.Profile, Assert.Single(await store.GetProfilesAsync()));
+        Assert.Single(vault.Secrets);
+    }
+
+    [Fact]
+    public async Task NewSignInReplacesLegacySecretWithBoundCredential()
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var old = CreateSession("legacy-token");
+        await store.SaveAsync(old);
+        var key = Assert.Single(vault.Secrets).Key;
+        vault.Secrets[key] = old.AccessToken;
+        var newlyAuthenticated = old with { AccessToken = "new-token" };
+
+        await store.SaveAsync(newlyAuthenticated);
+
+        Assert.Equal(newlyAuthenticated, await store.GetAsync(newlyAuthenticated.Profile));
+        Assert.NotEqual(old.AccessToken, vault.Secrets[key]);
     }
 
     [Fact]
@@ -48,8 +211,11 @@ public sealed class PersistentSessionStoreTests : IDisposable
         Assert.Equal(saved, await reopenedStore.GetAsync(suppliedProfile));
     }
 
-    [Fact]
-    public async Task RestoreUsesCurrentPersistedDestinationWhenCallerProfileIsStale()
+    [Theory]
+    [InlineData(HttpStatusCode.OK)]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public async Task RestoreUsesCurrentPersistedDestinationWhenCallerProfileIsStale(HttpStatusCode statusCode)
     {
         var vault = new TestCredentialStore();
         using var store = CreateStore(vault);
@@ -68,15 +234,26 @@ public sealed class PersistentSessionStoreTests : IDisposable
         };
         using var otherStore = CreateStore(vault);
         await otherStore.SaveAsync(replacement);
-        var handler = new RestoreHttpMessageHandler();
+        var handler = new RestoreHttpMessageHandler { StatusCode = statusCode };
         using var service = new JellyfinAuthenticationService(
             handler,
             store,
             new JellyfinClientIdentity("Cindara", "Test", "device-1", "1.0"));
 
-        var restored = await service.RestoreAsync(staleProfile);
+        if (statusCode == HttpStatusCode.OK)
+        {
+            var restored = await service.RestoreAsync(staleProfile);
+            Assert.Equal(replacement, restored);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<AuthenticationException>(
+                () => service.RestoreAsync(staleProfile));
+            Assert.Equal(AuthenticationError.RevokedSession, exception.Error);
+            Assert.Empty(await store.GetProfilesAsync());
+            Assert.Empty(vault.Secrets);
+        }
 
-        Assert.Equal(replacement, restored);
         Assert.Equal(new Uri("https://current.example.com/jellyfin/Users/Me"), handler.RequestUri);
         Assert.Equal(replacement.AccessToken, handler.AccessToken);
     }
@@ -165,13 +342,14 @@ public sealed class PersistentSessionStoreTests : IDisposable
         using var store = new PersistentSessionStore(indexPath, vault);
         var original = CreateSession("old-token");
         await store.SaveAsync(original);
+        var originalProtectedValue = Assert.Single(vault.Secrets).Value;
         File.Delete(indexPath);
         Directory.CreateDirectory(indexPath);
 
         await Assert.ThrowsAsync<SessionStoreException>(
             () => store.SaveAsync(original with { AccessToken = "new-token" }));
 
-        Assert.Equal("old-token", Assert.Single(vault.Secrets).Value);
+        Assert.Equal(originalProtectedValue, Assert.Single(vault.Secrets).Value);
     }
 
     [Fact]
@@ -443,6 +621,23 @@ public sealed class PersistentSessionStoreTests : IDisposable
         Assert.True(await store.RemoveIfMatchesAsync(session.Profile, null));
     }
 
+    [Fact]
+    public async Task ConditionalRemovalPreservesNewServerBindingEvenWhenTokenMatches()
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var original = CreateSession("token");
+        await store.SaveAsync(original);
+        var replacement = original with
+        {
+            Server = original.Server with { BaseUri = new Uri("https://replacement.example.com/") },
+        };
+        await store.SaveAsync(replacement);
+
+        Assert.False(await store.RemoveIfMatchesAsync(original.Profile, original.AccessToken));
+        Assert.Equal(replacement, await store.GetAsync(replacement.Profile));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))
@@ -453,6 +648,16 @@ public sealed class PersistentSessionStoreTests : IDisposable
 
     private PersistentSessionStore CreateStore(TestCredentialStore vault) =>
         new(Path.Combine(_directory, "sessions.json"), vault);
+
+    private Task WriteIndexAsync(params SessionProfile[] profiles) =>
+        File.WriteAllTextAsync(
+            Path.Combine(_directory, "sessions.json"),
+            JsonSerializer.Serialize(profiles, JsonSerializerOptions.Web));
+
+    private static JellyfinAuthenticationService CreateAuthenticationService(
+        ISessionStore store,
+        HttpMessageHandler handler) =>
+        new(handler, store, new JellyfinClientIdentity("Cindara", "Test", "device-1", "1.0"));
 
     private static AuthenticatedSession CreateSession(string token) =>
         new(
@@ -468,6 +673,8 @@ public sealed class PersistentSessionStoreTests : IDisposable
 
     private sealed class RestoreHttpMessageHandler : HttpMessageHandler
     {
+        public HttpStatusCode StatusCode { get; init; } = HttpStatusCode.OK;
+
         public Uri? RequestUri { get; private set; }
 
         public string? AccessToken { get; private set; }
@@ -478,7 +685,7 @@ public sealed class PersistentSessionStoreTests : IDisposable
         {
             RequestUri = request.RequestUri;
             AccessToken = request.Headers.GetValues("X-Emby-Token").Single();
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            return Task.FromResult(new HttpResponseMessage(StatusCode)
             {
                 Content = new StringContent(
                     """{"Id":"user-1","Name":"current-user"}""",

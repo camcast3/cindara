@@ -71,7 +71,13 @@ public sealed class InMemorySessionStore : ISessionStore
         lock (_sync)
         {
             var key = new SessionKey(profile.Server.Id, profile.UserId);
-            if (!string.Equals(_sessions.GetValueOrDefault(key)?.AccessToken, expectedAccessToken, StringComparison.Ordinal))
+            var session = _sessions.GetValueOrDefault(key);
+            if (!string.Equals(session?.AccessToken, expectedAccessToken, StringComparison.Ordinal)
+                || (session is not null
+                    && !string.Equals(
+                        session.Server.BaseUri.AbsoluteUri,
+                        profile.Server.BaseUri.AbsoluteUri,
+                        StringComparison.Ordinal)))
             {
                 return Task.FromResult(false);
             }

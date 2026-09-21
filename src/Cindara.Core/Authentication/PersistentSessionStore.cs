@@ -52,13 +52,29 @@ public sealed class PersistentSessionStore(
                 return null;
             }
 
-            var token = await credentialStore
+            var secret = await credentialStore
                 .GetAsync(GetCredentialKey(savedProfile), cancellationToken)
                 .ConfigureAwait(false);
 
-            return token is null
-                ? null
-                : new AuthenticatedSession(savedProfile.Server, savedProfile.UserId, savedProfile.Username, token);
+            if (secret is null)
+            {
+                return null;
+            }
+
+            var credential = ProtectedSessionCredential.Deserialize(secret);
+            if (!credential.Matches(savedProfile))
+            {
+                throw new SessionStoreException(
+                    SessionStoreError.InvalidData,
+                    "Saved account metadata does not match its protected credential. Remove this saved account, "
+                    + "then connect to a verified server address and sign in again.");
+            }
+
+            return new AuthenticatedSession(
+                savedProfile.Server with { BaseUri = new Uri(credential.ServerAddress) },
+                credential.UserId,
+                savedProfile.Username,
+                credential.AccessToken);
         }
         finally
         {
@@ -75,20 +91,21 @@ public sealed class PersistentSessionStore(
 
         var profile = session.Profile;
         var credentialKey = GetCredentialKey(profile);
+        var secret = ProtectedSessionCredential.Serialize(session);
         await _mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var fileLock = await AcquireFileLockAsync(cancellationToken)
                 .ConfigureAwait(false);
             var profiles = await ReadProfilesAsync(cancellationToken).ConfigureAwait(false);
-            var previousToken = await credentialStore
+            var previousCredential = await credentialStore
                 .GetAsync(credentialKey, cancellationToken)
                 .ConfigureAwait(false);
 
             try
             {
                 await credentialStore
-                    .SetAsync(credentialKey, session.AccessToken, cancellationToken)
+                    .SetAsync(credentialKey, secret, cancellationToken)
                     .ConfigureAwait(false);
                 var updated = profiles
                     .Where(saved => !HasSameKey(saved, profile))
@@ -102,7 +119,7 @@ public sealed class PersistentSessionStore(
             {
                 try
                 {
-                    if (previousToken is null)
+                    if (previousCredential is null)
                     {
                         await credentialStore.RemoveAsync(credentialKey, CancellationToken.None)
                             .ConfigureAwait(false);
@@ -110,7 +127,7 @@ public sealed class PersistentSessionStore(
                     else
                     {
                         await credentialStore
-                            .SetAsync(credentialKey, previousToken, CancellationToken.None)
+                            .SetAsync(credentialKey, previousCredential, CancellationToken.None)
                             .ConfigureAwait(false);
                     }
                 }
@@ -159,12 +176,19 @@ public sealed class PersistentSessionStore(
             var updated = profiles.Where(saved => !HasSameKey(saved, profile)).ToArray();
             var existed = updated.Length != profiles.Count;
             var credentialKey = GetCredentialKey(profile);
-            var previousToken = await credentialStore
+            var previousCredential = await credentialStore
                 .GetAsync(credentialKey, cancellationToken)
                 .ConfigureAwait(false);
-            if (compareCredential && !string.Equals(previousToken, expectedAccessToken, StringComparison.Ordinal))
+            if (compareCredential)
             {
-                return false;
+                var credential = previousCredential is null
+                    ? null
+                    : ProtectedSessionCredential.Deserialize(previousCredential);
+                if (!string.Equals(credential?.AccessToken, expectedAccessToken, StringComparison.Ordinal)
+                    || (credential is not null && !credential.Matches(profile)))
+                {
+                    return false;
+                }
             }
 
             try
@@ -179,12 +203,12 @@ public sealed class PersistentSessionStore(
 
                 return compareCredential || existed || credentialRemoved;
             }
-            catch (Exception removalException) when (previousToken is not null)
+            catch (Exception removalException) when (previousCredential is not null)
             {
                 try
                 {
                     await credentialStore
-                        .SetAsync(credentialKey, previousToken, CancellationToken.None)
+                        .SetAsync(credentialKey, previousCredential, CancellationToken.None)
                         .ConfigureAwait(false);
                 }
                 catch (Exception rollbackException)

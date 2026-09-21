@@ -16,6 +16,18 @@ account and return it to sign-in.
 Credential-bearing requests require HTTPS. Plain HTTP is accepted only for
 loopback development servers.
 
+Each OS-protected credential binds its token to the canonical server URL
+(scheme, host, port, and base path), server ID, and user ID. The plaintext
+`sessions.json` index is used for account selection, not as authority for a
+token's destination. Restoration rejects metadata that differs from the protected
+binding before making any authenticated request. The entire protected credential
+is preserved when a save or removal is rolled back.
+
+Older, token-only credentials cannot be safely upgraded using the plaintext
+index. They are rejected without sending the token. Remove the saved account,
+reconnect using a verified server address, and sign in again. The same recovery
+applies when saved metadata and its protected credential disagree.
+
 ## Architecture
 
 ```text

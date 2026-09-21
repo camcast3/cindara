@@ -136,7 +136,7 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            await RemoveIgnoringCancellationAsync(profile, session.AccessToken).ConfigureAwait(false);
+            await RemoveIgnoringCancellationAsync(session.Profile, session.AccessToken).ConfigureAwait(false);
             throw new AuthenticationException(
                 AuthenticationError.RevokedSession,
                 "This Jellyfin session is no longer valid. Sign in again to continue.");

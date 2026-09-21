@@ -45,6 +45,24 @@ public sealed class InMemorySessionStoreTests
         Assert.Empty(await store.GetProfilesAsync());
     }
 
+    [Fact]
+    public async Task ConditionalRemovalPreservesNewServerBindingEvenWhenTokenMatches()
+    {
+        var store = new InMemorySessionStore();
+        var original = CreateSession("server-a", "user-a", "token");
+        await store.SaveAsync(original);
+        var replacement = original with
+        {
+            Server = original.Server with { BaseUri = new Uri("https://replacement.example.com/") },
+        };
+        await store.SaveAsync(replacement);
+
+        Assert.False(await store.RemoveIfMatchesAsync(original.Profile, original.AccessToken));
+        Assert.Equal(replacement, await store.GetAsync(replacement.Profile));
+        Assert.True(await store.RemoveIfMatchesAsync(replacement.Profile, replacement.AccessToken));
+        Assert.Null(await store.GetAsync(replacement.Profile));
+    }
+
     private static AuthenticatedSession CreateSession(
         string serverId,
         string userId,
