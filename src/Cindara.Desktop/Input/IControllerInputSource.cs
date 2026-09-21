@@ -12,6 +12,17 @@ public interface IControllerInputSource : IDisposable
 
     int ConnectedGamepads { get; }
 
+    ControllerInfo? ActiveController => null;
+
+    event EventHandler? ActiveControllerChanged
+    {
+        add { }
+        remove { }
+    }
+
+    // Call on both activation and deactivation; keep polling while inactive for hotplug.
+    void SetApplicationActive(bool isActive) { }
+
     void Initialize();
 
     void Poll();
