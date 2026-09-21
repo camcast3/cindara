@@ -8,12 +8,18 @@ branding, exact layout, or proprietary interaction.
 
 ## Information architecture
 
-The persistent left rail exposes **Home**, **Libraries**, **Search**,
+The production information architecture exposes **Home**, **Libraries**, **Search**,
 **Downloads**, and **Settings** in that order. It is collapsed to icons during
 browsing and expands when focused. Downloads is a visible placeholder until
 offline media ships so later work does not destabilize navigation order.
 Details are entered from content rather than added to the rail. Playback is a
 temporary full-screen layer.
+
+The approved authenticated preview uses a compact icon rail with Search, Home,
+Saved, TV, Movies, Anime, and More, plus Home/Trending/Activity/Profile header
+buttons. This PR establishes their appearance and focus behavior, not the
+destination screens. Production navigation and library/details/playback flows
+remain assigned to #9, #3, #5, and #4.
 
 ## Tokens and accessibility
 
@@ -52,29 +58,95 @@ inside the safe area. Hero artwork carries a dark Cindara gradient so text
 remains readable. Dialogs dim, but do not blur, the context. Toasts do not take
 focus. Skeletons preserve final geometry and respect reduced motion.
 
-`DesignGalleryView.axaml` is a non-production, compile-checked catalog for the
-navigation rail, hero, landscape rail, poster grid, card states, dialog, toast,
-empty state, and loading skeleton.
+`DesignGalleryView.axaml` is a non-production authenticated showcase for the
+navigation rail, header, hero, landscape cards, and poster rails. The reusable
+styles also define dialog, toast, empty-state actions, and loading skeleton
+treatments; the wireframes below specify the remaining screens.
 
 ## Screen wireframes and focus graphs
 
-Directional links below are deterministic. **A/Enter/Space** activates,
+Directional links below describe the target production shell. **A/Enter/Space** activates,
 **B/Escape** returns or dismisses, and **Start/F11** toggles fullscreen. Mouse
 click maps to activation, pointer hover maps to hover (not keyboard focus), and
 wheel/trackpad scroll maps to rail or grid scrolling.
+The current preview implements header/rail directional navigation and controller
+Start/Back fullscreen toggling; the complete keyboard shortcuts, reduced-motion
+settings, modal behavior, and production destinations are follow-up shell and
+accessibility work.
 
 ### Home
 
 ```text
-[Rail]  [Hero title and Play]
+[Rail]  [Home] [Trending] [Activity] [Profile]
+        [Hero title / episode / facts / overview]
         [Continue watching  > > >]
         [Recently added     > > >]
 ```
 
-Initial focus: hero primary action. Left enters the selected rail item; down
-enters the first card of the first rail. Within a rail, left/right moves cards;
-up/down chooses the nearest card in the adjacent rail. Up from the hero stays
-on the hero. Returning from details restores the originating card.
+Initial focus: Home in the header. Left/right traverses the header; down enters
+the first card of the active media row. Within a rail, left/right moves cards;
+up/down enters the first card of the adjacent rail. Up from the first row
+returns to the header. The hero is informational, with no Play or More Info
+buttons. Returning from production details will restore the originating card.
+
+The authenticated preview uses one right-aligned hero image. Its width is 60%
+of the content viewport, independent of hero height, so its left fade begins
+near the midpoint on both 16:9 TVs and ultrawide monitors. Preserve the source
+aspect ratio and top alignment; clip any excess height at the bottom. Apply
+opacity masks relative to the artwork's visible bounds, not the entire window,
+with fully transparent left and bottom edges over an opaque background. This
+prevents seams and keeps scrolled cards from bleeding through the hero.
+
+Preview hero text starts at the upper left immediately below the Home/Trending
+header. Title, subtitle, metadata, description, and their spacing scale together
+from 1080p to 4K; long titles and descriptions truncate within the hero rather
+than overlapping the rails. Poster and landscape cards have no border at rest.
+The focused card retains one rounded accent outline for controller and keyboard
+use; the framework's rectangular focus adorner is suppressed on media cards so
+directional navigation does not add a second outline.
+
+The rail viewport reserves measured trailing space below its final visible row
+so that row can reach the same focused position beneath the hero as earlier
+rows. Align the row heading below the hero, with the cards beneath it; never
+align only the artwork and obscure the heading. Recompute trailing space after
+layout or viewport changes, accounting for the heading, cards, captions, and
+the existing bottom margin.
+Controller and keyboard up/down navigation enters the first card of the adjacent
+nonempty row and resets that row's horizontal offset. Returning to a previously
+visited row also starts at its first card; left/right still traverses within
+the current row, and a mouse click retains the specific card selected.
+Row changes use the standard 200 ms cubic ease-out motion. New input redirects
+the current transition rather than queuing moves. Scroll targets are measured
+in content coordinates so partially completed movement cannot shift the final
+heading position. Automatic vertical bring-into-view is suppressed to avoid a
+snap before the transition; horizontal card visibility remains automatic.
+
+The preview opens with focus on Home in the top bar. Left/right traverses
+Home, Trending, Activity, and Profile; up from the first media row returns to
+the last focused header button, and down returns to the first card of the
+active row. Left from Home enters the sidebar; right from the sidebar's Home
+icon returns to the header. Header destinations remain design placeholders.
+TV uses a screen-and-stand glyph; Anime has its own torii gate glyph, accessible
+name, and tooltip rather than sharing the TV icon.
+Both the sidebar's library icons and recently-added rows use TV, Movies, Anime
+order; Continue Watching stays first. Anime libraries are distinguished by
+their name because Jellyfin normally reports them as `tvshows`. Separate
+libraries within each group retain the server's order and are never merged.
+
+### Review status and preview limits
+
+The product owner approved this design for review on 2026-09-21 after live
+authenticated-media iteration on an ultrawide monitor and a physical 4K TV.
+The preview launches fullscreen and uses logical viewport dimensions so Windows
+DPI scaling is not applied twice. Moving the native window between mixed-DPI
+screens during testing required a resize refresh; display migration and startup
+screen selection remain part of the production shell work.
+
+This gallery intentionally caps rows at 20 items and preloads a bounded subset
+of recently-added backdrops, falling back to card artwork elsewhere. Header and
+sidebar destinations, playback, mutations, paging, and production image caching
+are not implemented here. Session tokens are sent only in authenticated headers;
+the preview transport rejects redirects rather than forwarding those headers.
 
 ### Library
 

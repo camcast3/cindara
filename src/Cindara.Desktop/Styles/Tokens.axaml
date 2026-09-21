@@ -48,7 +48,7 @@
 
     <x:Double x:Key="Cindara.Elevation.Rest">0</x:Double>
     <BoxShadows x:Key="Cindara.Elevation.Focused">0 12 32 0 #A6000000</BoxShadows>
-    <x:Double x:Key="Cindara.Motion.Fast">120</x:Double>
-    <x:Double x:Key="Cindara.Motion.Standard">200</x:Double>
-    <x:Double x:Key="Cindara.Motion.Deliberate">320</x:Double>
+    <x:TimeSpan x:Key="Cindara.Motion.Fast">0:0:0.12</x:TimeSpan>
+    <x:TimeSpan x:Key="Cindara.Motion.Standard">0:0:0.2</x:TimeSpan>
+    <x:TimeSpan x:Key="Cindara.Motion.Deliberate">0:0:0.32</x:TimeSpan>
 </ResourceDictionary>

@@ -61,9 +61,15 @@
     </Style>
 
     <Style Selector="Button.nav">
-        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.TextSecondary}" />
+    </Style>
+    <Style Selector="Button.nav.header-tab">
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.nav.selected /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
@@ -76,9 +82,11 @@
 
     <Style Selector="Button.card">
         <Setter Property="Padding" Value="0" />
+        <!-- The rounded :focus border below replaces the default rectangular focus adorner. -->
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Surface}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Border}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Medium}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />

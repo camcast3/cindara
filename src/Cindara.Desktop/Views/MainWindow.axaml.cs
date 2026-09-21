@@ -11,6 +11,7 @@ public partial class MainWindow : Window
 {
     private readonly IControllerInputSource _controllerInput;
     private readonly DispatcherTimer _controllerTimer;
+    private MainViewModel? _viewModel;
 
     public MainWindow()
         : this(new SdlGamepadInputSource())
@@ -32,7 +33,7 @@ public partial class MainWindow : Window
         Closed += OnClosed;
     }
 
-    private void OnOpened(object? sender, EventArgs eventArgs)
+    private async void OnOpened(object? sender, EventArgs eventArgs)
     {
         _controllerInput.ActionPressed += OnControllerActionPressed;
         _controllerInput.ConnectionChanged += OnControllerConnectionChanged;
@@ -40,6 +41,9 @@ public partial class MainWindow : Window
 
         if (DataContext is MainViewModel viewModel)
         {
+            _viewModel = viewModel;
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            await viewModel.InitializeCommand.ExecuteAsync(null);
             viewModel.SetControllerStatus(
                 _controllerInput.IsAvailable
                     ? "Controller ready: D-pad or left stick navigates, A selects, and Start toggles fullscreen."
@@ -51,7 +55,7 @@ public partial class MainWindow : Window
             _controllerTimer.Start();
         }
 
-        ServerAddressTextBox.Focus();
+        FocusCurrentState();
     }
 
     private void OnClosed(object? sender, EventArgs eventArgs)
@@ -61,10 +65,58 @@ public partial class MainWindow : Window
         _controllerInput.ActionPressed -= OnControllerActionPressed;
         _controllerInput.ConnectionChanged -= OnControllerConnectionChanged;
         _controllerInput.Dispose();
+        if (_viewModel is not null)
+        {
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel = null;
+        }
     }
 
     private void OnControllerTimerTick(object? sender, EventArgs eventArgs) =>
         _controllerInput.Poll();
+
+    private void OnViewModelPropertyChanged(
+        object? sender,
+        System.ComponentModel.PropertyChangedEventArgs eventArgs)
+    {
+        if (eventArgs.PropertyName is nameof(MainViewModel.IsServerEntryVisible)
+            or nameof(MainViewModel.IsSignInVisible)
+            or nameof(MainViewModel.AreSavedSessionsVisible)
+            or nameof(MainViewModel.IsAuthenticatedVisible)
+            or nameof(MainViewModel.IsDesignGalleryVisible))
+        {
+            Dispatcher.UIThread.Post(FocusCurrentState, DispatcherPriority.Loaded);
+        }
+    }
+
+    private void FocusCurrentState()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        if (_viewModel.IsSignInVisible)
+        {
+            UsernameTextBox.Focus();
+        }
+        else if (_viewModel.AreSavedSessionsVisible)
+        {
+            SavedSessionsComboBox.Focus();
+        }
+        else if (_viewModel.IsDesignGalleryVisible)
+        {
+            GalleryView.FocusTopNavigation();
+        }
+        else if (_viewModel.IsAuthenticatedVisible)
+        {
+            PreviewButton.Focus();
+        }
+        else if (_viewModel.IsServerEntryVisible)
+        {
+            ServerAddressTextBox.Focus();
+        }
+    }
 
     private void OnControllerConnectionChanged(
         object? sender,
@@ -117,6 +169,9 @@ public partial class MainWindow : Window
                     ? WindowState.Normal
                     : WindowState.FullScreen;
                 break;
+            case ControllerAction.Back when _viewModel?.IsDesignGalleryVisible is true:
+                _viewModel.HideDesignGalleryCommand.Execute(null);
+                break;
             case ControllerAction.Back:
                 break;
             default:
@@ -129,6 +184,11 @@ public partial class MainWindow : Window
 
     private void MoveFocus(NavigationDirection direction)
     {
+        if (_viewModel?.IsDesignGalleryVisible is true && GalleryView.TryMoveGalleryFocus(direction))
+        {
+            return;
+        }
+
         FocusManager?.TryMoveFocus(
             direction,
             new FindNextElementOptions

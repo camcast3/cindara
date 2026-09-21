@@ -19,5 +19,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cindara.Desktop\Cindara.Desktop.csproj" />
+    <EmbeddedResource Include="..\..\src\Cindara.Desktop\Styles\Components.axaml"
+                      LogicalName="Cindara.Tests.CardStyles.axaml" />
+    <EmbeddedResource Include="..\..\src\Cindara.Desktop\Views\DesignGalleryView.axaml"
+                      LogicalName="Cindara.Tests.DesignGallery.axaml" />
   </ItemGroup>
 </Project>

@@ -2,11 +2,25 @@ namespace Cindara.Core.Authentication;
 
 public interface ISessionStore
 {
-    IReadOnlyCollection<AuthenticatedSession> Sessions { get; }
+    Task<IReadOnlyList<SessionProfile>> GetProfilesAsync(
+        CancellationToken cancellationToken = default);
 
-    AuthenticatedSession? Find(string serverId, string userId);
+    Task<AuthenticatedSession?> GetAsync(
+        SessionProfile profile,
+        CancellationToken cancellationToken = default);
 
-    void Save(AuthenticatedSession session);
+    Task SaveAsync(
+        AuthenticatedSession session,
+        CancellationToken cancellationToken = default);
 
-    bool Remove(string serverId, string userId);
+    Task<bool> RemoveAsync(
+        SessionProfile profile,
+        CancellationToken cancellationToken = default);
+
+    // Atomically removes only the expected token (null means missing).
+    // Returns false when a different token or bound server address is now stored.
+    Task<bool> RemoveIfMatchesAsync(
+        SessionProfile profile,
+        string? expectedAccessToken,
+        CancellationToken cancellationToken = default);
 }
