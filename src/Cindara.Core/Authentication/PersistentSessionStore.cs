@@ -40,13 +40,23 @@ public sealed class PersistentSessionStore(
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        var token = await credentialStore
-            .GetAsync(GetCredentialKey(profile), cancellationToken)
-            .ConfigureAwait(false);
+        await _mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var fileLock = await AcquireFileLockAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var token = await credentialStore
+                .GetAsync(GetCredentialKey(profile), cancellationToken)
+                .ConfigureAwait(false);
 
-        return token is null
-            ? null
-            : new AuthenticatedSession(profile.Server, profile.UserId, profile.Username, token);
+            return token is null
+                ? null
+                : new AuthenticatedSession(profile.Server, profile.UserId, profile.Username, token);
+        }
+        finally
+        {
+            _mutex.Release();
+        }
     }
 
     public async Task SaveAsync(
@@ -114,9 +124,22 @@ public sealed class PersistentSessionStore(
         }
     }
 
-    public async Task<bool> RemoveAsync(
+    public Task<bool> RemoveAsync(
         SessionProfile profile,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        RemoveCoreAsync(profile, false, null, cancellationToken);
+
+    public Task<bool> RemoveIfMatchesAsync(
+        SessionProfile profile,
+        string? expectedAccessToken,
+        CancellationToken cancellationToken = default) =>
+        RemoveCoreAsync(profile, true, expectedAccessToken, cancellationToken);
+
+    private async Task<bool> RemoveCoreAsync(
+        SessionProfile profile,
+        bool compareCredential,
+        string? expectedAccessToken,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
@@ -132,6 +155,10 @@ public sealed class PersistentSessionStore(
             var previousToken = await credentialStore
                 .GetAsync(credentialKey, cancellationToken)
                 .ConfigureAwait(false);
+            if (compareCredential && !string.Equals(previousToken, expectedAccessToken, StringComparison.Ordinal))
+            {
+                return false;
+            }
 
             try
             {
@@ -143,7 +170,7 @@ public sealed class PersistentSessionStore(
                     await WriteProfilesAsync(updated, cancellationToken).ConfigureAwait(false);
                 }
 
-                return existed || credentialRemoved;
+                return compareCredential || existed || credentialRemoved;
             }
             catch (Exception removalException) when (previousToken is not null)
             {

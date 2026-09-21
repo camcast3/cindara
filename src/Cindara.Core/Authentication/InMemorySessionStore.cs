@@ -60,5 +60,26 @@ public sealed class InMemorySessionStore : ISessionStore
         }
     }
 
+    public Task<bool> RemoveIfMatchesAsync(
+        SessionProfile profile,
+        string? expectedAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_sync)
+        {
+            var key = new SessionKey(profile.Server.Id, profile.UserId);
+            if (!string.Equals(_sessions.GetValueOrDefault(key)?.AccessToken, expectedAccessToken, StringComparison.Ordinal))
+            {
+                return Task.FromResult(false);
+            }
+
+            _sessions.Remove(key);
+            return Task.FromResult(true);
+        }
+    }
+
     private sealed record SessionKey(string ServerId, string UserId);
 }

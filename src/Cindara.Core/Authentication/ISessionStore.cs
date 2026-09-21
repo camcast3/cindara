@@ -16,4 +16,11 @@ public interface ISessionStore
     Task<bool> RemoveAsync(
         SessionProfile profile,
         CancellationToken cancellationToken = default);
+
+    // Atomically removes only the expected token (null means missing).
+    // Returns false only when a different credential is now stored.
+    Task<bool> RemoveIfMatchesAsync(
+        SessionProfile profile,
+        string? expectedAccessToken,
+        CancellationToken cancellationToken = default);
 }

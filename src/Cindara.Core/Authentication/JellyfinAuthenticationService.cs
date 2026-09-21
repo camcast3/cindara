@@ -121,7 +121,7 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
         if (session is null)
         {
-            await RemoveIgnoringCancellationAsync(profile).ConfigureAwait(false);
+            await RemoveIgnoringCancellationAsync(profile, null).ConfigureAwait(false);
             throw new AuthenticationException(
                 AuthenticationError.RevokedSession,
                 "The saved credential is missing. Sign in again to restore this account.");
@@ -135,7 +135,7 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            await RemoveIgnoringCancellationAsync(profile).ConfigureAwait(false);
+            await RemoveIgnoringCancellationAsync(profile, session.AccessToken).ConfigureAwait(false);
             throw new AuthenticationException(
                 AuthenticationError.RevokedSession,
                 "This Jellyfin session is no longer valid. Sign in again to continue.");
@@ -175,7 +175,7 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
         }
         finally
         {
-            await RemoveIgnoringCancellationAsync(session.Profile).ConfigureAwait(false);
+            await RemoveIgnoringCancellationAsync(session.Profile, session.AccessToken).ConfigureAwait(false);
         }
 
         if (serverFailure is not null)
@@ -324,11 +324,17 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
             AuthenticationError.UnexpectedStatus,
             $"Jellyfin returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).");
 
-    private async Task RemoveIgnoringCancellationAsync(SessionProfile profile)
+    private async Task RemoveIgnoringCancellationAsync(SessionProfile profile, string? expectedAccessToken)
     {
         try
         {
-            await _sessionStore.RemoveAsync(profile, CancellationToken.None).ConfigureAwait(false);
+            if (!await _sessionStore.RemoveIfMatchesAsync(profile, expectedAccessToken, CancellationToken.None)
+                .ConfigureAwait(false))
+            {
+                throw new AuthenticationException(
+                    AuthenticationError.SessionChanged,
+                    "This account was signed in again while the request was running. The newer saved session was kept. Select it again to continue.");
+            }
         }
         catch (SessionStoreException exception)
         {

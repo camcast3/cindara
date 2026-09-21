@@ -134,6 +134,51 @@ public sealed class JellyfinAuthenticationServiceTests
         Assert.Equal(session, restored);
     }
 
+    [Theory]
+    [InlineData(false, HttpStatusCode.Unauthorized)]
+    [InlineData(false, HttpStatusCode.Forbidden)]
+    [InlineData(true, HttpStatusCode.NoContent)]
+    [InlineData(true, HttpStatusCode.Unauthorized)]
+    public async Task StaleSessionResponsePreservesConcurrentSignIn(bool logout, HttpStatusCode status)
+    {
+        var old = Session("user-1", "viewer", "old-token");
+        var store = new InMemorySessionStore();
+        await store.SaveAsync(old);
+        var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseResponse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task<HttpResponseMessage> DelayedResponse()
+        {
+            requestStarted.SetResult();
+            await releaseResponse.Task;
+            return Response(status, "{}");
+        }
+
+        var handler = new QueueHttpMessageHandler(
+            (Func<Task<HttpResponseMessage>>)DelayedResponse,
+            Response(HttpStatusCode.OK, """
+                {"AccessToken":"new-token","User":{"Id":"user-1","Name":"viewer"}}
+                """));
+        using var service = CreateService(handler, store);
+        var staleOperation = logout ? service.LogoutAsync(old) : service.RestoreAsync(old.Profile);
+        AuthenticatedSession? replacement = null;
+        try
+        {
+            await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            replacement = await service.AuthenticateAsync(new AuthenticationRequest(Server, "viewer", "password"));
+        }
+        finally
+        {
+            releaseResponse.TrySetResult();
+        }
+
+        var exception = await Assert.ThrowsAsync<AuthenticationException>(() => staleOperation);
+        Assert.Equal(AuthenticationError.SessionChanged, exception.Error);
+        Assert.NotNull(replacement);
+        Assert.Equal(replacement, await store.GetAsync(old.Profile));
+        Assert.Single(await store.GetProfilesAsync());
+        Assert.Equal("old-token", handler.Requests[0].AccessToken);
+    }
+
     [Fact]
     public async Task RestoreAsyncRemovesProfileWhenCredentialIsMissing()
     {
@@ -273,6 +318,7 @@ public sealed class JellyfinAuthenticationServiceTests
             return _results.Dequeue() switch
             {
                 HttpResponseMessage response => response,
+                Func<Task<HttpResponseMessage>> response => await response(),
                 Exception exception => throw exception,
                 _ => throw new InvalidOperationException("Unsupported test response."),
             };
@@ -307,6 +353,12 @@ public sealed class JellyfinAuthenticationServiceTests
             SessionProfile profile,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
+
+        public Task<bool> RemoveIfMatchesAsync(
+            SessionProfile profile,
+            string? expectedAccessToken,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(expectedAccessToken is null);
     }
 
     private sealed class MissingCredentialSessionStore(SessionProfile profile) : ISessionStore
@@ -338,6 +390,20 @@ public sealed class JellyfinAuthenticationServiceTests
             _profile = null;
             return Task.FromResult(WasRemoved);
         }
+
+        public async Task<bool> RemoveIfMatchesAsync(
+            SessionProfile requestedProfile,
+            string? expectedAccessToken,
+            CancellationToken cancellationToken = default)
+        {
+            if (expectedAccessToken is not null)
+            {
+                return false;
+            }
+
+            await RemoveAsync(requestedProfile, cancellationToken);
+            return true;
+        }
     }
 
     private sealed class CancelingSessionStore : ISessionStore
@@ -360,5 +426,11 @@ public sealed class JellyfinAuthenticationServiceTests
             SessionProfile profile,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
+
+        public Task<bool> RemoveIfMatchesAsync(
+            SessionProfile profile,
+            string? expectedAccessToken,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(expectedAccessToken is null);
     }
 }

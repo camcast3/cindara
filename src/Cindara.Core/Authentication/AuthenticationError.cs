@@ -9,4 +9,5 @@ public enum AuthenticationError
     Network,
     InvalidResponse,
     UnexpectedStatus,
+    SessionChanged,
 }

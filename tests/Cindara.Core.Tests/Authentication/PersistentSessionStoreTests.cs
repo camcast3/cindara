@@ -183,6 +183,167 @@ public sealed class PersistentSessionStoreTests : IDisposable
         Assert.Equal(2, (await firstStore.GetProfilesAsync()).Count);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task CredentialReadsWaitForTransactionRollback(bool separateStore, bool remove)
+    {
+        var vault = new TestCredentialStore();
+        using var writer = CreateStore(vault);
+        using var otherStore = CreateStore(vault);
+        var reader = separateStore ? otherStore : writer;
+        var original = CreateSession("original-token");
+        await writer.SaveAsync(original);
+        var mutated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task PauseThenFail()
+        {
+            mutated.SetResult();
+            await release.Task;
+            throw new SessionStoreException(SessionStoreError.PersistenceFailure, "Simulated failure.");
+        }
+
+        if (remove)
+        {
+            vault.AfterRemove = PauseThenFail;
+        }
+        else
+        {
+            vault.AfterSet = PauseThenFail;
+        }
+
+        var transaction = remove
+            ? writer.RemoveAsync(original.Profile)
+            : writer.SaveAsync(original with { AccessToken = "uncommitted-token" });
+        Task<AuthenticatedSession?>? read = null;
+        try
+        {
+            await mutated.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            read = reader.GetAsync(original.Profile);
+            Assert.False(read.IsCompleted);
+        }
+        finally
+        {
+            release.TrySetResult();
+            await Assert.ThrowsAsync<SessionStoreException>(() => transaction);
+        }
+
+        Assert.NotNull(read);
+        Assert.Equal(original, await read.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CanceledCredentialReadReleasesLocks(bool separateStore)
+    {
+        var vault = new TestCredentialStore();
+        using var writer = CreateStore(vault);
+        using var otherStore = CreateStore(vault);
+        var reader = separateStore ? otherStore : writer;
+        var original = CreateSession("original-token");
+        await writer.SaveAsync(original);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mutated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        vault.AfterSet = async () =>
+        {
+            mutated.SetResult();
+            await release.Task;
+        };
+
+        var replacement = original with { AccessToken = "replacement-token" };
+        var write = writer.SaveAsync(replacement);
+        using var cancellation = new CancellationTokenSource();
+        try
+        {
+            await mutated.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var read = reader.GetAsync(original.Profile, cancellation.Token);
+            Assert.False(read.IsCompleted);
+            await cancellation.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read);
+        }
+        finally
+        {
+            release.TrySetResult();
+            await write;
+        }
+
+        Assert.Equal(replacement, await reader.GetAsync(original.Profile).WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConditionalRemovalWaitsForReplacementCommit(bool separateStore)
+    {
+        var vault = new TestCredentialStore();
+        using var writer = CreateStore(vault);
+        using var otherStore = CreateStore(vault);
+        var remover = separateStore ? otherStore : writer;
+        var original = CreateSession("original-token");
+        await writer.SaveAsync(original);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mutated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        vault.AfterSet = async () =>
+        {
+            mutated.SetResult();
+            await release.Task;
+        };
+        var replacement = original with { AccessToken = "replacement-token" };
+        var write = writer.SaveAsync(replacement);
+        Task<bool>? removal = null;
+        try
+        {
+            await mutated.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            removal = remover.RemoveIfMatchesAsync(original.Profile, original.AccessToken);
+            Assert.False(removal.IsCompleted);
+        }
+        finally
+        {
+            release.TrySetResult();
+            await write;
+        }
+
+        Assert.NotNull(removal);
+        Assert.False(await removal.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(replacement, await remover.GetAsync(original.Profile));
+        Assert.Single(await remover.GetProfilesAsync());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("different-token")]
+    [InlineData("current-token")]
+    public async Task ConditionalRemovalDeletesOnlyMatchingCredentials(string? expectedToken)
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var current = CreateSession("current-token");
+        await store.SaveAsync(current);
+
+        var removed = await store.RemoveIfMatchesAsync(current.Profile, expectedToken);
+
+        Assert.Equal(expectedToken == current.AccessToken, removed);
+        Assert.Equal(removed ? null : current, await store.GetAsync(current.Profile));
+        Assert.Equal(removed ? 0 : 1, (await store.GetProfilesAsync()).Count);
+    }
+
+    [Fact]
+    public async Task ConditionalRemovalCleansMissingCredentialProfileIdempotently()
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var session = CreateSession("token");
+        await store.SaveAsync(session);
+        vault.Secrets.Clear();
+
+        Assert.True(await store.RemoveIfMatchesAsync(session.Profile, null));
+        Assert.Empty(await store.GetProfilesAsync());
+        Assert.True(await store.RemoveIfMatchesAsync(session.Profile, null));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))
@@ -216,12 +377,16 @@ public sealed class PersistentSessionStoreTests : IDisposable
 
         public bool CancelAfterRemoval { get; set; }
 
+        public Func<Task>? AfterSet { get; set; }
+
+        public Func<Task>? AfterRemove { get; set; }
+
         public Task<string?> GetAsync(
             string key,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(Secrets.GetValueOrDefault(key));
 
-        public Task SetAsync(
+        public async Task SetAsync(
             string key,
             string secret,
             CancellationToken cancellationToken = default)
@@ -235,10 +400,15 @@ public sealed class PersistentSessionStoreTests : IDisposable
             }
 
             Secrets[key] = secret;
-            return Task.CompletedTask;
+            var afterSet = AfterSet;
+            AfterSet = null;
+            if (afterSet is not null)
+            {
+                await afterSet();
+            }
         }
 
-        public Task<bool> RemoveAsync(
+        public async Task<bool> RemoveAsync(
             string key,
             CancellationToken cancellationToken = default)
         {
@@ -250,9 +420,16 @@ public sealed class PersistentSessionStoreTests : IDisposable
             }
 
             var removed = Secrets.Remove(key);
+            var afterRemove = AfterRemove;
+            AfterRemove = null;
+            if (afterRemove is not null)
+            {
+                await afterRemove();
+            }
+
             return CancelAfterRemoval
-                ? Task.FromCanceled<bool>(new CancellationToken(true))
-                : Task.FromResult(removed);
+                ? await Task.FromCanceled<bool>(new CancellationToken(true))
+                : removed;
         }
     }
 }

@@ -32,6 +32,10 @@ public partial class MainViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(SignInCommand))]
     [NotifyCanExecuteChangedFor(nameof(UseSavedSessionCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSavedSessionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddServerCommand))]
+    [NotifyCanExecuteChangedFor(nameof(BackToSessionsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LogoutCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InitializeCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -74,9 +78,10 @@ public partial class MainViewModel : ViewModelBase
         ControllerStatus = status;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanNavigate))]
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
+        IsBusy = true;
         try
         {
             await RefreshSavedSessionsAsync(cancellationToken);
@@ -86,6 +91,10 @@ public partial class MainViewModel : ViewModelBase
         {
             ShowServerEntry();
             StatusMessage = exception.Message;
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
@@ -121,8 +130,7 @@ public partial class MainViewModel : ViewModelBase
     private bool CanSignIn() =>
         !IsBusy
         && CurrentServer is not null
-        && !string.IsNullOrWhiteSpace(Username)
-        && !string.IsNullOrWhiteSpace(Password);
+        && !string.IsNullOrWhiteSpace(Username);
 
     [RelayCommand(CanExecute = nameof(CanSignIn))]
     private async Task SignInAsync(CancellationToken cancellationToken)
@@ -173,14 +181,26 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (AuthenticationException exception)
         {
-            await RefreshSavedSessionsAsync(CancellationToken.None);
             StatusMessage = exception.Message;
             if (exception.Error == AuthenticationError.RevokedSession)
             {
+                _currentSession = null;
+                SavedSessions.Remove(profile);
+                SelectedSavedSession = SavedSessions.FirstOrDefault();
                 CurrentServer = profile.Server;
                 ServerAddress = profile.Server.BaseUri.ToString();
                 Username = profile.Username;
+                Password = string.Empty;
                 ShowSignIn();
+            }
+
+            try
+            {
+                await RefreshSavedSessionsAsync(CancellationToken.None);
+            }
+            catch (AuthenticationException refreshException)
+            {
+                StatusMessage = $"{exception.Message} {refreshException.Message}";
             }
         }
         finally
@@ -217,7 +237,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanNavigate))]
     private async Task LogoutAsync(CancellationToken cancellationToken)
     {
         if (_currentSession is null)
@@ -256,7 +276,9 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    private bool CanNavigate() => !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(CanNavigate))]
     private void AddServer()
     {
         CurrentServer = null;
@@ -265,7 +287,7 @@ public partial class MainViewModel : ViewModelBase
         StatusMessage = "Enter the address of the Jellyfin server you want to add.";
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanNavigate))]
     private void BackToSessions()
     {
         Password = string.Empty;
