@@ -4,12 +4,38 @@ using System.Text.Json;
 
 namespace Cindara.Core.Authentication;
 
-public sealed class JellyfinAuthenticationService(
-    HttpClient httpClient,
-    ISessionStore sessionStore,
-    JellyfinClientIdentity clientIdentity) : IAuthenticationService
+public sealed class JellyfinAuthenticationService : IAuthenticationService, IDisposable
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly JellyfinClientIdentity _clientIdentity;
+    private readonly HttpClient _httpClient;
+    private readonly ISessionStore _sessionStore;
+
+    public JellyfinAuthenticationService(
+        ISessionStore sessionStore,
+        JellyfinClientIdentity clientIdentity)
+        : this(CreateSecureTransport(), sessionStore, clientIdentity)
+    {
+    }
+
+    internal JellyfinAuthenticationService(
+        HttpMessageHandler httpHandler,
+        ISessionStore sessionStore,
+        JellyfinClientIdentity clientIdentity)
+    {
+        ArgumentNullException.ThrowIfNull(httpHandler);
+        ArgumentNullException.ThrowIfNull(sessionStore);
+        ArgumentNullException.ThrowIfNull(clientIdentity);
+
+        _httpClient = new HttpClient(httpHandler)
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+        };
+        _sessionStore = sessionStore;
+        _clientIdentity = clientIdentity;
+    }
+
+    public void Dispose() => _httpClient.Dispose();
 
     public async Task<AuthenticatedSession> AuthenticateAsync(
         AuthenticationRequest request,
@@ -46,10 +72,11 @@ public sealed class JellyfinAuthenticationService(
 
         try
         {
-            await sessionStore.SaveAsync(session, cancellationToken).ConfigureAwait(false);
+            await _sessionStore.SaveAsync(session, cancellationToken).ConfigureAwait(false);
         }
         catch (SessionStoreException exception)
         {
+            await TryRevokeServerSessionAsync(session).ConfigureAwait(false);
             throw MapStorageException(exception);
         }
 
@@ -61,7 +88,7 @@ public sealed class JellyfinAuthenticationService(
     {
         try
         {
-            return await sessionStore.GetProfilesAsync(cancellationToken).ConfigureAwait(false);
+            return await _sessionStore.GetProfilesAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (SessionStoreException exception)
         {
@@ -79,7 +106,7 @@ public sealed class JellyfinAuthenticationService(
         AuthenticatedSession? session;
         try
         {
-            session = await sessionStore.GetAsync(profile, cancellationToken).ConfigureAwait(false);
+            session = await _sessionStore.GetAsync(profile, cancellationToken).ConfigureAwait(false);
         }
         catch (SessionStoreException exception)
         {
@@ -162,7 +189,7 @@ public sealed class JellyfinAuthenticationService(
 
         try
         {
-            await sessionStore.RemoveAsync(profile, cancellationToken).ConfigureAwait(false);
+            await _sessionStore.RemoveAsync(profile, cancellationToken).ConfigureAwait(false);
         }
         catch (SessionStoreException exception)
         {
@@ -188,10 +215,10 @@ public sealed class JellyfinAuthenticationService(
     }
 
     private string BuildAuthorizationHeader() =>
-        $"MediaBrowser Client=\"{Escape(clientIdentity.ClientName)}\", "
-        + $"Device=\"{Escape(clientIdentity.DeviceName)}\", "
-        + $"DeviceId=\"{Escape(clientIdentity.DeviceId)}\", "
-        + $"Version=\"{Escape(clientIdentity.Version)}\"";
+        $"MediaBrowser Client=\"{Escape(_clientIdentity.ClientName)}\", "
+        + $"Device=\"{Escape(_clientIdentity.DeviceName)}\", "
+        + $"DeviceId=\"{Escape(_clientIdentity.DeviceId)}\", "
+        + $"Version=\"{Escape(_clientIdentity.Version)}\"";
 
     private async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
@@ -199,7 +226,7 @@ public sealed class JellyfinAuthenticationService(
     {
         try
         {
-            return await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            return await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -295,7 +322,7 @@ public sealed class JellyfinAuthenticationService(
     {
         try
         {
-            await sessionStore.RemoveAsync(profile, CancellationToken.None).ConfigureAwait(false);
+            await _sessionStore.RemoveAsync(profile, CancellationToken.None).ConfigureAwait(false);
         }
         catch (SessionStoreException exception)
         {
@@ -308,6 +335,28 @@ public sealed class JellyfinAuthenticationService(
             AuthenticationError.SecureStorageUnavailable,
             exception.Message,
             exception);
+
+    private async Task TryRevokeServerSessionAsync(AuthenticatedSession session)
+    {
+        try
+        {
+            using var request = CreateAuthenticatedRequest(
+                HttpMethod.Post,
+                new Uri(session.Server.BaseUri, "Sessions/Logout"),
+                session.AccessToken);
+            using var response = await SendAsync(request, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (AuthenticationException)
+        {
+            // Preserve the storage failure that made the token inaccessible locally.
+        }
+    }
+
+    internal static SocketsHttpHandler CreateSecureTransport() =>
+        new()
+        {
+            AllowAutoRedirect = false,
+        };
 
     private static void EnsureSecureConnection(Uri serverUri)
     {

@@ -51,9 +51,11 @@
                    <TextBlock FontWeight="SemiBold"
                               Foreground="#E7ECF8"
                               Text="Jellyfin sign in" />
-                   <TextBox PlaceholderText="Username"
+                   <TextBox AutomationProperties.Name="Jellyfin username"
+                            PlaceholderText="Username"
                             Text="{Binding Username}" />
-                   <TextBox PasswordChar="*"
+                   <TextBox AutomationProperties.Name="Jellyfin password"
+                            PasswordChar="*"
                             PlaceholderText="Password"
                             Text="{Binding Password}" />
                    <Button Padding="20,12"
@@ -69,7 +71,8 @@
                    <TextBlock FontWeight="SemiBold"
                               Foreground="#E7ECF8"
                               Text="Saved accounts" />
-                   <ComboBox ItemsSource="{Binding SavedSessions}"
+                   <ComboBox x:Name="SavedSessionsComboBox"
+                             ItemsSource="{Binding SavedSessions}"
                              SelectedItem="{Binding SelectedSavedSession}">
                        <ComboBox.ItemTemplate>
                            <DataTemplate>

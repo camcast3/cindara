@@ -35,7 +35,6 @@ public partial class App : Application
                 Path.Combine(applicationData, "sessions.json"),
                 new OsSecureCredentialStore(Path.Combine(applicationData, "credentials")));
             var authenticationService = new JellyfinAuthenticationService(
-                httpClient,
                 sessionStore,
                 new JellyfinClientIdentity(
                     "Cindara",

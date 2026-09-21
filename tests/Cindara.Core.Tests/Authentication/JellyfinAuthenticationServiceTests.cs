@@ -145,28 +145,42 @@ public sealed class JellyfinAuthenticationServiceTests
     [Fact]
     public async Task AuthenticationMapsPersistenceFailure()
     {
-        var service = CreateService(
-            new QueueHttpMessageHandler(
-                Response(HttpStatusCode.OK, """
+        var handler = new QueueHttpMessageHandler(
+            Response(HttpStatusCode.OK, """
                     {
                       "AccessToken": "token",
                       "User": { "Id": "user-1", "Name": "viewer" }
                     }
-                    """)),
-            new FailingSessionStore());
+                    """),
+            Response(HttpStatusCode.NoContent, string.Empty));
+        var service = CreateService(handler, new FailingSessionStore());
 
         var exception = await Assert.ThrowsAsync<AuthenticationException>(
             () => service.AuthenticateAsync(
                 new AuthenticationRequest(Server, "viewer", "password")));
 
         Assert.Equal(AuthenticationError.SecureStorageUnavailable, exception.Error);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.EndsWith(
+            "/Sessions/Logout",
+            handler.Requests[1].Uri.AbsolutePath,
+            StringComparison.Ordinal);
+        Assert.Equal("token", handler.Requests[1].AccessToken);
+    }
+
+    [Fact]
+    public void ProductionTransportDisablesAutomaticRedirects()
+    {
+        using var handler = JellyfinAuthenticationService.CreateSecureTransport();
+
+        Assert.False(handler.AllowAutoRedirect);
     }
 
     private static JellyfinAuthenticationService CreateService(
         HttpMessageHandler handler,
         ISessionStore store) =>
         new(
-            new HttpClient(handler),
+            handler,
             store,
             new JellyfinClientIdentity("Cindara", "Living Room", "device-1", "1.0.0"));
 
@@ -197,8 +211,12 @@ public sealed class JellyfinAuthenticationServiceTests
             CancellationToken cancellationToken)
         {
             Requests.Add(new CapturedRequest(
+                request.RequestUri ?? throw new InvalidOperationException("Request URI is missing."),
                 request.Headers.Authorization?.ToString()
                     ?? request.Headers.GetValues("Authorization").Single(),
+                request.Headers.TryGetValues("X-Emby-Token", out var accessTokens)
+                    ? accessTokens.Single()
+                    : null,
                 request.Content is null
                     ? null
                     : await request.Content.ReadAsStringAsync(cancellationToken)));
@@ -212,7 +230,11 @@ public sealed class JellyfinAuthenticationServiceTests
         }
     }
 
-    private sealed record CapturedRequest(string Authorization, string? Body);
+    private sealed record CapturedRequest(
+        Uri Uri,
+        string Authorization,
+        string? AccessToken,
+        string? Body);
 
     private sealed class FailingSessionStore : ISessionStore
     {

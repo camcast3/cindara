@@ -32,7 +32,7 @@ public partial class MainWindow : Window
         Closed += OnClosed;
     }
 
-    private void OnOpened(object? sender, EventArgs eventArgs)
+    private async void OnOpened(object? sender, EventArgs eventArgs)
     {
         _controllerInput.ActionPressed += OnControllerActionPressed;
         _controllerInput.ConnectionChanged += OnControllerConnectionChanged;
@@ -40,7 +40,7 @@ public partial class MainWindow : Window
 
         if (DataContext is MainViewModel viewModel)
         {
-            viewModel.InitializeCommand.Execute(null);
+            await viewModel.InitializeCommand.ExecuteAsync(null);
             viewModel.SetControllerStatus(
                 _controllerInput.IsAvailable
                     ? "Controller ready: D-pad or left stick navigates, A selects, and Start toggles fullscreen."
@@ -52,7 +52,14 @@ public partial class MainWindow : Window
             _controllerTimer.Start();
         }
 
-        ServerAddressTextBox.Focus();
+        if (DataContext is MainViewModel { AreSavedSessionsVisible: true })
+        {
+            SavedSessionsComboBox.Focus();
+        }
+        else
+        {
+            ServerAddressTextBox.Focus();
+        }
     }
 
     private void OnClosed(object? sender, EventArgs eventArgs)
