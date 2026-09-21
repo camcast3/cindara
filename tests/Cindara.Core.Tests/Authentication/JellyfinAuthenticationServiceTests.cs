@@ -111,6 +111,21 @@ public sealed class JellyfinAuthenticationServiceTests
     }
 
     [Fact]
+    public async Task RestoreAsyncRemovesProfileWhenCredentialIsMissing()
+    {
+        var profile = Session("user-1", "viewer", "token").Profile;
+        var store = new MissingCredentialSessionStore(profile);
+        var service = CreateService(new QueueHttpMessageHandler(), store);
+
+        var exception = await Assert.ThrowsAsync<AuthenticationException>(
+            () => service.RestoreAsync(profile));
+
+        Assert.Equal(AuthenticationError.RevokedSession, exception.Error);
+        Assert.True(store.WasRemoved);
+        Assert.Empty(await store.GetProfilesAsync());
+    }
+
+    [Fact]
     public async Task LogoutAsyncRemovesLocalSessionWhenServerIsOffline()
     {
         var session = Session("user-1", "viewer", "token");
@@ -221,5 +236,36 @@ public sealed class JellyfinAuthenticationServiceTests
             SessionProfile profile,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
+    }
+
+    private sealed class MissingCredentialSessionStore(SessionProfile profile) : ISessionStore
+    {
+        private SessionProfile? _profile = profile;
+
+        public bool WasRemoved { get; private set; }
+
+        public Task<IReadOnlyList<SessionProfile>> GetProfilesAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<SessionProfile>>(
+                _profile is null ? [] : [_profile]);
+
+        public Task<AuthenticatedSession?> GetAsync(
+            SessionProfile requestedProfile,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<AuthenticatedSession?>(null);
+
+        public Task SaveAsync(
+            AuthenticatedSession session,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<bool> RemoveAsync(
+            SessionProfile requestedProfile,
+            CancellationToken cancellationToken = default)
+        {
+            WasRemoved = _profile is not null;
+            _profile = null;
+            return Task.FromResult(WasRemoved);
+        }
     }
 }

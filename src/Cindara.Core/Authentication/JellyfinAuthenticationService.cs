@@ -88,8 +88,9 @@ public sealed class JellyfinAuthenticationService(
 
         if (session is null)
         {
+            await RemoveIgnoringCancellationAsync(profile).ConfigureAwait(false);
             throw new AuthenticationException(
-                AuthenticationError.SecureStorageUnavailable,
+                AuthenticationError.RevokedSession,
                 "The saved credential is missing. Sign in again to restore this account.");
         }
 

@@ -239,9 +239,20 @@ public partial class MainViewModel : ViewModelBase
         finally
         {
             _currentSession = null;
-            await RefreshSavedSessionsAsync(CancellationToken.None);
-            ShowSavedSessionsOrServerEntry(false);
-            IsBusy = false;
+            try
+            {
+                await RefreshSavedSessionsAsync(CancellationToken.None);
+                ShowSavedSessionsOrServerEntry(false);
+            }
+            catch (AuthenticationException exception)
+            {
+                ShowServerEntry();
+                StatusMessage = exception.Message;
+            }
+            finally
+            {
+                IsBusy = false;
+            }
         }
     }
 
