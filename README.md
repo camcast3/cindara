@@ -59,6 +59,16 @@ Formatting is enforced in CI:
 dotnet format --verify-no-changes
 ```
 
+## Local AI pull request review
+
+The repository includes a read-only `review-committee` Copilot custom agent in
+`.github/agents/review-committee.agent.md`. Select **review-committee** from the
+Copilot agent picker, then ask it to review the current branch or pull request.
+
+The chair runs independent reviews with GPT, Gemini, and Microsoft MAI model
+families, verifies and deduplicates their findings, and produces one local
+report. It does not edit code or publish a GitHub review.
+
 ## Focused roadmap
 
 1. Authenticate users and persist encrypted sessions for multiple servers.
