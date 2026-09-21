@@ -124,6 +124,7 @@ public sealed class JellyfinAuthenticationServiceTests
         Assert.Equal(AuthenticationError.Network, exception.Error);
         Assert.Null(await store.GetAsync(session.Profile));
         Assert.Contains("local credential was removed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("could not complete", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

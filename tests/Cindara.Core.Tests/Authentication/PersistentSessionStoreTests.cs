@@ -121,6 +121,52 @@ public sealed class PersistentSessionStoreTests : IDisposable
         Assert.Equal(SessionStoreError.InvalidData, exception.Error);
     }
 
+    [Fact]
+    public async Task ProfileWithUriCredentialsReportsCorruption()
+    {
+        Directory.CreateDirectory(_directory);
+        await File.WriteAllTextAsync(
+            Path.Combine(_directory, "sessions.json"),
+            """
+            [{
+              "server": {
+                "id": "server-1",
+                "baseUri": "https://user:password@media.example.com/",
+                "displayName": "Living Room",
+                "version": "10.10.7",
+                "operatingSystem": "Linux"
+              },
+              "userId": "user-1",
+              "username": "viewer"
+            }]
+            """);
+        using var store = CreateStore(new TestCredentialStore());
+
+        var exception = await Assert.ThrowsAsync<SessionStoreException>(
+            () => store.GetProfilesAsync());
+
+        Assert.Equal(SessionStoreError.InvalidData, exception.Error);
+    }
+
+    [Fact]
+    public async Task ConcurrentStoreInstancesDoNotDropProfiles()
+    {
+        var vault = new TestCredentialStore();
+        using var firstStore = CreateStore(vault);
+        using var secondStore = CreateStore(vault);
+        var first = CreateSession("first-token");
+        var second = first with
+        {
+            UserId = "user-2",
+            Username = "second",
+            AccessToken = "second-token",
+        };
+
+        await Task.WhenAll(firstStore.SaveAsync(first), secondStore.SaveAsync(second));
+
+        Assert.Equal(2, (await firstStore.GetProfilesAsync()).Count);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))

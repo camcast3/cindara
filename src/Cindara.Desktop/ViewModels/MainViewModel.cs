@@ -145,11 +145,11 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (AuthenticationException exception)
         {
-            Password = string.Empty;
             StatusMessage = exception.Message;
         }
         finally
         {
+            Password = string.Empty;
             IsBusy = false;
         }
     }

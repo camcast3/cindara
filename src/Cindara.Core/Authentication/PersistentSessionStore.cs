@@ -14,6 +14,7 @@ public sealed class PersistentSessionStore(
     };
 
     private readonly SemaphoreSlim _mutex = new(1, 1);
+    private readonly string _lockPath = $"{Path.GetFullPath(indexPath)}.lock";
 
     public void Dispose() => _mutex.Dispose();
 
@@ -23,6 +24,8 @@ public sealed class PersistentSessionStore(
         await _mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await using var fileLock = await AcquireFileLockAsync(cancellationToken)
+                .ConfigureAwait(false);
             return await ReadProfilesAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -58,6 +61,8 @@ public sealed class PersistentSessionStore(
         await _mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await using var fileLock = await AcquireFileLockAsync(cancellationToken)
+                .ConfigureAwait(false);
             var profiles = await ReadProfilesAsync(cancellationToken).ConfigureAwait(false);
             var previousToken = await credentialStore
                 .GetAsync(credentialKey, cancellationToken)
@@ -118,6 +123,8 @@ public sealed class PersistentSessionStore(
         await _mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await using var fileLock = await AcquireFileLockAsync(cancellationToken)
+                .ConfigureAwait(false);
             var profiles = await ReadProfilesAsync(cancellationToken).ConfigureAwait(false);
             var updated = profiles.Where(saved => !HasSameKey(saved, profile)).ToArray();
             var existed = updated.Length != profiles.Count;
@@ -207,6 +214,62 @@ public sealed class PersistentSessionStore(
         }
     }
 
+    private async Task<FileStream> AcquireFileLockAsync(CancellationToken cancellationToken)
+    {
+        var startedAt = TimeProvider.System.GetTimestamp();
+        var directory = Path.GetDirectoryName(_lockPath)
+            ?? throw new SessionStoreException(
+                SessionStoreError.PersistenceFailure,
+                "The saved session lock path is invalid.");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new SessionStoreException(
+                SessionStoreError.PersistenceFailure,
+                "The saved session lock could not be created.",
+                exception);
+        }
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                return new FileStream(
+                    _lockPath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    1,
+                    FileOptions.Asynchronous);
+            }
+            catch (IOException exception)
+            {
+                if (TimeProvider.System.GetElapsedTime(startedAt) >= TimeSpan.FromSeconds(30))
+                {
+                    throw new SessionStoreException(
+                        SessionStoreError.PersistenceFailure,
+                        "Timed out while waiting to lock saved session metadata.",
+                        exception);
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                throw new SessionStoreException(
+                    SessionStoreError.PersistenceFailure,
+                    "Cindara does not have permission to lock saved session metadata.",
+                    exception);
+            }
+        }
+    }
+
     private async Task WriteProfilesAsync(
         IReadOnlyCollection<SessionProfile> profiles,
         CancellationToken cancellationToken)
@@ -271,6 +334,12 @@ public sealed class PersistentSessionStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(session.UserId);
         ArgumentException.ThrowIfNullOrWhiteSpace(session.Username);
         ArgumentException.ThrowIfNullOrWhiteSpace(session.AccessToken);
+        if (!string.IsNullOrEmpty(session.Server.BaseUri.UserInfo))
+        {
+            throw new ArgumentException(
+                "Server addresses must not contain user information.",
+                nameof(session));
+        }
     }
 
     private static void ValidateProfile(SessionProfile? profile)
@@ -279,6 +348,7 @@ public sealed class PersistentSessionStore(
             || string.IsNullOrWhiteSpace(profile.Server.Id)
             || profile.Server.BaseUri is null
             || !profile.Server.BaseUri.IsAbsoluteUri
+            || !string.IsNullOrEmpty(profile.Server.BaseUri.UserInfo)
             || string.IsNullOrWhiteSpace(profile.Server.DisplayName)
             || string.IsNullOrWhiteSpace(profile.UserId)
             || string.IsNullOrWhiteSpace(profile.Username))

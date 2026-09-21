@@ -148,7 +148,7 @@ public sealed class JellyfinAuthenticationService(
         {
             throw new AuthenticationException(
                 serverFailure.Error,
-                "The local credential was removed, but Jellyfin could not be reached to finish signing out.",
+                "The local credential was removed, but Jellyfin could not complete sign-out.",
                 serverFailure);
         }
     }
