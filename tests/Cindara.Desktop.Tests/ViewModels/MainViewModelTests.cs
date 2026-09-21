@@ -31,6 +31,41 @@ public sealed class MainViewModelTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RemovingSavedAccountPreservesConfirmationInDestinationState(bool keepAnotherAccount)
+    {
+        var authentication = new TestAuthenticationService();
+        var viewModel = new MainViewModel(new StubServerClient(), authentication);
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        var selected = Assert.IsType<SessionProfile>(viewModel.SelectedSavedSession);
+        var other = selected with { UserId = "other-user", Username = "other" };
+        if (keepAnotherAccount)
+        {
+            authentication.SavedProfiles = [selected, other];
+            await viewModel.InitializeCommand.ExecuteAsync(null);
+        }
+
+        await viewModel.RemoveSavedSessionCommand.ExecuteAsync(null);
+
+        Assert.Equal($"Removed {selected.DisplayName}.", viewModel.StatusMessage);
+        Assert.False(viewModel.IsBusy);
+        Assert.Equal(keepAnotherAccount, viewModel.AreSavedSessionsVisible);
+        Assert.Equal(!keepAnotherAccount, viewModel.IsServerEntryVisible);
+        Assert.DoesNotContain(selected, viewModel.SavedSessions);
+        if (keepAnotherAccount)
+        {
+            Assert.Equal(other, Assert.Single(viewModel.SavedSessions));
+            Assert.Equal(other, viewModel.SelectedSavedSession);
+        }
+        else
+        {
+            Assert.Empty(viewModel.SavedSessions);
+            Assert.Null(viewModel.SelectedSavedSession);
+        }
+    }
+
+    [Theory]
     [InlineData(AuthenticationError.RevokedSession)]
     [InlineData(AuthenticationError.Network)]
     [InlineData(AuthenticationError.SecureStorageUnavailable)]
@@ -199,6 +234,8 @@ public sealed class MainViewModelTests
 
         public bool FailRefresh { get; set; }
 
+        public IReadOnlyList<SessionProfile>? SavedProfiles { get; set; }
+
         public bool FailOperation { get; set; }
 
         public AuthenticationError? RestoreError { get; set; }
@@ -227,7 +264,7 @@ public sealed class MainViewModelTests
                     "Saved session metadata could not be read.");
             }
 
-            return [_session.Profile];
+            return SavedProfiles ?? [_session.Profile];
         }
 
         public async Task<AuthenticatedSession> RestoreAsync(
@@ -248,10 +285,15 @@ public sealed class MainViewModelTests
             CancellationToken cancellationToken = default) =>
             WaitForOperationAsync(cancellationToken);
 
-        public Task RemoveAsync(
+        public async Task RemoveAsync(
             SessionProfile profile,
-            CancellationToken cancellationToken = default) =>
-            WaitForOperationAsync(cancellationToken);
+            CancellationToken cancellationToken = default)
+        {
+            await WaitForOperationAsync(cancellationToken);
+            SavedProfiles = (SavedProfiles ?? [_session.Profile])
+                .Where(saved => saved.Server.Id != profile.Server.Id || saved.UserId != profile.UserId)
+                .ToArray();
+        }
 
         private async Task WaitForOperationAsync(CancellationToken cancellationToken)
         {

@@ -45,13 +45,20 @@ public sealed class PersistentSessionStore(
         {
             await using var fileLock = await AcquireFileLockAsync(cancellationToken)
                 .ConfigureAwait(false);
+            var profiles = await ReadProfilesAsync(cancellationToken).ConfigureAwait(false);
+            var savedProfile = profiles.FirstOrDefault(saved => HasSameKey(saved, profile));
+            if (savedProfile is null)
+            {
+                return null;
+            }
+
             var token = await credentialStore
-                .GetAsync(GetCredentialKey(profile), cancellationToken)
+                .GetAsync(GetCredentialKey(savedProfile), cancellationToken)
                 .ConfigureAwait(false);
 
             return token is null
                 ? null
-                : new AuthenticatedSession(profile.Server, profile.UserId, profile.Username, token);
+                : new AuthenticatedSession(savedProfile.Server, savedProfile.UserId, savedProfile.Username, token);
         }
         finally
         {

@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using Cindara.Core.Authentication;
 using Cindara.Core.Models;
 
@@ -23,6 +25,103 @@ public sealed class PersistentSessionStoreTests : IDisposable
         Assert.Equal(session, restored);
         Assert.DoesNotContain(session.AccessToken, index, StringComparison.Ordinal);
         Assert.Contains(session.Username, index, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetUsesPersistedMetadataInsteadOfCallerMetadata()
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var saved = CreateSession("saved-token");
+        await store.SaveAsync(saved);
+        var suppliedProfile = saved.Profile with
+        {
+            Server = saved.Server with
+            {
+                BaseUri = new Uri("https://other.example.com/"),
+                DisplayName = "Caller-supplied server",
+            },
+            Username = "caller-supplied-user",
+        };
+        using var reopenedStore = CreateStore(vault);
+
+        Assert.Equal(saved, await reopenedStore.GetAsync(suppliedProfile));
+    }
+
+    [Fact]
+    public async Task RestoreUsesCurrentPersistedDestinationWhenCallerProfileIsStale()
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var original = CreateSession("old-token");
+        await store.SaveAsync(original);
+        var staleProfile = Assert.Single(await store.GetProfilesAsync());
+        var replacement = original with
+        {
+            Server = original.Server with
+            {
+                BaseUri = new Uri("https://current.example.com/jellyfin/"),
+                DisplayName = "Current server",
+            },
+            Username = "current-user",
+            AccessToken = "current-token",
+        };
+        using var otherStore = CreateStore(vault);
+        await otherStore.SaveAsync(replacement);
+        var handler = new RestoreHttpMessageHandler();
+        using var service = new JellyfinAuthenticationService(
+            handler,
+            store,
+            new JellyfinClientIdentity("Cindara", "Test", "device-1", "1.0"));
+
+        var restored = await service.RestoreAsync(staleProfile);
+
+        Assert.Equal(replacement, restored);
+        Assert.Equal(new Uri("https://current.example.com/jellyfin/Users/Me"), handler.RequestUri);
+        Assert.Equal(replacement.AccessToken, handler.AccessToken);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetDoesNotReadOrphanCredentialWithoutMatchingIndexedProfile(bool missingIndex)
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var saved = CreateSession("saved-token");
+        await store.SaveAsync(saved);
+        var indexPath = Path.Combine(_directory, "sessions.json");
+        if (missingIndex)
+        {
+            File.Delete(indexPath);
+        }
+        else
+        {
+            await File.WriteAllTextAsync(indexPath, "[]");
+        }
+
+        var previousReads = vault.GetCalls;
+        Assert.Null(await store.GetAsync(saved.Profile));
+        Assert.Equal(previousReads, vault.GetCalls);
+        Assert.Single(vault.Secrets);
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("[{}]")]
+    public async Task GetRejectsInvalidIndexBeforeAccessingCredential(string content)
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var saved = CreateSession("saved-token");
+        await store.SaveAsync(saved);
+        await File.WriteAllTextAsync(Path.Combine(_directory, "sessions.json"), content);
+        var previousReads = vault.GetCalls;
+
+        var exception = await Assert.ThrowsAsync<SessionStoreException>(() => store.GetAsync(saved.Profile));
+
+        Assert.Equal(SessionStoreError.InvalidData, exception.Error);
+        Assert.Equal(previousReads, vault.GetCalls);
     }
 
     [Fact]
@@ -367,9 +466,33 @@ public sealed class PersistentSessionStoreTests : IDisposable
             "viewer",
             token);
 
+    private sealed class RestoreHttpMessageHandler : HttpMessageHandler
+    {
+        public Uri? RequestUri { get; private set; }
+
+        public string? AccessToken { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            RequestUri = request.RequestUri;
+            AccessToken = request.Headers.GetValues("X-Emby-Token").Single();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"Id":"user-1","Name":"current-user"}""",
+                    Encoding.UTF8,
+                    "application/json"),
+            });
+        }
+    }
+
     private sealed class TestCredentialStore : ISecureCredentialStore
     {
         public Dictionary<string, string> Secrets { get; } = [];
+
+        public int GetCalls { get; private set; }
 
         public bool FailRemoval { get; set; }
 
@@ -383,8 +506,11 @@ public sealed class PersistentSessionStoreTests : IDisposable
 
         public Task<string?> GetAsync(
             string key,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(Secrets.GetValueOrDefault(key));
+            CancellationToken cancellationToken = default)
+        {
+            GetCalls++;
+            return Task.FromResult(Secrets.GetValueOrDefault(key));
+        }
 
         public async Task SetAsync(
             string key,

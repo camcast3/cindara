@@ -127,6 +127,7 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
                 "The saved credential is missing. Sign in again to restore this account.");
         }
 
+        EnsureSecureConnection(session.Server.BaseUri);
         using var request = CreateAuthenticatedRequest(
             HttpMethod.Get,
             new Uri(session.Server.BaseUri, "Users/Me"),

@@ -135,6 +135,26 @@ public sealed class JellyfinAuthenticationServiceTests
     }
 
     [Theory]
+    [InlineData("http://media.example.com/")]
+    [InlineData("ftp://localhost/")]
+    public async Task RestoreValidatesResolvedDestinationBeforeSendingToken(string savedAddress)
+    {
+        var session = Session("user-1", "viewer", "saved-token");
+        var saved = session with { Server = Server with { BaseUri = new Uri(savedAddress) } };
+        var store = new InMemorySessionStore();
+        await store.SaveAsync(saved);
+        var handler = new QueueHttpMessageHandler();
+        using var service = CreateService(handler, store);
+
+        var exception = await Assert.ThrowsAsync<AuthenticationException>(
+            () => service.RestoreAsync(session.Profile));
+
+        Assert.Equal(AuthenticationError.InsecureConnection, exception.Error);
+        Assert.Empty(handler.Requests);
+        Assert.Equal(saved, await store.GetAsync(session.Profile));
+    }
+
+    [Theory]
     [InlineData(false, HttpStatusCode.Unauthorized)]
     [InlineData(false, HttpStatusCode.Forbidden)]
     [InlineData(true, HttpStatusCode.NoContent)]

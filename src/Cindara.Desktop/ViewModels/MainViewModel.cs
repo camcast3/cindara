@@ -225,7 +225,7 @@ public partial class MainViewModel : ViewModelBase
             await _authenticationService.RemoveAsync(profile, cancellationToken);
             await RefreshSavedSessionsAsync(cancellationToken);
             StatusMessage = $"Removed {profile.DisplayName}.";
-            ShowSavedSessionsOrServerEntry();
+            ShowSavedSessionsOrServerEntry(false);
         }
         catch (AuthenticationException exception)
         {
