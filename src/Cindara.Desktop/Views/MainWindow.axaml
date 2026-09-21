@@ -52,6 +52,7 @@
                               Foreground="#E7ECF8"
                               Text="Jellyfin sign in" />
                    <TextBox AutomationProperties.Name="Jellyfin username"
+                            x:Name="UsernameTextBox"
                             PlaceholderText="Username"
                             Text="{Binding Username}" />
                    <TextBox AutomationProperties.Name="Jellyfin password"
@@ -71,7 +72,8 @@
                    <TextBlock FontWeight="SemiBold"
                               Foreground="#E7ECF8"
                               Text="Saved accounts" />
-                   <ComboBox x:Name="SavedSessionsComboBox"
+                   <ComboBox AutomationProperties.Name="Saved Jellyfin account"
+                             x:Name="SavedSessionsComboBox"
                              ItemsSource="{Binding SavedSessions}"
                              SelectedItem="{Binding SelectedSavedSession}">
                        <ComboBox.ItemTemplate>
@@ -98,7 +100,8 @@
                               Text="{Binding AuthenticatedAccount}" />
                    <TextBlock Foreground="#AEBAD4"
                               Text="Your secure Jellyfin session is ready." />
-                   <Button Command="{Binding LogoutCommand}"
+                   <Button x:Name="LogoutButton"
+                           Command="{Binding LogoutCommand}"
                            Content="Sign out" />
                    <Button Command="{Binding BackToSessionsCommand}"
                            Content="Switch account" />

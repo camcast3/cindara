@@ -7,5 +7,6 @@ public sealed record SessionProfile(
     string UserId,
     string Username)
 {
-    public string DisplayName => $"{Username} - {Server.DisplayName}";
+    public string DisplayName =>
+        $"{Username} - {Server.DisplayName} ({Server.BaseUri.AbsoluteUri.TrimEnd('/')})";
 }

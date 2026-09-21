@@ -132,18 +132,20 @@ public sealed class PersistentSessionStore(
             var previousToken = await credentialStore
                 .GetAsync(credentialKey, cancellationToken)
                 .ConfigureAwait(false);
-            var credentialRemoved = await credentialStore
-                .RemoveAsync(credentialKey, cancellationToken)
-                .ConfigureAwait(false);
 
             try
             {
+                var credentialRemoved = await credentialStore
+                    .RemoveAsync(credentialKey, cancellationToken)
+                    .ConfigureAwait(false);
                 if (existed)
                 {
                     await WriteProfilesAsync(updated, cancellationToken).ConfigureAwait(false);
                 }
+
+                return existed || credentialRemoved;
             }
-            catch (Exception persistenceException) when (previousToken is not null)
+            catch (Exception removalException) when (previousToken is not null)
             {
                 try
                 {
@@ -156,13 +158,11 @@ public sealed class PersistentSessionStore(
                     throw new SessionStoreException(
                         SessionStoreError.PersistenceFailure,
                         "Session metadata could not be updated and the credential could not be restored.",
-                        new AggregateException(persistenceException, rollbackException));
+                        new AggregateException(removalException, rollbackException));
                 }
 
                 throw;
             }
-
-            return existed || credentialRemoved;
         }
         finally
         {

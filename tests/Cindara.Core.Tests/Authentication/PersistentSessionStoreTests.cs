@@ -107,6 +107,22 @@ public sealed class PersistentSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task CancellationAfterCredentialRemovalRestoresCredential()
+    {
+        var vault = new TestCredentialStore();
+        using var store = CreateStore(vault);
+        var session = CreateSession("token");
+        await store.SaveAsync(session);
+        vault.CancelAfterRemoval = true;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => store.RemoveAsync(session.Profile));
+
+        Assert.Single(await store.GetProfilesAsync());
+        Assert.Equal(session, await store.GetAsync(session.Profile));
+    }
+
+    [Fact]
     public async Task ValidJsonWithInvalidProfileReportsCorruption()
     {
         Directory.CreateDirectory(_directory);
@@ -198,6 +214,8 @@ public sealed class PersistentSessionStoreTests : IDisposable
 
         public bool FailNextSet { get; set; }
 
+        public bool CancelAfterRemoval { get; set; }
+
         public Task<string?> GetAsync(
             string key,
             CancellationToken cancellationToken = default) =>
@@ -231,7 +249,10 @@ public sealed class PersistentSessionStoreTests : IDisposable
                     "Credential removal failed.");
             }
 
-            return Task.FromResult(Secrets.Remove(key));
+            var removed = Secrets.Remove(key);
+            return CancelAfterRemoval
+                ? Task.FromCanceled<bool>(new CancellationToken(true))
+                : Task.FromResult(removed);
         }
     }
 }

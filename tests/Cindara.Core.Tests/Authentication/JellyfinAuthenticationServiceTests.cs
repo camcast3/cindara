@@ -61,6 +61,30 @@ public sealed class JellyfinAuthenticationServiceTests
     }
 
     [Fact]
+    public async Task AuthenticateAsyncRejectsUnsupportedLoopbackScheme()
+    {
+        var service = CreateService(new QueueHttpMessageHandler(), new InMemorySessionStore());
+        var unsupportedServer = Server with { BaseUri = new Uri("ftp://localhost/") };
+
+        var exception = await Assert.ThrowsAsync<AuthenticationException>(
+            () => service.AuthenticateAsync(
+                new AuthenticationRequest(unsupportedServer, "viewer", "password")));
+
+        Assert.Equal(AuthenticationError.InsecureConnection, exception.Error);
+    }
+
+    [Fact]
+    public void AuthenticationRequestDoesNotRenderPassword()
+    {
+        var request = new AuthenticationRequest(Server, "viewer", "secret-password");
+
+        var rendered = request.ToString();
+
+        Assert.Contains("viewer", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-password", rendered, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AuthenticateAsyncRejectsMalformedResponse()
     {
         var service = CreateService(
@@ -160,6 +184,31 @@ public sealed class JellyfinAuthenticationServiceTests
                 new AuthenticationRequest(Server, "viewer", "password")));
 
         Assert.Equal(AuthenticationError.SecureStorageUnavailable, exception.Error);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.EndsWith(
+            "/Sessions/Logout",
+            handler.Requests[1].Uri.AbsolutePath,
+            StringComparison.Ordinal);
+        Assert.Equal("token", handler.Requests[1].AccessToken);
+    }
+
+    [Fact]
+    public async Task AuthenticationCancellationDuringPersistenceRevokesIssuedToken()
+    {
+        var handler = new QueueHttpMessageHandler(
+            Response(HttpStatusCode.OK, """
+                {
+                  "AccessToken": "token",
+                  "User": { "Id": "user-1", "Name": "viewer" }
+                }
+                """),
+            Response(HttpStatusCode.NoContent, string.Empty));
+        var service = CreateService(handler, new CancelingSessionStore());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.AuthenticateAsync(
+                new AuthenticationRequest(Server, "viewer", "password")));
+
         Assert.Equal(2, handler.Requests.Count);
         Assert.EndsWith(
             "/Sessions/Logout",
@@ -289,5 +338,27 @@ public sealed class JellyfinAuthenticationServiceTests
             _profile = null;
             return Task.FromResult(WasRemoved);
         }
+    }
+
+    private sealed class CancelingSessionStore : ISessionStore
+    {
+        public Task<IReadOnlyList<SessionProfile>> GetProfilesAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<SessionProfile>>([]);
+
+        public Task<AuthenticatedSession?> GetAsync(
+            SessionProfile profile,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<AuthenticatedSession?>(null);
+
+        public Task SaveAsync(
+            AuthenticatedSession session,
+            CancellationToken cancellationToken = default) =>
+            Task.FromCanceled(new CancellationToken(true));
+
+        public Task<bool> RemoveAsync(
+            SessionProfile profile,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
     }
 }

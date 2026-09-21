@@ -11,6 +11,7 @@ public partial class MainWindow : Window
 {
     private readonly IControllerInputSource _controllerInput;
     private readonly DispatcherTimer _controllerTimer;
+    private MainViewModel? _viewModel;
 
     public MainWindow()
         : this(new SdlGamepadInputSource())
@@ -40,6 +41,8 @@ public partial class MainWindow : Window
 
         if (DataContext is MainViewModel viewModel)
         {
+            _viewModel = viewModel;
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             await viewModel.InitializeCommand.ExecuteAsync(null);
             viewModel.SetControllerStatus(
                 _controllerInput.IsAvailable
@@ -52,14 +55,7 @@ public partial class MainWindow : Window
             _controllerTimer.Start();
         }
 
-        if (DataContext is MainViewModel { AreSavedSessionsVisible: true })
-        {
-            SavedSessionsComboBox.Focus();
-        }
-        else
-        {
-            ServerAddressTextBox.Focus();
-        }
+        FocusCurrentState();
     }
 
     private void OnClosed(object? sender, EventArgs eventArgs)
@@ -69,10 +65,53 @@ public partial class MainWindow : Window
         _controllerInput.ActionPressed -= OnControllerActionPressed;
         _controllerInput.ConnectionChanged -= OnControllerConnectionChanged;
         _controllerInput.Dispose();
+        if (_viewModel is not null)
+        {
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel = null;
+        }
     }
 
     private void OnControllerTimerTick(object? sender, EventArgs eventArgs) =>
         _controllerInput.Poll();
+
+    private void OnViewModelPropertyChanged(
+        object? sender,
+        System.ComponentModel.PropertyChangedEventArgs eventArgs)
+    {
+        if (eventArgs.PropertyName is nameof(MainViewModel.IsServerEntryVisible)
+            or nameof(MainViewModel.IsSignInVisible)
+            or nameof(MainViewModel.AreSavedSessionsVisible)
+            or nameof(MainViewModel.IsAuthenticatedVisible))
+        {
+            Dispatcher.UIThread.Post(FocusCurrentState, DispatcherPriority.Loaded);
+        }
+    }
+
+    private void FocusCurrentState()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        if (_viewModel.IsSignInVisible)
+        {
+            UsernameTextBox.Focus();
+        }
+        else if (_viewModel.AreSavedSessionsVisible)
+        {
+            SavedSessionsComboBox.Focus();
+        }
+        else if (_viewModel.IsAuthenticatedVisible)
+        {
+            LogoutButton.Focus();
+        }
+        else if (_viewModel.IsServerEntryVisible)
+        {
+            ServerAddressTextBox.Focus();
+        }
+    }
 
     private void OnControllerConnectionChanged(
         object? sender,

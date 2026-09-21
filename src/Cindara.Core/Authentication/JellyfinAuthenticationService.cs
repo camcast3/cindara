@@ -62,7 +62,7 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
         }
 
         EnsureSuccess(response);
-        var result = await ReadAuthenticationResultAsync(response, cancellationToken)
+        var result = await ReadAuthenticationResultAsync(response, CancellationToken.None)
             .ConfigureAwait(false);
         var session = new AuthenticatedSession(
             request.Server,
@@ -72,12 +72,18 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await _sessionStore.SaveAsync(session, cancellationToken).ConfigureAwait(false);
         }
         catch (SessionStoreException exception)
         {
             await TryRevokeServerSessionAsync(session).ConfigureAwait(false);
             throw MapStorageException(exception);
+        }
+        catch (OperationCanceledException)
+        {
+            await TryRevokeServerSessionAsync(session).ConfigureAwait(false);
+            throw;
         }
 
         return session;
@@ -360,7 +366,9 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
     private static void EnsureSecureConnection(Uri serverUri)
     {
-        if (serverUri.Scheme != Uri.UriSchemeHttps && !serverUri.IsLoopback)
+        var isSecure = serverUri.Scheme == Uri.UriSchemeHttps;
+        var isLoopbackHttp = serverUri.Scheme == Uri.UriSchemeHttp && serverUri.IsLoopback;
+        if (!isSecure && !isLoopbackHttp)
         {
             throw new AuthenticationException(
                 AuthenticationError.InsecureConnection,
