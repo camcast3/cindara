@@ -32,5 +32,11 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Cindara.Desktop.Tests" />
+    <AssemblyMetadata Include="CindaraPseudoLocale" Value="$(CindaraPseudoLocale)"
+                      Condition="'$(CindaraPseudoLocale)' != ''" />
   </ItemGroup>
+  <Target Name="ValidatePseudoLocale" BeforeTargets="BeforeBuild"
+          Condition="'$(CindaraPseudoLocale)' != '' and '$(CindaraPseudoLocale)' != 'qps-ploc' and '$(CindaraPseudoLocale)' != 'qps-plocm'">
+    <Error Text="CindaraPseudoLocale must be qps-ploc or qps-plocm." />
+  </Target>
 </Project>

@@ -16,30 +16,35 @@ Details are entered from content rather than added to the rail. Playback is a
 temporary full-screen layer.
 
 The approved authenticated preview uses a compact icon rail with Search, Home,
-Saved, TV, Movies, Anime, and More, plus Home/Trending/Activity/Profile header
-buttons. These are non-production preview controls, not destination screens.
+Saved, TV, Movies, Anime, and Settings. The product owner removed the speculative
+Home/Trending/Activity/Profile top bar. Home focuses the media content and Settings
+opens the signed-in settings; other preview icons remain placeholders.
 The production shell implements the five destinations above; library content,
 details, and playback flows remain assigned to #3, #5, and #4.
 
 ## Implemented shell navigation
 
-`ShellView` owns the production frame, not browsing data. Home initially focuses
-its header; its preview action opens the approved gallery and Back restores the
-launcher. Libraries, Search, and Downloads show honest unavailable-content states
-with Return to Home actions. Settings initially focuses Account; right enters
-the selected category's settings, left returns, and up/down stays within the
-category column. Account switching and sign-out use the existing session commands.
+`ShellView` owns the production frame, not browsing data. Sign-in opens media
+Home automatically, initially focusing a card (or the sidebar Home if empty).
+There is no intermediate preview launcher or redundant Home-screen back button. Libraries,
+Search, and Downloads show honest unavailable-content states and retain rail
+focus. Settings exposes exactly Language: English, Exit, and Back to Home;
+initial focus is Language. Up/down traverses the three actions, and left
+returns to the rail. Button labels are centered with consistent padding.
+Entering Settings from another screen resets focus to Language; moving between
+its actions, language dialog, and rail preserves focus within the same visit.
+Expanded settings are deferred to [#27](https://github.com/camcast3/cindara/issues/27).
 
 The rail expands on focus or hover and collapses to original vector icons when
 content is focused. Up/down follows Home, Libraries, Search, Downloads, Settings
 without wrapping. Accept opens the focused destination. Right returns to remembered
 content in the current destination; left or Back from content enters its selected
-rail item. Back from the rail opens window/exit choices, rather than exiting
-fullscreen unexpectedly. The persistent Window / exit action is also accessible
-by directional navigation, Tab, and mouse. The preview remains a separate layer.
+rail item. Back from the settings rail returns to media Home without reloading it.
+Exit closes the app; Back to Home restores media and focus without reloading.
+The login screen offers only the English language selector alongside authentication.
 
 `FocusNavigationService` scopes navigation to the active screen or dialog.
-Explicit rail/category links take priority; other controls use transformed bounds,
+Explicit rail links take priority; other controls use transformed bounds,
 aligned candidates, nearest directional edge, distance, and stable visual order.
 Screen focus is remembered, and hidden, disabled, or removed controls recover to
 the nearest available action. Initial focus waits for layout. Tab/Shift+Tab cycle
@@ -47,12 +52,13 @@ inside the current scope. Modal choices disable background interaction, trap
 directional and keyboard focus, start on a safe action, and restore their launcher
 on selection or Back. Account changes discard old screen focus.
 
-The saved-account picker and window/exit choices use these primitives. Controller
+The saved-account and language pickers use these primitives. Controller
 Accept on an authentication text field opens a modal keyboard with letters, digits,
 punctuation, Shift, Space, Backspace, Clear, Done, and Cancel. Physical typing and
 paste still work in the field; passwords stay masked and drafts are discarded on
-dismissal. Full international text entry, platform keyboard integration, and
-localization remain accessibility work in #11.
+dismissal. Startup localization and pseudo-localization are available; full
+international controller text entry and platform keyboard integration remain
+future work. Physical Unicode typing and paste are retained.
 
 The production frame and dialogs fit a 1920x1080 reference surface uniformly,
 including the existing 48-pixel safe-area token. At 3840x2160 logical pixels they
@@ -74,8 +80,9 @@ the navigation actions.
 
 `Styles/Tokens.axaml` is the source of truth. The base palette uses `#080B12`
 behind raised `#131925` and `#1C2535` surfaces. Primary text (`#F5F8FC`) and
-secondary text (`#B3BED0`) exceed WCAG AA against those surfaces; muted text is
-reserved for large, non-essential captions. Teal `#64D8CB` identifies focus,
+secondary text (`#B3BED0`) exceed WCAG AA against those surfaces; muted caption
+text (`#8490A5`) also exceeds 4.5:1, including on the raised surface.
+Teal `#64D8CB` identifies focus,
 selection, and primary action. Error, warning, and success never rely on color
 alone.
 
@@ -84,13 +91,25 @@ body, and caption roles. Spacing follows a 4/8/16/24/40 scale. Corners use
 8/14/24 radii. Every action has at least a 48 by 48 logical-pixel focus target
 at 1080p. Focus uses a high-contrast three- or four-pixel outline plus
 elevation; hover may raise the surface, pressed reduces emphasis, selected
-keeps a teal outline, disabled reduces opacity, loading uses skeletons, and
-errors add a labeled pink boundary.
+keeps an outline (navigation uses a bottom border), disabled reduces opacity,
+loading uses labeled skeletons, and errors add a labeled pink boundary.
+Accent-filled primary actions use a dark inner focus border and light outer
+ring so neither the button fill nor surrounding dark surface masks focus.
 
 Standard motion is 200 ms, with 120 ms for direct feedback and 320 ms for
 large context changes. Scale focused cards to at most 1.04 in production so
-neighbors do not shift. When reduced motion is enabled, remove scale and
-translation, shorten fades to 80 ms, and keep the focus outline instantaneous.
+neighbors do not shift. When reduced motion is enabled, motion tokens become
+zero, Fluent button press transforms are disabled, gallery scrolling is
+immediate, and indeterminate busy animation is replaced by static status text.
+Focus outlines remain instantaneous in every mode.
+
+Developer-injected presentation preferences apply at window scope: text roles scale to 125% or
+150%, high contrast replaces Cindara and Fluent control palettes, and default
+restoration reverses every override. These appearance controls are deferred from
+the user-facing UI; the app uses defaults and does not restore earlier appearance
+settings. There is no OS preference auto-detection.
+See [the accessibility contract and manual test matrix](accessibility.md) for
+persistence, localization, pseudo-locales, contrast coverage, and limits.
 
 ## TV viewport behavior
 
@@ -125,8 +144,8 @@ inside the safe area. Hero artwork carries a dark Cindara gradient so text
 remains readable. Dialogs dim, but do not blur, the context. Toasts do not take
 focus. Skeletons preserve final geometry and respect reduced motion.
 
-`DesignGalleryView.axaml` is a non-production authenticated showcase for the
-navigation rail, header, hero, landscape cards, and poster rails. The reusable
+`DesignGalleryView.axaml` supplies the current authenticated Home preview with a
+navigation rail, hero, landscape cards, and poster rails. The reusable
 styles also define dialog, toast, empty-state actions, and loading skeleton
 treatments; the wireframes below specify the remaining screens.
 
@@ -136,25 +155,24 @@ Directional links below describe the target production shell. **A/Enter/Space** 
 **B/Escape** returns or dismisses, and **Start/F11** toggles fullscreen. Mouse
 click maps to activation, pointer hover maps to hover (not keyboard focus), and
 wheel/trackpad scroll maps to rail or grid scrolling.
-The current preview implements header/rail directional navigation. Back/Escape
-closes the gallery without leaving fullscreen and restores its Home launcher.
+The current Home implements sidebar/rail directional navigation. Back/Escape
+returns focus to its sidebar Home without leaving the signed-in experience.
 Start/Options/+ and F11 toggle fullscreen. Modals consume controller Menu so it
 cannot change the background; F11 remains the explicit keyboard escape path.
-Reduced-motion settings remain accessibility work.
+Appearance overrides are developer-tested foundation code, not current UI options.
 
 ### Home
 
 ```text
-[Rail]  [Home] [Trending] [Activity] [Profile]
-        [Hero title / episode / facts / overview]
+[Rail]  [Hero title / episode / facts / overview]
         [Continue watching  > > >]
         [Recently added     > > >]
 ```
 
-Initial focus: Home in the header. Left/right traverses the header; down enters
-the first card of the active media row. Within a rail, left/right moves cards;
+Initial focus: first media card, or the sidebar Home action if there is no media.
+Right from sidebar Home returns to the focused card. Within a rail, left/right moves cards;
 up/down enters the first card of the adjacent rail. Up from the first row
-returns to the header. The hero is informational, with no Play or More Info
+returns to sidebar Home. The hero is informational, with no Play or More Info
 buttons. Returning from production details will restore the originating card.
 
 The authenticated preview uses one right-aligned hero image. Its width is 60%
@@ -165,10 +183,10 @@ opacity masks relative to the artwork's visible bounds, not the entire window,
 with fully transparent left and bottom edges over an opaque background. This
 prevents seams and keeps scrolled cards from bleeding through the hero.
 
-Preview hero text starts at the upper left immediately below the Home/Trending
-header. Title, subtitle, metadata, description, and their spacing scale together
-from 1080p to 4K; long titles and descriptions truncate within the hero rather
-than overlapping the rails. Poster and landscape cards have no border at rest.
+Preview hero text starts at the upper left without a top tab bar.
+Title, subtitle, metadata, description, and their spacing scale together
+from 1080p to 4K; long text wraps inside a scrollable hero rather than overlapping
+the rails. Page Up/Page Down scroll the description. Poster and landscape cards have no border at rest.
 The focused card retains one rounded accent outline for controller and keyboard
 use; the framework's rectangular focus adorner is suppressed on media cards so
 directional navigation does not add a second outline.
@@ -189,11 +207,10 @@ in content coordinates so partially completed movement cannot shift the final
 heading position. Automatic vertical bring-into-view is suppressed to avoid a
 snap before the transition; horizontal card visibility remains automatic.
 
-The preview opens with focus on Home in the top bar. Left/right traverses
-Home, Trending, Activity, and Profile; up from the first media row returns to
-the last focused header button, and down returns to the first card of the
-active row. Left from Home enters the sidebar; right from the sidebar's Home
-icon returns to the header. Header destinations remain design placeholders.
+The preview has a single Home navigation action in the sidebar. Settings opens
+the three-action settings panel; returning Home preserves the
+loaded media and focused card. The top tab bar has been removed pending a
+product decision about its purpose.
 TV uses a screen-and-stand glyph; Anime has its own torii gate glyph, accessible
 name, and tooltip rather than sharing the TV icon.
 Both the sidebar's library icons and recently-added rows use TV, Movies, Anime
@@ -211,9 +228,15 @@ layout for display migration; its DPI-change behavior has headless coverage.
 Startup uses the OS-selected display rather than persisting a display preference.
 
 This gallery intentionally caps rows at 20 items and preloads a bounded subset
-of recently-added backdrops, falling back to card artwork elsewhere. Header and
-sidebar destinations, playback, mutations, paging, and production image caching
-are not implemented here. Session tokens are sent only in authenticated headers;
+of recently-added backdrops, falling back to card artwork elsewhere. Full
+library destinations, playback, mutations, paging, and production image caching
+are not implemented here. Metadata and artwork overlap under a six-request cap,
+images are deduplicated within the request, and a 30-second deadline prevents
+unbounded loading. Cancel loading/Back stops the request and enables Retry.
+Loading Home initially focuses Cancel loading, and moving right from the Home
+rail reaches it (left in the developer RTL layout). The loading focus state is
+separate from ready/error Home so retrying restores the cancel action.
+Session tokens are sent only in authenticated headers;
 the preview transport requires HTTPS (or HTTP loopback) before sending any
 request and rejects redirects rather than forwarding those headers.
 Rejected preview sessions clear the active gallery, invalidate only the rejected
@@ -266,12 +289,16 @@ an explanatory empty state and returns up to the field.
 ### Settings
 
 ```text
-[Rail]  [Category list]  [Setting rows / value / toggle]
+[Rail]  Settings
+        [Language: English]
+        [Exit]
+        [Back to Home]
 ```
 
-Initial focus: first category. Right enters its first setting; left returns to
-the selected category. Up/down stays within a column. A modal choice traps
-focus between options and its primary action until selection or Back.
+Initial focus: Language. Up/down moves between the three actions; left returns
+to the rail. The language picker traps focus until selection or Back and currently
+offers English only. Exit closes the app, while Back to Home restores media
+without a new load. No category navigation or expanded settings are exposed yet.
 
 ### Playback overlay
 
@@ -299,8 +326,9 @@ states include a reason and next action. Skeletons are non-focusable and use
 the final component's dimensions.
 
 Keyboard focus must always be visible. Screen-reader names describe the action
-and media title rather than artwork. Text supports 200% scaling without
-clipping critical controls. No essential status is communicated only through
+and media title rather than artwork. The current application text scale supports
+100/125/150%; 200% text remains a future layout target, distinct from OS DPI.
+No essential status is communicated only through
 motion, color, artwork, or sound.
 
 ## Shell validation

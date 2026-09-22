@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Status.LoadingSessions" xml:space="preserve"><value>Loading saved Jellyfin sessions...</value></data>
+  <data name="Status.InitializingController" xml:space="preserve"><value>Initializing controller input...</value></data>
+  <data name="Status.CheckingServer" xml:space="preserve"><value>Checking server...</value></data>
+  <data name="Status.Connected" xml:space="preserve"><value>Connected to {0}. Sign in with your Jellyfin account.</value></data>
+  <data name="Status.SigningIn" xml:space="preserve"><value>Signing in...</value></data>
+  <data name="Status.CheckingSession" xml:space="preserve"><value>Checking saved session...</value></data>
+  <data name="Status.RemovedAccount" xml:space="preserve"><value>Removed {0}.</value></data>
+  <data name="Status.SignedOut" xml:space="preserve"><value>Signed out of {0}.</value></data>
+  <data name="Status.LoadingPreview" xml:space="preserve"><value>Loading your Jellyfin Home...</value></data>
+  <data name="Status.PreviewLoaded" xml:space="preserve"><value>Your Jellyfin Home is ready.</value></data>
+  <data name="Status.PreviewCanceled" xml:space="preserve"><value>Loading canceled. Select Retry loading Home to try again.</value></data>
+  <data name="Status.SignInAgain" xml:space="preserve"><value>{0} Sign in again to continue.</value></data>
+  <data name="Status.Combined" xml:space="preserve"><value>{0} {1}</value></data>
+  <data name="Status.EnterServer" xml:space="preserve"><value>Enter the address of the Jellyfin server you want to add.</value></data>
+  <data name="Status.GetStarted" xml:space="preserve"><value>Connect to your Jellyfin server to get started.</value></data>
+  <data name="Status.ChooseAccount" xml:space="preserve"><value>Choose a saved Jellyfin account or add another server.</value></data>
+  <data name="Status.SignedIn" xml:space="preserve"><value>Signed in to {0}.</value></data>
+  <data name="Error.Unknown" xml:space="preserve"><value>The operation could not be completed. Please try again.</value></data>
+  <data name="Error.SessionRefresh" xml:space="preserve"><value>Saved session metadata could not be read. {0}</value></data>
+  <data name="Error.SessionInvalidation" xml:space="preserve"><value>Could not invalidate the rejected session. {0}</value></data>
+  <data name="Error.Authentication.InvalidCredentials" xml:space="preserve"><value>The username or password was not accepted by Jellyfin.</value></data>
+  <data name="Error.Authentication.InsecureConnection" xml:space="preserve"><value>Sign-in requires HTTPS so passwords and access tokens are not exposed on the network.</value></data>
+  <data name="Error.Authentication.RevokedSession" xml:space="preserve"><value>This Jellyfin session is no longer valid. Sign in again to continue.</value></data>
+  <data name="Error.Authentication.SecureStorageUnavailable" xml:space="preserve"><value>Saved credentials could not be accessed. Check that secure storage is available and try again.</value></data>
+  <data name="Error.Authentication.Network" xml:space="preserve"><value>Jellyfin could not be reached. Check the server and network connection.</value></data>
+  <data name="Error.Authentication.InvalidResponse" xml:space="preserve"><value>Jellyfin returned an invalid authentication response.</value></data>
+  <data name="Error.Authentication.UnexpectedStatus" xml:space="preserve"><value>Jellyfin could not complete the authentication request. Please try again.</value></data>
+  <data name="Error.Authentication.SessionChanged" xml:space="preserve"><value>This account was signed in again while the request was running. The newer saved session was kept. Select it again to continue.</value></data>
+  <data name="Error.Server.InvalidAddress" xml:space="preserve"><value>Enter a valid HTTP or HTTPS Jellyfin server address.</value></data>
+  <data name="Error.Server.Unreachable" xml:space="preserve"><value>The Jellyfin server could not be reached. Check the address and network connection.</value></data>
+  <data name="Error.Server.TimedOut" xml:space="preserve"><value>The Jellyfin server did not respond before the request timed out.</value></data>
+  <data name="Error.Server.AccessDenied" xml:space="preserve"><value>The Jellyfin server denied access. Check the server address and permissions.</value></data>
+  <data name="Error.Server.UnexpectedStatus" xml:space="preserve"><value>The Jellyfin server could not complete the connection request. Please try again.</value></data>
+  <data name="Error.Server.InvalidResponse" xml:space="preserve"><value>The server returned an unexpected response. Check that this is a Jellyfin server.</value></data>
+  <data name="Error.Preview.AccessDenied" xml:space="preserve"><value>Jellyfin denied access to the media preview.</value></data>
+  <data name="Error.Preview.Network" xml:space="preserve"><value>Jellyfin could not be reached while loading the preview. Check the network connection.</value></data>
+  <data name="Error.Preview.TimedOut" xml:space="preserve"><value>Jellyfin did not respond before the media preview request timed out.</value></data>
+  <data name="Error.Preview.InvalidResponse" xml:space="preserve"><value>Jellyfin returned media data or artwork that could not be decoded. Try refreshing the preview.</value></data>
+  <data name="Error.Preview.UnexpectedStatus" xml:space="preserve"><value>Jellyfin could not load the media preview. Please try again.</value></data>
+  <data name="Error.Preview.InsecureConnection" xml:space="preserve"><value>The media preview requires HTTPS or local HTTP loopback to protect your access token.</value></data>
+  <data name="Error.Preview.Artwork" xml:space="preserve"><value>Jellyfin returned artwork that could not be decoded. Try refreshing the preview.</value></data>
+  <data name="View.NotFound" xml:space="preserve"><value>Not Found: {0}</value></data>
+  <data name="Controller.Cross" xml:space="preserve"><value>Cross</value></data>
+  <data name="Controller.Circle" xml:space="preserve"><value>Circle</value></data>
+  <data name="Controller.Options" xml:space="preserve"><value>Options</value></data>
+  <data name="Controller.South" xml:space="preserve"><value>South</value></data>
+  <data name="Controller.East" xml:space="preserve"><value>East</value></data>
+  <data name="Controller.Start" xml:space="preserve"><value>Start</value></data>
+  <data name="Format.Session" xml:space="preserve"><value>{0} - {1} ({2})</value></data>
+  <data name="Format.Duration.HoursMinutes" xml:space="preserve"><value>{0:0}h {1:0}m</value></data>
+  <data name="Format.Duration.Minutes" xml:space="preserve"><value>{0:0}m</value></data>
+  <data name="Format.EpisodeNumber" xml:space="preserve"><value>S{0:0} E{1:0}</value></data>
+  <data name="Format.Episode" xml:space="preserve"><value>Episode</value></data>
+  <data name="Format.Subtitle" xml:space="preserve"><value>{0} · {1}</value></data>
+  <data name="Format.DetailSeparator" xml:space="preserve"><value>  ·  </value></data>
+  <data name="Format.RecentlyAdded" xml:space="preserve"><value>Recently Added in {0}</value></data>
+  <data name="Format.Rating" xml:space="preserve"><value>{0:0.0} / {1:0}</value></data>
+  <data name="Format.MediaSource" xml:space="preserve"><value>Jellyfin</value></data>
+</root>

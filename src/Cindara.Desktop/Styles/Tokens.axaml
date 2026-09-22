@@ -33,6 +33,7 @@
     <x:Double x:Key="Cindara.Type.Heading">24</x:Double>
     <x:Double x:Key="Cindara.Type.Body">18</x:Double>
     <x:Double x:Key="Cindara.Type.Caption">14</x:Double>
+    <x:Double x:Key="Cindara.TextScale">1</x:Double>
 
     <Thickness x:Key="Cindara.Space.Safe1080">48</Thickness>
     <Thickness x:Key="Cindara.Space.Safe4K">96</Thickness>
@@ -48,6 +49,7 @@
 
     <x:Double x:Key="Cindara.Elevation.Rest">0</x:Double>
     <BoxShadows x:Key="Cindara.Elevation.Focused">0 12 32 0 #A6000000</BoxShadows>
+    <BoxShadows x:Key="Cindara.Elevation.PrimaryFocus">0 0 0 2 #F5F8FC</BoxShadows>
     <x:TimeSpan x:Key="Cindara.Motion.Fast">0:0:0.12</x:TimeSpan>
     <x:TimeSpan x:Key="Cindara.Motion.Standard">0:0:0.2</x:TimeSpan>
     <x:TimeSpan x:Key="Cindara.Motion.Deliberate">0:0:0.32</x:TimeSpan>

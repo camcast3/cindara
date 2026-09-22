@@ -1,12 +1,74 @@
 using Cindara.Core.Authentication;
 using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
+using Cindara.Desktop.Localization;
+using Cindara.Desktop.Tests.Localization;
 using Cindara.Desktop.ViewModels;
 
 namespace Cindara.Desktop.Tests.ViewModels;
 
+[Collection(LocalizationTestGroup.Name)]
 public sealed class MainViewModelTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CanceledOrDisposedLoadNeverPublishesLateResults(bool dispose)
+    {
+        var preview = new PendingPreviewClient();
+        using var model = new MainViewModel(new StubServerClient(), new TestAuthenticationService(), preview);
+        await model.InitializeCommand.ExecuteAsync(null);
+        await model.UseSavedSessionCommand.ExecuteAsync(null);
+        var pending = model.ShowDesignGalleryCommand.ExecuteAsync(null);
+        Assert.True(model.IsBusy);
+        if (dispose)
+        {
+            model.Dispose();
+        }
+        else
+        {
+            model.ShowDesignGalleryCancelCommand.Execute(null);
+        }
+
+        preview.Completion.SetResult(new MediaPreviewHome(null, [], []));
+        await pending;
+        Assert.Null(model.DesignGallery);
+        Assert.False(model.IsDesignGalleryVisible);
+        Assert.False(model.IsBusy);
+        Assert.Equal(!dispose, model.OpenHomeCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task UnsupportedLanguageUsesEnglishResourcesAndLeavesServerNameUntouched()
+    {
+        using var scope = new CultureScope("fr-CA");
+        using var viewModel = new MainViewModel(new StubServerClient(), new TestAuthenticationService())
+        {
+            ServerAddress = Server.BaseUri.ToString(),
+        };
+
+        Assert.Equal("Loading saved Jellyfin sessions...", viewModel.StatusMessage);
+        await viewModel.ConnectCommand.ExecuteAsync(null);
+
+        Assert.Equal("Connected to Living Room. Sign in with your Jellyfin account.",
+            viewModel.StatusMessage);
+        Assert.Equal(string.Empty, viewModel.Username);
+    }
+
+    [Fact]
+    public async Task PseudoStatusPreservesUsernamesAndServerData()
+    {
+        using var scope = new CultureScope("qps-ploc");
+        using var viewModel = new MainViewModel(new StubServerClient(), new TestAuthenticationService());
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("[!! ", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("Living Room", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("viewer", viewModel.AuthenticatedAccount, StringComparison.Ordinal);
+        Assert.Contains("https://media.example.com", viewModel.AuthenticatedAccount, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task LogoutRefreshFailureRestoresCommandsAndShowsError()
     {
@@ -26,7 +88,7 @@ public sealed class MainViewModelTests
         Assert.False(viewModel.IsBusy);
         Assert.True(viewModel.IsServerEntryVisible);
         Assert.False(viewModel.IsAuthenticatedVisible);
-        Assert.Equal("Saved session metadata could not be read.", viewModel.StatusMessage);
+        Assert.Equal(Loc.Get("Error.Authentication.SecureStorageUnavailable"), viewModel.StatusMessage);
         Assert.True(viewModel.ConnectCommand.CanExecute(null));
     }
 
@@ -84,7 +146,7 @@ public sealed class MainViewModelTests
         await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
 
         Assert.False(viewModel.IsBusy);
-        Assert.Contains("Could not restore the saved session.", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains(Loc.Get($"Error.Authentication.{error}"), viewModel.StatusMessage, StringComparison.Ordinal);
         Assert.Contains("Saved session metadata could not be read.", viewModel.StatusMessage, StringComparison.Ordinal);
         Assert.Contains(other, viewModel.SavedSessions);
         if (error == AuthenticationError.RevokedSession)
@@ -335,7 +397,7 @@ public sealed class MainViewModelTests
         Assert.False(viewModel.IsBusy);
         Assert.False(viewModel.ShowDesignGalleryCommand.CanExecute(null));
         Assert.Contains(other, viewModel.SavedSessions);
-        Assert.Contains("Preview failed", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains(Loc.Get("Error.Preview.AccessDenied"), viewModel.StatusMessage, StringComparison.Ordinal);
         Assert.Equal(failInvalidation,
             viewModel.StatusMessage.Contains("Could not invalidate", StringComparison.Ordinal));
         Assert.Equal(failRefresh,
@@ -380,7 +442,7 @@ public sealed class MainViewModelTests
         Assert.True(viewModel.IsAuthenticatedVisible);
         Assert.False(viewModel.IsSignInVisible);
         Assert.True(viewModel.ShowDesignGalleryCommand.CanExecute(null));
-        Assert.Equal("Preview failed.", viewModel.StatusMessage);
+        Assert.Equal(Loc.Get($"Error.Preview.{error}"), viewModel.StatusMessage);
     }
 
     [Theory]
@@ -469,6 +531,14 @@ public sealed class MainViewModelTests
         var item = new MediaPreviewItem("movie", "Movie", "2026", "Movie",
             Artwork: [1], Backdrop: [2], Overview: "Overview", Details: "2026", PlaybackProgress: null);
         return new MediaPreviewHome(item, [], [new MediaPreviewRail("movies", "Movies", [item])]);
+    }
+
+    private sealed class PendingPreviewClient : IJellyfinMediaPreviewClient
+    {
+        public TaskCompletionSource<MediaPreviewHome> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<MediaPreviewHome> GetHomeAsync(AuthenticatedSession session, CancellationToken cancellationToken = default) =>
+            Completion.Task;
     }
 
     private static readonly ServerIdentity Server = new(

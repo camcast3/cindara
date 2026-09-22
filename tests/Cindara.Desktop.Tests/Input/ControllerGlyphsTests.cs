@@ -1,10 +1,26 @@
 using Cindara.Desktop.Input;
+using Cindara.Desktop.Tests.Localization;
 using SDL3;
 
 namespace Cindara.Desktop.Tests.Input;
 
+[Collection(LocalizationTestGroup.Name)]
 public sealed class ControllerGlyphsTests
 {
+    [Theory]
+    [InlineData("fr", "Cross", "Circle")]
+    [InlineData("fr-CA", "Cross", "Circle")]
+    public void UnsupportedLanguagesKeepEnglishButtonNamesAndPhysicalSymbols(string culture, string accept, string back)
+    {
+        using var scope = new CultureScope(culture);
+
+        Assert.Equal(accept, ControllerGlyphs.GetLabel(ControllerLayout.PlayStation, ControllerAction.Accept));
+        Assert.Equal(back, ControllerGlyphs.GetLabel(ControllerLayout.PlayStation, ControllerAction.Back));
+        Assert.Equal("A", ControllerGlyphs.GetLabel(ControllerLayout.Xbox, ControllerAction.Accept));
+        Assert.Equal("+", ControllerGlyphs.GetLabel(ControllerLayout.Nintendo, ControllerAction.Menu));
+        Assert.Equal("↑", ControllerGlyphs.GetLabel(ControllerLayout.Generic, ControllerAction.NavigateUp));
+    }
+
     [Theory]
     [InlineData(ControllerLayout.Xbox, "A", "B", "Start")]
     [InlineData(ControllerLayout.PlayStation, "Cross", "Circle", "Options")]

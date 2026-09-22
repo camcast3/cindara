@@ -11,4 +11,5 @@ public sealed record MediaPreviewItem(
     string Details,
     double? PlaybackProgress,
     string? HeroName = null,
-    string? HeroSubtitle = null);
+    string? HeroSubtitle = null,
+    MediaPreviewMetadata? Metadata = null);

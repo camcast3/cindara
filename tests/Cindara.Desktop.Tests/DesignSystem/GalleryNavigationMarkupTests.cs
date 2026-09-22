@@ -6,26 +6,18 @@ public sealed class GalleryNavigationMarkupTests
 {
     private static readonly XNamespace Xaml = "https://github.com/avaloniaui";
     private static readonly XNamespace Names = "http://schemas.microsoft.com/winfx/2006/xaml";
-    private static readonly string[] HeaderLabels = ["Home", "Trending", "Activity", "Profile"];
-    private static readonly string[] LibraryLabels = ["TV shows", "Movies", "Anime"];
+    private static readonly string[] LibraryLabels = ["{loc:Tr Gallery.Shows}", "{loc:Tr Gallery.Movies}", "{loc:Tr Gallery.Anime}"];
 
     [Fact]
-    public void HeaderUsesFocusableButtonsWithDistinctAccessibleNames()
+    public void HomeHasOneNavigationActionAndNoSpeculativeTopTabs()
     {
         var gallery = LoadGallery();
-        var header = Assert.Single(gallery.Descendants(Xaml + "StackPanel"),
-            panel => (string?)panel.Attribute(Names + "Name") == "TopNavigationPanel");
-        var tabs = header.Elements(Xaml + "Button").ToArray();
-
-        Assert.Equal(HeaderLabels,
-            tabs.Select(tab => (string?)tab.Attribute("Content")));
-        Assert.All(tabs, tab =>
-        {
-            Assert.Contains("header-tab", (string?)tab.Attribute("Classes"));
-            Assert.NotEqual("False", (string?)tab.Attribute("Focusable"));
-            Assert.Equal($"{(string?)tab.Attribute("Content")} tab",
-                (string?)tab.Attribute("AutomationProperties.Name"));
-        });
+        Assert.DoesNotContain(gallery.Descendants(),
+            element => (string?)element.Attribute(Names + "Name") == "TopNavigationPanel");
+        var home = Assert.Single(gallery.Descendants(Xaml + "Button"),
+            button => (string?)button.Attribute("AutomationProperties.Name") == "{loc:Tr Nav.Home}");
+        Assert.Equal("SidebarHomeButton", (string?)home.Attribute(Names + "Name"));
+        Assert.Equal("OnHomeClicked", (string?)home.Attribute("Click"));
     }
 
     [Fact]
@@ -58,17 +50,17 @@ public sealed class GalleryNavigationMarkupTests
     {
         var buttons = LoadGallery().Descendants(Xaml + "Button").ToArray();
         var anime = Assert.Single(buttons,
-            button => (string?)button.Attribute("AutomationProperties.Name") == "Anime");
+            button => (string?)button.Attribute("AutomationProperties.Name") == "{loc:Tr Gallery.Anime}");
         var tv = Assert.Single(buttons,
-            button => (string?)button.Attribute("AutomationProperties.Name") == "TV shows");
+            button => (string?)button.Attribute("AutomationProperties.Name") == "{loc:Tr Gallery.Shows}");
         var animePath = Assert.Single(anime.Elements(Xaml + "PathIcon")).Attribute("Data")?.Value;
         var tvPath = Assert.Single(tv.Elements(Xaml + "PathIcon")).Attribute("Data")?.Value;
 
         Assert.False(string.IsNullOrWhiteSpace(animePath));
         Assert.False(string.IsNullOrWhiteSpace(tvPath));
         Assert.NotEqual(animePath, tvPath);
-        Assert.Equal("Anime", (string?)anime.Attribute("ToolTip.Tip"));
-        Assert.Equal("TV shows", (string?)tv.Attribute("ToolTip.Tip"));
+        Assert.Equal("{loc:Tr Gallery.Anime}", (string?)anime.Attribute("ToolTip.Tip"));
+        Assert.Equal("{loc:Tr Gallery.Shows}", (string?)tv.Attribute("ToolTip.Tip"));
     }
 
     private static XDocument LoadGallery()

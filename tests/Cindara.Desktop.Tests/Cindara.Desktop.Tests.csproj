@@ -24,5 +24,9 @@
                       LogicalName="Cindara.Tests.CardStyles.axaml" />
     <EmbeddedResource Include="..\..\src\Cindara.Desktop\Views\DesignGalleryView.axaml"
                       LogicalName="Cindara.Tests.DesignGallery.axaml" />
+    <EmbeddedResource Include="..\..\src\Cindara.Desktop\Views\MainWindow.axaml"
+                      LogicalName="Cindara.Tests.MainWindow.axaml" />
+    <EmbeddedResource Include="..\..\src\Cindara.Desktop\Views\ShellView.axaml"
+                      LogicalName="Cindara.Tests.ShellView.axaml" />
   </ItemGroup>
 </Project>

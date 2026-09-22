@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
@@ -7,7 +8,9 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.Input;
+using Cindara.Desktop.Localization;
 using Cindara.Desktop.Navigation;
 using Cindara.Desktop.ViewModels;
 
@@ -23,15 +26,23 @@ public partial class MainWindow : Window
     private TextBox? _keyboardDraft;
     private string? _screen;
     private bool _closed;
+    private bool _openHomeOnReady;
+
+    public PresentationPreferences Preferences { get; }
 
     public MainWindow() : this(new SdlGamepadInputSource())
     {
     }
 
-    public MainWindow(IControllerInputSource controllerInput)
+    public MainWindow(IControllerInputSource controllerInput, PresentationPreferences? preferences = null)
     {
         _controllerInput = controllerInput;
         InitializeComponent();
+        Shell.HomeLoadingAction = CancelLoadingButton;
+        FlowDirection = Loc.IsRightToLeft
+            ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight;
+        Preferences = preferences ?? new();
+        ApplyPresentation();
         _navigation = new FocusNavigationService(this);
         _controllerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _controllerTimer.Tick += OnControllerTimerTick;
@@ -50,10 +61,26 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnShellKeyDown, RoutingStrategies.Tunnel);
         Shell.DestinationChanged += (_, _) =>
         {
+            if (Shell.Destination != "Home" && _viewModel?.ShowDesignGalleryCommand.IsRunning is true)
+            {
+                _viewModel.ShowDesignGalleryCommand.Cancel();
+            }
+
+            if (Shell.Destination == "Home" && _viewModel?.OpenHomeCommand.CanExecute(null) is true)
+            {
+                _viewModel.OpenHomeCommand.Execute(null);
+            }
+
             _screen = null;
             Dispatcher.UIThread.Post(RefreshScreen, DispatcherPriority.Loaded);
         };
-        Shell.WindowOptionsRequested += (_, _) => ShowWindowOptions();
+        Shell.ExitRequested += (_, _) => Close();
+        Shell.LanguageRequested += (_, _) => ShowLanguage();
+        GalleryView.SettingsRequested += (_, _) =>
+        {
+            Shell.Navigate("Settings");
+            _viewModel?.HideDesignGalleryCommand.Execute(null);
+        };
     }
 
     private async void OnOpened(object? sender, EventArgs eventArgs)
@@ -62,6 +89,7 @@ public partial class MainWindow : Window
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _viewModel.ShowDesignGalleryCommand.PropertyChanged += OnHomeLoadPropertyChanged;
         }
 
         _controllerInput.ActionPressed += OnControllerActionPressed;
@@ -112,15 +140,35 @@ public partial class MainWindow : Window
         ClearModal();
         if (_viewModel is not null)
         {
+            _viewModel.ShowDesignGalleryCommand.Cancel();
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.ShowDesignGalleryCommand.PropertyChanged -= OnHomeLoadPropertyChanged;
             _viewModel = null;
         }
     }
 
     private void OnControllerTimerTick(object? sender, EventArgs eventArgs) => _controllerInput.Poll();
 
+    private void OnHomeLoadPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(MainViewModel.ShowDesignGalleryCommand.IsRunning))
+        {
+            Dispatcher.UIThread.Post(RefreshScreen, DispatcherPriority.Loaded);
+        }
+    }
+
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
+        if (args.PropertyName == nameof(MainViewModel.IsAuthenticatedVisible))
+        {
+            _openHomeOnReady = _viewModel?.IsAuthenticatedVisible is true;
+        }
+
+        if (args.PropertyName == nameof(MainViewModel.IsBusy))
+        {
+            BusyIndicator.IsIndeterminate = _viewModel?.IsBusy is true && !Preferences.ReducedMotion;
+        }
+
         if (args.PropertyName is nameof(MainViewModel.IsServerEntryVisible)
             or nameof(MainViewModel.IsSignInVisible) or nameof(MainViewModel.AreSavedSessionsVisible)
             or nameof(MainViewModel.IsAuthenticatedVisible) or nameof(MainViewModel.IsDesignGalleryVisible)
@@ -137,10 +185,18 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_openHomeOnReady && !_viewModel.IsBusy && _viewModel.OpenHomeCommand.CanExecute(null))
+        {
+            _openHomeOnReady = false;
+            _viewModel.OpenHomeCommand.Execute(null);
+        }
+
         ShellViewport.IsVisible = !_viewModel.IsDesignGalleryVisible;
         Shell.IsVisible = _viewModel.IsAuthenticatedVisible;
         AuthenticationSurface.IsVisible = !Shell.IsVisible;
         var screen = _viewModel.IsDesignGalleryVisible ? "gallery"
+            : _viewModel.IsAuthenticatedVisible && Shell.Destination == "Home"
+                && _viewModel.ShowDesignGalleryCommand.IsRunning ? "shell:Home:loading"
             : _viewModel.IsAuthenticatedVisible ? $"shell:{Shell.Destination}"
             : _viewModel.IsSignInVisible ? "sign-in"
             : _viewModel.AreSavedSessionsVisible ? "accounts"
@@ -164,27 +220,22 @@ public partial class MainWindow : Window
             Shell.Reset();
         }
 
-        var returningFromGallery = _screen == "gallery" && Shell.IsVisible;
         _screen = screen;
+        var contentFocus = Shell.ContentFocus;
         UpdateLayout();
         var initial = screen switch
         {
             "sign-in" => UsernameTextBox,
             "accounts" => SavedAccountButton,
             "server" => (Control)ServerAddressTextBox,
-            "gallery" => GalleryBackButton,
-            "loading" => WindowOptionsButton,
+            "gallery" => GalleryView.HomeNavigation,
+            "loading" => LanguageButton,
             _ => Shell.InitialFocus,
         };
-        var contentFocus = Shell.ContentFocus;
         _navigation.SetScope(MainSurface, initial, screen);
         if (screen == "gallery")
         {
-            GalleryView.FocusTopNavigation();
-        }
-        else if (returningFromGallery)
-        {
-            _navigation.Focus(Shell.PreviewAction);
+            GalleryView.FocusHomeContent();
         }
         else if (Shell.IsVisible)
         {
@@ -204,10 +255,10 @@ public partial class MainWindow : Window
         var accept = ControllerGlyphs.GetLabel(layout, ControllerAction.Accept);
         var back = ControllerGlyphs.GetLabel(layout, ControllerAction.Back);
         var menu = ControllerGlyphs.GetLabel(layout, ControllerAction.Menu);
-        var name = controller?.Name ?? (_controllerInput.ConnectedGamepads > 0 ? "Controller ready" : "Connect a controller");
+        var name = controller?.Name ?? Loc.Get(_controllerInput.ConnectedGamepads > 0 ? "Input.Ready" : "Input.Connect");
         _viewModel?.SetControllerStatus(_controllerInput.IsAvailable
-            ? $"{name} | D-pad / left stick: move | [{accept}]: select | [{back}]: back | [{menu}] / F11: fullscreen"
-            : $"{_controllerInput.InitializationError ?? "No controller available."} Keyboard and mouse remain available. F11: fullscreen.");
+            ? Loc.Format("Input.Prompts", name, accept, back, menu)
+            : Loc.Get("Input.Unavailable"));
     }
 
     private void OnControllerActionPressed(object? sender, ControllerActionEventArgs args)
@@ -251,7 +302,13 @@ public partial class MainWindow : Window
 
     private void OnShellKeyDown(object? sender, KeyEventArgs args)
     {
-        if (args.Key == Key.F11)
+        if (args.Key is Key.PageUp or Key.PageDown && !ModalOverlay.IsVisible
+            && _viewModel?.IsDesignGalleryVisible is true)
+        {
+            GalleryView.ScrollDescription(args.Key == Key.PageDown);
+            args.Handled = true;
+        }
+        else if (args.Key == Key.F11)
         {
             ToggleFullscreen();
             args.Handled = true;
@@ -329,9 +386,13 @@ public partial class MainWindow : Window
         {
             DismissModal();
         }
+        else if (_viewModel?.ShowDesignGalleryCommand.IsRunning is true)
+        {
+            _viewModel.ShowDesignGalleryCommand.Cancel();
+        }
         else if (_viewModel?.IsDesignGalleryVisible is true)
         {
-            _viewModel.HideDesignGalleryCommand.Execute(null);
+            GalleryView.HomeNavigation.Focus(NavigationMethod.Directional);
         }
         else if (_viewModel?.IsAuthenticatedVisible is true && !Shell.IsRailFocused)
         {
@@ -345,30 +406,48 @@ public partial class MainWindow : Window
                 _viewModel.BackToSessionsCommand.Execute(null);
             }
         }
+        else if (_viewModel?.IsAuthenticatedVisible is true)
+        {
+            Shell.Navigate("Home");
+        }
         else
         {
-            ShowWindowOptions();
+            LanguageButton.Focus(NavigationMethod.Directional);
         }
     }
 
     private void ToggleFullscreen() => WindowState =
         WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
 
-    private void OnWindowOptions(object? sender, RoutedEventArgs args) => ShowWindowOptions();
+    private void OnLanguage(object? sender, RoutedEventArgs args) => ShowLanguage();
 
-    private void ShowWindowOptions()
+    private void ShowLanguage()
     {
         if (ModalOverlay.IsVisible)
         {
-            return;
+            ModalActions.Children.Clear();
+            ModalTitle.Text = Loc.Get("Language.Title");
+            AutomationProperties.SetName(ModalOverlay, ModalTitle.Text);
+            _navigation.Forget("modal");
+        }
+        else
+        {
+            BeginModal(Loc.Get("Language.Title"));
         }
 
-        BeginModal("Window and exit");
-        AddModalButton("Return to Cindara", DismissModal);
-        AddModalButton("Use a desktop window", () => { WindowState = WindowState.Normal; DismissModal(); });
-        AddModalButton("Use fullscreen", () => { WindowState = WindowState.FullScreen; DismissModal(); });
-        AddModalButton("Exit Cindara", Close);
+        var english = AddModalButton(Loc.Get("Language.English"), DismissModal);
+        english.Classes.Add("selected");
+        AutomationProperties.SetItemStatus(english, Loc.Get("State.Selected"));
+        AutomationProperties.SetHelpText(english, Loc.Get("Language.EnglishOnly"));
+        AddModalButton(Loc.Get("Action.Back"), DismissModal);
         FocusModal();
+    }
+
+    private void ApplyPresentation()
+    {
+        PresentationTheme.Apply(this, Preferences);
+        GalleryView.ApplyPreferences(Preferences);
+        BusyIndicator.IsIndeterminate = _viewModel?.IsBusy is true && !Preferences.ReducedMotion;
     }
 
     private void OnChooseAccount(object? sender, RoutedEventArgs args)
@@ -378,17 +457,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        BeginModal("Choose saved account");
+        BeginModal(Loc.Get("Window.ChooseAccount"));
         foreach (var profile in _viewModel.SavedSessions)
         {
-            AddModalButton(profile.DisplayName, () =>
+            AddModalButton(LocaleFormat.SessionDisplayName(profile), () =>
             {
                 _viewModel.SelectedSavedSession = profile;
                 DismissModal();
             });
         }
 
-        AddModalButton("Cancel", DismissModal);
+        AddModalButton(Loc.Get("Action.Cancel"), DismissModal);
         FocusModal();
     }
 
@@ -397,6 +476,7 @@ public partial class MainWindow : Window
         _navigation.Remember();
         _modalReturnFocus = FocusManager?.GetFocusedElement() as Control;
         ModalTitle.Text = title;
+        AutomationProperties.SetName(ModalOverlay, title);
         ModalActions.Children.Clear();
         ModalOverlay.IsVisible = true;
         MainSurface.IsEnabled = false;
@@ -453,13 +533,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        BeginModal(AutomationProperties.GetName(target) ?? target.PlaceholderText ?? "Enter text");
-        var draft = new TextBox { Text = target.Text, PasswordChar = target.PasswordChar, MinWidth = 800 };
+        BeginModal(AutomationProperties.GetName(target) ?? target.PlaceholderText ?? Loc.Get("Keyboard.EnterText"));
+        var draft = new TextBox { Text = target.Text, PasswordChar = target.PasswordChar, MinWidth = 800, FlowDirection = target.FlowDirection };
         AutomationProperties.SetName(draft, ModalTitle.Text);
         draft.CaretIndex = draft.Text?.Length ?? 0;
         _keyboardDraft = draft;
         ModalActions.Children.Add(draft);
-        var keys = new UniformGrid { Columns = 12 };
+        var keys = new UniformGrid { Columns = 12, FlowDirection = Avalonia.Media.FlowDirection.LeftToRight };
         var letters = new List<Button>();
         foreach (var character in "1234567890-=" + "qwertyuiop[]" + "asdfghjkl;'\\"
                      + "zxcvbnm,./`" + "!@#$%^&*()_+{}:\"|<>?~")
@@ -475,7 +555,7 @@ public partial class MainWindow : Window
 
         ModalActions.Children.Add(keys);
         var actions = new WrapPanel();
-        AddKeyboardAction("Shift", () =>
+        AddKeyboardAction(Loc.Get("Keyboard.Shift"), () =>
         {
             foreach (var letter in letters)
             {
@@ -483,8 +563,8 @@ public partial class MainWindow : Window
                 letter.Content = char.IsLower(value[0]) ? value.ToUpperInvariant() : value.ToLowerInvariant();
             }
         });
-        AddKeyboardAction("Space", () => InsertText(draft, " "));
-        AddKeyboardAction("Backspace", () =>
+        AddKeyboardAction(Loc.Get("Keyboard.Space"), () => InsertText(draft, " "));
+        AddKeyboardAction(Loc.Get("Keyboard.Backspace"), () =>
         {
             if (draft.SelectionStart == draft.SelectionEnd && draft.CaretIndex > 0)
             {
@@ -494,14 +574,14 @@ public partial class MainWindow : Window
 
             InsertText(draft, string.Empty);
         });
-        AddKeyboardAction("Clear", () => draft.Text = string.Empty);
-        AddKeyboardAction("Done", () =>
+        AddKeyboardAction(Loc.Get("Keyboard.Clear"), () => draft.Text = string.Empty);
+        AddKeyboardAction(Loc.Get("Keyboard.Done"), () =>
         {
             target.Text = draft.Text;
             target.CaretIndex = target.Text?.Length ?? 0;
             DismissModal();
         });
-        AddKeyboardAction("Cancel", DismissModal);
+        AddKeyboardAction(Loc.Get("Action.Cancel"), DismissModal);
         ModalActions.Children.Add(actions);
         FocusModal();
 

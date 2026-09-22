@@ -1,4 +1,4 @@
-using System.Globalization;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -12,6 +12,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient _httpClient;
     private readonly JellyfinClientIdentity _clientIdentity;
+    private readonly TimeProvider _timeProvider;
 
     public JellyfinMediaPreviewClient(JellyfinClientIdentity clientIdentity)
         : this(CreateSecureTransport(), clientIdentity)
@@ -20,7 +21,8 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
 
     internal JellyfinMediaPreviewClient(
         HttpMessageHandler httpHandler,
-        JellyfinClientIdentity clientIdentity)
+        JellyfinClientIdentity clientIdentity,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(httpHandler);
         ArgumentNullException.ThrowIfNull(clientIdentity);
@@ -29,6 +31,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             Timeout = TimeSpan.FromSeconds(15),
         };
         _clientIdentity = clientIdentity;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     internal static HttpClientHandler CreateSecureTransport() => new()
@@ -50,66 +53,77 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 "The media preview requires HTTPS or local HTTP loopback to protect your access token.");
         }
 
-        var resumeTask = GetWrappedItemsAsync(
-            session,
-            $"Users/{Uri.EscapeDataString(session.UserId)}/Items/Resume"
-            + $"?Limit={ItemLimit}&Recursive=true&Fields=PrimaryImageAspectRatio,SeriesName,SeriesId,SeriesPrimaryImageTag,ParentBackdropItemId,ParentIndexNumber,IndexNumber,ProductionYear,UserData,Overview,RunTimeTicks,OfficialRating,BackdropImageTags",
-            cancellationToken);
-        var viewsTask = GetWrappedItemsAsync(
-            session,
-            $"Users/{Uri.EscapeDataString(session.UserId)}/Views",
-            "media libraries",
-            cancellationToken);
-
-        await Task.WhenAll(resumeTask, viewsTask).ConfigureAwait(false);
-
-        var resumeItems = await resumeTask.ConfigureAwait(false);
-        var resume = await PopulateArtworkAsync(
-            session,
-            resumeItems,
-            landscape: true,
-            cancellationToken).ConfigureAwait(false);
-        var libraries = await GetLibraryRailsAsync(
-            session,
-            await viewsTask.ConfigureAwait(false),
-            cancellationToken).ConfigureAwait(false);
-        var featured = resume.Count > 0
-            ? resume[0]
-            : libraries.SelectMany(rail => rail.Items).FirstOrDefault();
-        if (featured is not null)
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, deadline.Token);
+        using var load = new PreviewLoad(session, cancellation);
+        try
         {
-            var featuredSource = resumeItems.FirstOrDefault(item => item.Id == featured.Id);
-            var backdrop = featured.Backdrop;
-            if (backdrop is null)
+            var resumeTask = GetResumeAsync(load);
+            var librariesTask = GetLibraryRailsAsync(load);
+            await Task.WhenAll(resumeTask, librariesTask).ConfigureAwait(false);
+
+            var (resumeItems, resume) = await resumeTask.ConfigureAwait(false);
+            var libraries = await librariesTask.ConfigureAwait(false);
+            var featured = resume.Count > 0
+                ? resume[0]
+                : libraries.SelectMany(rail => rail.Items).FirstOrDefault();
+            if (featured is not null)
             {
-                var backdropItemId = featuredSource is null
-                    ? featured.Id
-                    : GetBackdropItemId(featuredSource);
-                backdrop = await GetBackdropAsync(session, backdropItemId, cancellationToken)
-                    .ConfigureAwait(false);
+                var featuredSource = resumeItems.FirstOrDefault(item => item.Id == featured.Id);
+                var backdrop = featured.Backdrop;
+                if (backdrop is null)
+                {
+                    var backdropItemId = featuredSource is null
+                        ? featured.Id
+                        : GetBackdropItemId(featuredSource);
+                    backdrop = await GetBackdropAsync(load, backdropItemId).ConfigureAwait(false);
+                }
+
+                featured = featuredSource is not null
+                    ? featured with
+                    {
+                        Name = BuildName(featuredSource, preferSeriesTitle: true),
+                        Metadata = CreateMetadata(featuredSource, preferSeriesTitle: true),
+                        Backdrop = backdrop ?? featured.Artwork,
+                    }
+                    : featured with { Backdrop = backdrop ?? featured.Artwork };
             }
 
-            featured = featuredSource is not null
-                ? featured with
-                {
-                    Name = BuildName(featuredSource, preferSeriesTitle: true),
-                    Subtitle = BuildSubtitle(featuredSource, preferSeriesTitle: true),
-                    Backdrop = backdrop ?? featured.Artwork,
-                }
-                : featured with { Backdrop = backdrop ?? featured.Artwork };
+            cancellationToken.ThrowIfCancellationRequested();
+            deadline.Token.ThrowIfCancellationRequested();
+            return new MediaPreviewHome(
+                Featured: featured,
+                ContinueWatching: resume,
+                RecentlyAddedLibraries: libraries);
         }
-
-        return new MediaPreviewHome(
-            Featured: featured,
-            ContinueWatching: resume,
-            RecentlyAddedLibraries: libraries);
+        catch (OperationCanceledException) when (
+            deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new MediaPreviewException(
+                MediaPreviewError.TimedOut,
+                "The Jellyfin media preview timed out.");
+        }
     }
 
-    private async Task<IReadOnlyList<MediaPreviewRail>> GetLibraryRailsAsync(
-        AuthenticatedSession session,
-        IReadOnlyList<JellyfinItem> views,
-        CancellationToken cancellationToken)
+    private async Task<(IReadOnlyList<JellyfinItem> Sources, IReadOnlyList<MediaPreviewItem> Items)>
+        GetResumeAsync(PreviewLoad load)
     {
+        var items = await GetWrappedItemsAsync(
+            load,
+            $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Items/Resume"
+            + $"?Limit={ItemLimit}&Recursive=true&Fields=PrimaryImageAspectRatio,SeriesName,SeriesId,SeriesPrimaryImageTag,ParentBackdropItemId,ParentIndexNumber,IndexNumber,ProductionYear,UserData,Overview,RunTimeTicks,OfficialRating,BackdropImageTags",
+            "continue-watching media").ConfigureAwait(false);
+        var previews = await PopulateArtworkAsync(load, items, landscape: true).ConfigureAwait(false);
+        return (items, previews);
+    }
+
+    private async Task<IReadOnlyList<MediaPreviewRail>> GetLibraryRailsAsync(PreviewLoad load)
+    {
+        var views = await GetWrappedItemsAsync(
+            load,
+            $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Views",
+            "media libraries").ConfigureAwait(false);
         var mediaViews = views
             .Where(view => !string.IsNullOrWhiteSpace(view.Id)
                 && !string.IsNullOrWhiteSpace(view.Name)
@@ -121,104 +135,88 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         var tasks = mediaViews.Select(async view =>
         {
             var latest = await GetItemsAsync(
-                session,
-                $"Users/{Uri.EscapeDataString(session.UserId)}/Items/Latest"
+                load,
+                $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Items/Latest"
                 + $"?ParentId={Uri.EscapeDataString(view.Id!)}&Limit={ItemLimit}"
                 + "&Fields=PrimaryImageAspectRatio,SeriesName,SeriesId,SeriesPrimaryImageTag,ParentBackdropItemId,ParentIndexNumber,IndexNumber,ProductionYear,UserData,Overview,RunTimeTicks,OfficialRating,BackdropImageTags"
                 + (view.CollectionType == "movies"
                     ? "&IncludeItemTypes=Movie"
                     : "&IncludeItemTypes=Series,Season,Episode"),
-                $"recently added media in {view.Name}",
-                cancellationToken).ConfigureAwait(false);
+                $"recently added media in {view.Name}").ConfigureAwait(false);
             var items = await PopulateArtworkAsync(
-                session,
+                load,
                 latest,
-                landscape: false,
-                cancellationToken).ConfigureAwait(false);
+                landscape: false).ConfigureAwait(false);
             return new MediaPreviewRail(
                 view.Id!,
-                $"Recently Added in {view.Name}",
-                items);
+                view.Name!,
+                items,
+                LibraryName: view.Name);
         });
 
         return await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
     private async Task<IReadOnlyList<JellyfinItem>> GetWrappedItemsAsync(
-        AuthenticatedSession session,
+        PreviewLoad load,
         string relativeUri,
-        string operation,
-        CancellationToken cancellationToken)
+        string operation)
     {
         var result = await GetAsync<ItemResult>(
-            session,
+            load,
             relativeUri,
-            operation,
-            cancellationToken)
+            operation)
             .ConfigureAwait(false);
         return result?.Items ?? [];
     }
 
-    private Task<IReadOnlyList<JellyfinItem>> GetWrappedItemsAsync(
-        AuthenticatedSession session,
-        string relativeUri,
-        CancellationToken cancellationToken) =>
-        GetWrappedItemsAsync(session, relativeUri, "continue-watching media", cancellationToken);
-
     private async Task<IReadOnlyList<JellyfinItem>> GetItemsAsync(
-        AuthenticatedSession session,
+        PreviewLoad load,
         string relativeUri,
-        string operation,
-        CancellationToken cancellationToken) =>
+        string operation) =>
         await GetAsync<JellyfinItem[]>(
-            session,
+            load,
             relativeUri,
-            operation,
-            cancellationToken)
+            operation)
             .ConfigureAwait(false) ?? [];
 
-    private async Task<T?> GetAsync<T>(
-        AuthenticatedSession session,
+    private Task<T?> GetAsync<T>(
+        PreviewLoad load,
         string relativeUri,
-        string operation,
-        CancellationToken cancellationToken)
-    {
-        using var request = CreateAuthenticatedRequest(
-            session,
-            new Uri(session.Server.BaseUri, relativeUri));
-        using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
-        EnsureSuccess(response, operation);
+        string operation) =>
+        load.RunRequestAsync(async cancellationToken =>
+        {
+            using var request = CreateAuthenticatedRequest(
+                load.Session,
+                new Uri(load.Session.Server.BaseUri, relativeUri));
+            using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+            EnsureSuccess(response, operation);
 
-        try
-        {
-            return await response.Content
-                .ReadFromJsonAsync<T>(SerializerOptions, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (JsonException exception)
-        {
-            throw InvalidResponse(exception);
-        }
-        catch (NotSupportedException exception)
-        {
-            throw InvalidResponse(exception);
-        }
-    }
+            try
+            {
+                return await response.Content
+                    .ReadFromJsonAsync<T>(SerializerOptions, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (JsonException exception)
+            {
+                throw InvalidResponse(exception);
+            }
+            catch (NotSupportedException exception)
+            {
+                throw InvalidResponse(exception);
+            }
+        });
 
     private async Task<IReadOnlyList<MediaPreviewItem>> PopulateArtworkAsync(
-        AuthenticatedSession session,
+        PreviewLoad load,
         IReadOnlyList<JellyfinItem> items,
-        bool landscape,
-        CancellationToken cancellationToken)
+        bool landscape)
     {
-        var previews = new List<MediaPreviewItem>(items.Count);
-        foreach (var item in items)
+        var tasks = items
+            .Where(item => !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.Name))
+            .Select(async (item, index) =>
         {
-            if (string.IsNullOrWhiteSpace(item.Id) || string.IsNullOrWhiteSpace(item.Name))
-            {
-                continue;
-            }
-
             var artworkItemId = !landscape
                 && item.Type == "Episode"
                 && !string.IsNullOrWhiteSpace(item.SeriesId)
@@ -227,92 +225,79 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                     : item.ImageTags?.ContainsKey("Primary") is true
                         ? item.Id
                         : null;
-            var artwork = artworkItemId is not null
-                ? await GetArtworkAsync(
-                    session,
+            var artworkTask = artworkItemId is not null
+                ? GetArtworkAsync(
+                    load,
                     artworkItemId,
-                    landscape,
-                    cancellationToken).ConfigureAwait(false)
-                : null;
+                    landscape)
+                : Task.FromResult<byte[]?>(null);
             var hasBackdrop = item.BackdropImageTags is { Length: > 0 }
                 || !string.IsNullOrWhiteSpace(item.ParentBackdropItemId);
-            var shouldLoadBackdrop = landscape || previews.Count < 8 && hasBackdrop;
-            var backdrop = shouldLoadBackdrop
-                ? await GetBackdropAsync(
-                    session,
-                    GetBackdropItemId(item),
-                    cancellationToken).ConfigureAwait(false)
-                : null;
-            previews.Add(new MediaPreviewItem(
-                item.Id,
+            var shouldLoadBackdrop = landscape || index < 8 && hasBackdrop;
+            var backdropTask = shouldLoadBackdrop
+                ? GetBackdropAsync(load, GetBackdropItemId(item))
+                : Task.FromResult<byte[]?>(null);
+            await Task.WhenAll(artworkTask, backdropTask).ConfigureAwait(false);
+            var artwork = await artworkTask.ConfigureAwait(false);
+            var backdrop = await backdropTask.ConfigureAwait(false);
+            return new MediaPreviewItem(
+                item.Id!,
                 BuildName(item, preferSeriesTitle: !landscape),
-                BuildSubtitle(item, preferSeriesTitle: !landscape),
+                string.Empty,
                 item.Type ?? "Unknown",
                 artwork,
                 backdrop ?? artwork,
                 item.Overview,
-                BuildDetails(item),
+                string.Empty,
                 item.UserData?.PlayedPercentage is { } percentage
                     ? Math.Clamp(percentage, 0, 100)
                     : null,
                 HeroName: BuildName(item, preferSeriesTitle: true),
-                HeroSubtitle: BuildSubtitle(item, preferSeriesTitle: true)));
-        }
+                Metadata: CreateMetadata(item, preferSeriesTitle: !landscape));
+        });
 
-        return previews;
+        return await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
     private async Task<byte[]?> GetArtworkAsync(
-        AuthenticatedSession session,
+        PreviewLoad load,
         string itemId,
-        bool landscape,
-        CancellationToken cancellationToken)
+        bool landscape)
     {
         var imageType = landscape ? "Thumb" : "Primary";
         var width = landscape ? 720 : 320;
-        using var request = CreateAuthenticatedRequest(
-            session,
-            new Uri(
-                session.Server.BaseUri,
-                $"Items/{Uri.EscapeDataString(itemId)}/Images/{imageType}?maxWidth={width}&quality=88"));
-        using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (response.StatusCode == HttpStatusCode.NotFound && landscape)
-        {
-            return await GetArtworkAsync(
-                session,
-                itemId,
-                landscape: false,
-                cancellationToken).ConfigureAwait(false);
-        }
-
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-
-        EnsureSuccess(response, "media artwork");
-        return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        var artwork = await GetImageAsync(
+            load,
+            $"Items/{Uri.EscapeDataString(itemId)}/Images/{imageType}?maxWidth={width}&quality=88",
+            "media artwork").ConfigureAwait(false);
+        // Release the request slot before falling back, and share the primary request with other rails.
+        return artwork is null && landscape
+            ? await GetArtworkAsync(load, itemId, landscape: false).ConfigureAwait(false)
+            : artwork;
     }
 
-    private async Task<byte[]?> GetBackdropAsync(
-        AuthenticatedSession session,
-        string itemId,
-        CancellationToken cancellationToken)
-    {
-        using var request = CreateAuthenticatedRequest(
-            session,
-            new Uri(
-                session.Server.BaseUri,
-                $"Items/{Uri.EscapeDataString(itemId)}/Images/Backdrop/0?maxWidth=2560&quality=88"));
-        using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
+    private Task<byte[]?> GetBackdropAsync(PreviewLoad load, string itemId) =>
+        GetImageAsync(
+            load,
+            $"Items/{Uri.EscapeDataString(itemId)}/Images/Backdrop/0?maxWidth=2560&quality=88",
+            "featured artwork");
 
-        EnsureSuccess(response, "featured artwork");
-        return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
-    }
+    private Task<byte[]?> GetImageAsync(PreviewLoad load, string relativeUri, string operation) =>
+        load.Images.GetOrAdd(
+            relativeUri,
+            _ => new Lazy<Task<byte[]?>>(() => load.RunRequestAsync<byte[]?>(async cancellationToken =>
+            {
+                using var request = CreateAuthenticatedRequest(
+                    load.Session, new Uri(load.Session.Server.BaseUri, relativeUri));
+                using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return null;
+                }
+
+                EnsureSuccess(response, operation);
+                return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            }))).Value;
 
     private HttpRequestMessage CreateAuthenticatedRequest(
         AuthenticatedSession session,
@@ -393,48 +378,51 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 ? item.SeriesId
                 : item.Id!;
 
-    private static string BuildSubtitle(JellyfinItem item, bool preferSeriesTitle)
+    private static MediaPreviewMetadata CreateMetadata(JellyfinItem item, bool preferSeriesTitle) =>
+        new(
+            item.Name!,
+            item.SeriesName,
+            item.ParentIndexNumber,
+            item.IndexNumber,
+            item.ProductionYear,
+            item.RunTimeTicks,
+            item.OfficialRating,
+            preferSeriesTitle);
+
+    private sealed class PreviewLoad(
+        AuthenticatedSession session,
+        CancellationTokenSource cancellation) : IDisposable
     {
-        if (!string.IsNullOrWhiteSpace(item.SeriesName))
+        // Metadata shares the limit so servers with many libraries cannot fan out unbounded requests.
+        private readonly SemaphoreSlim _requests = new(6, 6);
+
+        public AuthenticatedSession Session { get; } = session;
+
+        public ConcurrentDictionary<string, Lazy<Task<byte[]?>>> Images { get; } = new(StringComparer.Ordinal);
+
+        public async Task<T> RunRequestAsync<T>(Func<CancellationToken, Task<T>> operation)
         {
-            if (item.Type == "Season" && preferSeriesTitle)
+            await _requests.WaitAsync(cancellation.Token).ConfigureAwait(false);
+            var completed = false;
+            try
             {
-                return item.Name!;
+                var result = await operation(cancellation.Token).ConfigureAwait(false);
+                completed = true;
+                return result;
             }
+            finally
+            {
+                // Sibling tasks are still awaited by WhenAll before this load's resources are disposed.
+                if (!completed)
+                {
+                    cancellation.Cancel();
+                }
 
-            var episodeNumber = item.ParentIndexNumber is { } season && item.IndexNumber is { } number
-                ? $"S{season.ToString(CultureInfo.InvariantCulture)} E{number.ToString(CultureInfo.InvariantCulture)}"
-                : "Episode";
-            return preferSeriesTitle
-                ? $"{episodeNumber} · {item.Name}"
-                : $"{item.SeriesName} · {episodeNumber}";
+                _requests.Release();
+            }
         }
 
-        return item.ProductionYear?.ToString(CultureInfo.InvariantCulture) ?? "Jellyfin";
-    }
-
-    private static string BuildDetails(JellyfinItem item)
-    {
-        var details = new List<string>(3);
-        if (item.ProductionYear is { } year)
-        {
-            details.Add(year.ToString(CultureInfo.InvariantCulture));
-        }
-
-        if (item.RunTimeTicks is > 0)
-        {
-            var runtime = TimeSpan.FromTicks(item.RunTimeTicks.Value);
-            details.Add(runtime.TotalHours >= 1
-                ? $"{(int)runtime.TotalHours}h {runtime.Minutes}m"
-                : $"{runtime.Minutes}m");
-        }
-
-        if (!string.IsNullOrWhiteSpace(item.OfficialRating))
-        {
-            details.Add(item.OfficialRating);
-        }
-
-        return string.Join("  ·  ", details);
+        public void Dispose() => _requests.Dispose();
     }
 
     private sealed record ItemResult(JellyfinItem[]? Items);

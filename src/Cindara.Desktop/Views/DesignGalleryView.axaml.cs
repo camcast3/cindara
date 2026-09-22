@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.ViewModels;
 
@@ -13,8 +14,8 @@ public partial class DesignGalleryView : UserControl
 {
     private double _heroHeight = 420;
     private Button? _focusedCard;
-    private Button? _lastHeaderTab;
     private bool _pinAfterLayout;
+    private PresentationPreferences _preferences = new();
 
     public DesignGalleryView()
     {
@@ -26,6 +27,11 @@ public partial class DesignGalleryView : UserControl
         }
 
         SizeChanged += OnSizeChanged;
+        DataContextChanged += (_, _) =>
+        {
+            HeroTextScroll.Offset = default;
+            _focusedCard = null;
+        };
         HeroPanel.SizeChanged += (_, _) =>
         {
             UpdateHeroArtwork();
@@ -43,31 +49,46 @@ public partial class DesignGalleryView : UserControl
         };
     }
 
-    private void OnSizeChanged(object? sender, SizeChangedEventArgs eventArgs)
+    public void ApplyPreferences(PresentationPreferences preferences)
     {
-        var profile = GalleryViewportProfile.Create(eventArgs.NewSize.Width, eventArgs.NewSize.Height);
+        _preferences = preferences;
+        HeroArtwork.IsVisible = !preferences.HighContrast;
+        UpdateViewport(Bounds.Size);
+    }
+
+    private void OnSizeChanged(object? sender, SizeChangedEventArgs eventArgs) => UpdateViewport(eventArgs.NewSize);
+
+    private void UpdateViewport(Size size)
+    {
+        if (size.Width <= 0 || size.Height <= 0)
+        {
+            return;
+        }
+
+        var profile = GalleryViewportProfile.Create(size.Width, size.Height);
         var scale = profile.CardScale;
         var heroScale = profile.HeroScale;
+        var textScale = _preferences.TextScale;
         var heroHeight = profile.HeroHeight;
         _heroHeight = heroHeight;
         Resources["Gallery.HeroHeight"] = heroHeight;
         Resources["Gallery.HeroContentWidth"] = Math.Min(
             880 * heroScale,
-            eventArgs.NewSize.Width * 0.46);
-        Resources["Gallery.HeroHeaderSize"] = 18 * heroScale;
-        Resources["Gallery.HeroTitleSize"] = 56 * heroScale;
-        Resources["Gallery.HeroTitleLineHeight"] = 64 * heroScale;
-        Resources["Gallery.HeroSubtitleSize"] = 28 * heroScale;
-        Resources["Gallery.HeroBodySize"] = 22 * heroScale;
-        Resources["Gallery.HeroBodyLineHeight"] = 30 * heroScale;
+            size.Width * 0.6);
+        Resources["Gallery.HeroHeaderSize"] = 18 * heroScale * textScale;
+        Resources["Gallery.HeroTitleSize"] = 56 * heroScale * textScale;
+        Resources["Gallery.HeroTitleLineHeight"] = 64 * heroScale * textScale;
+        Resources["Gallery.HeroSubtitleSize"] = 28 * heroScale * textScale;
+        Resources["Gallery.HeroBodySize"] = 22 * heroScale * textScale;
+        Resources["Gallery.HeroBodyLineHeight"] = 30 * heroScale * textScale;
         Resources["Gallery.HeroTextMargin"] = new Thickness(0, 28 * heroScale, 0, 0);
         Resources["Gallery.HeroTextSpacing"] = new Thickness(0, 0, 0, 12 * heroScale);
         Resources["Gallery.ContinueWidth"] = 290 * scale;
         Resources["Gallery.ContinueHeight"] = 163 * scale;
         Resources["Gallery.PosterWidth"] = 156 * scale;
         Resources["Gallery.PosterHeight"] = 234 * scale;
-        Resources["Gallery.CardTitleSize"] = 14 * scale;
-        Resources["Gallery.CardCaptionSize"] = 12 * scale;
+        Resources["Gallery.CardTitleSize"] = 14 * scale * textScale;
+        Resources["Gallery.CardCaptionSize"] = 12 * scale * textScale;
         Resources["Gallery.ItemSpacing"] = 16 * scale;
     }
 
@@ -93,6 +114,11 @@ public partial class DesignGalleryView : UserControl
         if (sender is Button { DataContext: MediaPreviewCardViewModel item }
             && DataContext is DesignGalleryViewModel gallery)
         {
+            if (!ReferenceEquals(gallery.Featured, item))
+            {
+                HeroTextScroll.Offset = default;
+            }
+
             gallery.SelectFeatured(item);
             var card = (Button)sender;
             _focusedCard = card;
@@ -118,52 +144,48 @@ public partial class DesignGalleryView : UserControl
         }
     }
 
-    private void OnHeaderFocused(object? sender, RoutedEventArgs eventArgs)
+    public event EventHandler? SettingsRequested;
+
+    public Control HomeNavigation => SidebarHomeButton;
+
+    public bool FocusHomeContent()
     {
-        if (eventArgs.Source is Button tab && tab.Classes.Contains("header-tab"))
+        if (_focusedCard is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true })
         {
-            _lastHeaderTab = tab;
+            return _focusedCard.Focus(NavigationMethod.Directional);
         }
+
+        var rows = GetMediaRows().ToArray();
+        return rows.Length > 0 ? FocusMediaRow(rows[0]) : SidebarHomeButton.Focus(NavigationMethod.Directional);
     }
 
-    public bool FocusTopNavigation() =>
-        (_lastHeaderTab ?? HomeTabButton).Focus(NavigationMethod.Directional);
+    private void OnHomeClicked(object? sender, RoutedEventArgs args) => FocusHomeContent();
+
+    private void OnSettingsClicked(object? sender, RoutedEventArgs args) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+
+    public void ScrollDescription(bool forward)
+    {
+        var step = HeroTextScroll.Viewport.Height * (forward ? 1 : -1);
+        HeroTextScroll.Offset = new Vector(0, Math.Clamp(HeroTextScroll.Offset.Y + step, 0,
+            Math.Max(0, HeroTextScroll.Extent.Height - HeroTextScroll.Viewport.Height)));
+    }
 
     public bool TryMoveGalleryFocus(NavigationDirection direction)
     {
-        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
-        var tabs = TopNavigationPanel.Children.OfType<Button>().ToArray();
-        var tabIndex = Array.FindIndex(tabs, tab => ReferenceEquals(tab, focused));
-        if (tabIndex >= 0)
+        if (FlowDirection == Avalonia.Media.FlowDirection.RightToLeft)
         {
-            switch (direction)
+            direction = direction switch
             {
-                case NavigationDirection.Left:
-                    return tabIndex == 0
-                        ? SidebarHomeButton.Focus(NavigationMethod.Directional)
-                        : tabs[tabIndex - 1].Focus(NavigationMethod.Directional);
-                case NavigationDirection.Right:
-                    return tabIndex == tabs.Length - 1
-                        || tabs[tabIndex + 1].Focus(NavigationMethod.Directional);
-                case NavigationDirection.Up:
-                    return true;
-                case NavigationDirection.Down:
-                    var rows = GetMediaRows().ToArray();
-                    if (rows.Length == 0)
-                    {
-                        return true;
-                    }
-
-                    var previousRow = _focusedCard?.GetVisualAncestors().OfType<ItemsControl>()
-                        .FirstOrDefault(control => control.Classes.Contains("media-row"));
-                    var rowIndex = Array.FindIndex(rows, row => ReferenceEquals(row.Control, previousRow));
-                    return FocusMediaRow(rows[Math.Max(0, rowIndex)]);
-            }
+                NavigationDirection.Left => NavigationDirection.Right,
+                NavigationDirection.Right => NavigationDirection.Left,
+                _ => direction,
+            };
         }
 
+        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
         if (ReferenceEquals(focused, SidebarHomeButton) && direction == NavigationDirection.Right)
         {
-            return FocusTopNavigation();
+            return FocusHomeContent();
         }
 
         return TryMoveMediaRowFocus(direction);
@@ -213,7 +235,7 @@ public partial class DesignGalleryView : UserControl
         var targetIndex = rowIndex + (direction == NavigationDirection.Down ? 1 : -1);
         if (targetIndex < 0)
         {
-            return FocusTopNavigation();
+            return SidebarHomeButton.Focus(NavigationMethod.Directional);
         }
 
         if (targetIndex >= rows.Length)

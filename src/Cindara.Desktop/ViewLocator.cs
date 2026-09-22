@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using Cindara.Desktop.Localization;
 using Cindara.Desktop.ViewModels;
 
 namespace Cindara.Desktop;
@@ -27,7 +28,7 @@ public class ViewLocator : IDataTemplate
             return (Control)Activator.CreateInstance(type)!;
         }
 
-        return new TextBlock { Text = "Not Found: " + name };
+        return new TextBlock { Text = Loc.Format("View.NotFound", name) };
     }
 
     public bool Match(object? data)

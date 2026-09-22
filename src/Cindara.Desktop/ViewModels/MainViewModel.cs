@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Cindara.Core.Authentication;
 using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
+using Cindara.Desktop.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -14,6 +15,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly IJellyfinMediaPreviewClient? _mediaPreviewClient;
     private readonly Func<MediaPreviewHome, DesignGalleryViewModel> _createGallery;
     private AuthenticatedSession? _currentSession;
+    private bool _disposed;
 
     public MainViewModel(
         IJellyfinServerClient serverClient,
@@ -51,6 +53,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(LogoutCommand))]
     [NotifyCanExecuteChangedFor(nameof(InitializeCommand))]
     [NotifyCanExecuteChangedFor(nameof(ShowDesignGalleryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenHomeCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -64,13 +67,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(UseSavedSessionCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSavedSessionCommand))]
+    [NotifyPropertyChangedFor(nameof(SelectedSavedSessionDisplayName))]
     private SessionProfile? _selectedSavedSession;
 
-    [ObservableProperty]
-    private string _statusMessage = "Loading saved Jellyfin sessions...";
+    public string SelectedSavedSessionDisplayName => SelectedSavedSession is { } profile
+        ? LocaleFormat.SessionDisplayName(profile) : string.Empty;
 
     [ObservableProperty]
-    private string _controllerStatus = "Initializing controller input...";
+    private string _statusMessage = Loc.Get("Status.LoadingSessions");
+
+    [ObservableProperty]
+    private string _controllerStatus = Loc.Get("Status.InitializingController");
 
     [ObservableProperty]
     private bool _isServerEntryVisible;
@@ -111,7 +118,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (AuthenticationException exception)
         {
             ShowServerEntry();
-            StatusMessage = exception.Message;
+            StatusMessage = LocalizedErrors.Get(exception);
         }
         finally
         {
@@ -125,7 +132,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private async Task ConnectAsync(CancellationToken cancellationToken)
     {
         IsBusy = true;
-        StatusMessage = "Checking server...";
+        StatusMessage = Loc.Get("Status.CheckingServer");
 
         try
         {
@@ -134,11 +141,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Username = string.Empty;
             Password = string.Empty;
             ShowSignIn();
-            StatusMessage = $"Connected to {server.DisplayName}. Sign in with your Jellyfin account.";
+            StatusMessage = Loc.Format("Status.Connected", server.DisplayName);
         }
         catch (ServerConnectionException exception)
         {
-            StatusMessage = exception.Message;
+            StatusMessage = LocalizedErrors.Get(exception);
         }
         finally
         {
@@ -162,7 +169,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         IsBusy = true;
-        StatusMessage = "Signing in...";
+        StatusMessage = Loc.Get("Status.SigningIn");
         try
         {
             _currentSession = await _authenticationService.AuthenticateAsync(
@@ -174,7 +181,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (AuthenticationException exception)
         {
-            StatusMessage = exception.Message;
+            StatusMessage = LocalizedErrors.Get(exception);
         }
         finally
         {
@@ -194,7 +201,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         IsBusy = true;
-        StatusMessage = "Checking saved session...";
+        StatusMessage = Loc.Get("Status.CheckingSession");
         try
         {
             _currentSession = await _authenticationService.RestoreAsync(profile, cancellationToken);
@@ -202,7 +209,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         catch (AuthenticationException exception)
         {
-            StatusMessage = exception.Message;
+            StatusMessage = LocalizedErrors.Get(exception);
             if (exception.Error == AuthenticationError.RevokedSession)
             {
                 PrepareForReauthentication(profile);
@@ -214,7 +221,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             }
             catch (AuthenticationException refreshException)
             {
-                StatusMessage = $"{exception.Message} {refreshException.Message}";
+                StatusMessage = Loc.Format("Status.Combined",
+                    LocalizedErrors.Get(exception),
+                    Loc.Format("Error.SessionRefresh", LocalizedErrors.Get(refreshException)));
             }
         }
         finally
@@ -238,12 +247,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             await _authenticationService.RemoveAsync(profile, cancellationToken);
             await RefreshSavedSessionsAsync(cancellationToken);
-            StatusMessage = $"Removed {profile.DisplayName}.";
+            StatusMessage = Loc.Format("Status.RemovedAccount", LocaleFormat.SessionDisplayName(profile));
             ShowSavedSessionsOrServerEntry(false);
         }
         catch (AuthenticationException exception)
         {
-            StatusMessage = exception.Message;
+            StatusMessage = LocalizedErrors.Get(exception);
         }
         finally
         {
@@ -264,11 +273,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         try
         {
             await _authenticationService.LogoutAsync(_currentSession, cancellationToken);
-            StatusMessage = $"Signed out of {profile.DisplayName}.";
+            StatusMessage = Loc.Format("Status.SignedOut", LocaleFormat.SessionDisplayName(profile));
         }
         catch (AuthenticationException exception)
         {
-            StatusMessage = exception.Message;
+            StatusMessage = LocalizedErrors.Get(exception);
         }
         finally
         {
@@ -281,7 +290,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             catch (AuthenticationException exception)
             {
                 ShowServerEntry();
-                StatusMessage = exception.Message;
+                StatusMessage = LocalizedErrors.Get(exception);
             }
             finally
             {
@@ -293,9 +302,22 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private bool CanNavigate() => !IsBusy;
 
     private bool CanShowDesignGallery() =>
-        !IsBusy && _currentSession is not null && _mediaPreviewClient is not null;
+        !_disposed && !IsBusy && _currentSession is not null && _mediaPreviewClient is not null;
 
     [RelayCommand(CanExecute = nameof(CanShowDesignGallery))]
+    private async Task OpenHomeAsync()
+    {
+        if (DesignGallery is not null)
+        {
+            IsDesignGalleryVisible = true;
+        }
+        else
+        {
+            await ShowDesignGalleryCommand.ExecuteAsync(null);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanShowDesignGallery), IncludeCancelCommand = true)]
     private async Task ShowDesignGalleryAsync(CancellationToken cancellationToken)
     {
         if (_currentSession is not { } session || _mediaPreviewClient is null)
@@ -304,30 +326,41 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         IsBusy = true;
-        StatusMessage = "Loading your Jellyfin media preview...";
+        StatusMessage = Loc.Get("Status.LoadingPreview");
         try
         {
             var home = await _mediaPreviewClient.GetHomeAsync(session, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_disposed)
+            {
+                return;
+            }
+
             var gallery = _createGallery(home);
             ClearDesignGallery();
             DesignGallery = gallery;
             IsDesignGalleryVisible = true;
-            StatusMessage = "Authenticated media preview loaded.";
+            StatusMessage = Loc.Get("Status.PreviewLoaded");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            StatusMessage = Loc.Get("Status.PreviewCanceled");
         }
         catch (MediaPreviewException exception)
         {
-            StatusMessage = exception.Message;
+            StatusMessage = LocalizedErrors.Get(exception);
             if (exception.Error == MediaPreviewError.AccessDenied)
             {
                 PrepareForReauthentication(session.Profile);
-                StatusMessage = $"{exception.Message} Sign in again to continue.";
+                StatusMessage = Loc.Format("Status.SignInAgain", LocalizedErrors.Get(exception));
                 try
                 {
                     await _authenticationService.InvalidateAsync(session);
                 }
                 catch (AuthenticationException invalidationException)
                 {
-                    StatusMessage = $"{StatusMessage} {invalidationException.Message}";
+                    StatusMessage = Loc.Format("Status.Combined", StatusMessage,
+                        Loc.Format("Error.SessionInvalidation", LocalizedErrors.Get(invalidationException)));
                 }
 
                 try
@@ -336,7 +369,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 }
                 catch (AuthenticationException refreshException)
                 {
-                    StatusMessage = $"{StatusMessage} {refreshException.Message}";
+                    StatusMessage = Loc.Format("Status.Combined", StatusMessage,
+                        Loc.Format("Error.SessionRefresh", LocalizedErrors.Get(refreshException)));
                 }
             }
         }
@@ -361,6 +395,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Password = string.Empty;
         ShowSignIn();
         ShowDesignGalleryCommand.NotifyCanExecuteChanged();
+        OpenHomeCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanNavigate))]
@@ -369,7 +404,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         CurrentServer = null;
         ServerAddress = string.Empty;
         ShowServerEntry();
-        StatusMessage = "Enter the address of the Jellyfin server you want to add.";
+        StatusMessage = Loc.Get("Status.EnterServer");
     }
 
     [RelayCommand(CanExecute = nameof(CanNavigate))]
@@ -398,7 +433,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             ShowServerEntry();
             if (updateStatus)
             {
-                StatusMessage = "Connect to your Jellyfin server to get started.";
+                StatusMessage = Loc.Get("Status.GetStarted");
             }
         }
         else
@@ -406,7 +441,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             SetVisibleState(savedSessions: true);
             if (updateStatus)
             {
-                StatusMessage = "Choose a saved Jellyfin account or add another server.";
+                StatusMessage = Loc.Get("Status.ChooseAccount");
             }
         }
     }
@@ -418,10 +453,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void ShowAuthenticated(AuthenticatedSession session)
     {
         ClearDesignGallery();
-        AuthenticatedAccount = session.Profile.DisplayName;
-        StatusMessage = $"Signed in to {session.Server.DisplayName}.";
+        AuthenticatedAccount = LocaleFormat.SessionDisplayName(session.Profile);
+        StatusMessage = Loc.Format("Status.SignedIn", session.Server.DisplayName);
         SetVisibleState(authenticated: true);
         ShowDesignGalleryCommand.NotifyCanExecuteChanged();
+        OpenHomeCommand.NotifyCanExecuteChanged();
     }
 
     private void SetVisibleState(
@@ -440,6 +476,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             AuthenticatedAccount = string.Empty;
             ClearDesignGallery();
             ShowDesignGalleryCommand.NotifyCanExecuteChanged();
+            OpenHomeCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -453,6 +490,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
+        ShowDesignGalleryCommand.Cancel();
         ClearDesignGallery();
         GC.SuppressFinalize(this);
     }

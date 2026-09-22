@@ -1,10 +1,82 @@
 using Cindara.Core.Jellyfin;
+using Cindara.Desktop.Tests.Localization;
 using Cindara.Desktop.ViewModels;
 
 namespace Cindara.Desktop.Tests.ViewModels;
 
+[Collection(LocalizationTestGroup.Name)]
 public sealed class DesignGalleryViewModelTests
 {
+    [Theory]
+    [InlineData("en", "Northstar · S2 E3", "S2 E3 · Homecoming", "2026  ·  1h 5m  ·  TV-14",
+        "Recently Added in TV {1}")]
+    [InlineData("fr", "Northstar · S2 E3", "S2 E3 · Homecoming", "2026  ·  1h 5m  ·  TV-14",
+        "Recently Added in TV {1}")]
+    public void RawMetadataIsLocalizedForCardsHeroAndLibraryHeadings(
+        string culture, string subtitle, string heroSubtitle, string details, string railTitle)
+    {
+        using var scope = new CultureScope(culture);
+        var item = CreateItem("episode", "Homecoming", "Northstar", "legacy subtitle") with
+        {
+            Metadata = new MediaPreviewMetadata("Homecoming", "Northstar", 2, 3, 2026,
+                TimeSpan.FromMinutes(65).Ticks, "TV-14", false),
+        };
+        using var gallery = DesignGalleryViewModel.Create(new MediaPreviewHome(item, [item],
+            [new MediaPreviewRail("tv", "unformatted title", [item], LibraryName: "TV {1}")]));
+
+        var card = Assert.Single(gallery.ContinueWatching);
+        Assert.Equal("Homecoming", card.Name);
+        Assert.Equal("Northstar", card.HeroName);
+        Assert.Equal("Episode overview", card.Overview);
+        Assert.Equal(subtitle, card.Subtitle);
+        Assert.Equal(heroSubtitle, card.HeroSubtitle);
+        Assert.Equal(details, card.Details);
+        Assert.Equal(railTitle, Assert.Single(gallery.RecentlyAddedLibraries).Title);
+        gallery.SelectFeatured(card);
+        Assert.Equal(heroSubtitle, gallery.Featured?.HeroSubtitle);
+    }
+
+    [Fact]
+    public void LibraryCardsAndFeaturedItemsUseSeriesTitleSubtitleLayout()
+    {
+        using var scope = new CultureScope("fr");
+        var item = CreateItem("episode", "Northstar", "Northstar", "legacy subtitle") with
+        {
+            Metadata = new MediaPreviewMetadata("Homecoming", "Northstar", 2, 3, null, null, null, true),
+        };
+        using var card = new MediaPreviewCardViewModel(item);
+
+        Assert.Equal("S2 E3 · Homecoming", card.Subtitle);
+        Assert.Equal(card.Subtitle, card.HeroSubtitle);
+        Assert.Empty(card.Details);
+    }
+
+    [Theory]
+    [InlineData("qps-ploc")]
+    [InlineData("qps-plocm")]
+    public void PseudoMetadataPreservesAllServerSuppliedText(string culture)
+    {
+        using var scope = new CultureScope(culture);
+        var item = CreateItem("episode", "Homecoming", "Northstar", "legacy subtitle") with
+        {
+            Metadata = new MediaPreviewMetadata("Homecoming", "Northstar", 2, 3, 2026,
+                TimeSpan.FromMinutes(65).Ticks, "TV-14", false),
+        };
+        using var gallery = DesignGalleryViewModel.Create(new MediaPreviewHome(item, [item],
+            [new MediaPreviewRail("tv", "unformatted title", [item], LibraryName: "My library")]));
+
+        var card = Assert.Single(gallery.ContinueWatching);
+        Assert.Equal("Homecoming", card.Name);
+        Assert.Equal("Northstar", card.HeroName);
+        Assert.Equal("Episode overview", card.Overview);
+        Assert.Contains("Northstar", card.Subtitle, StringComparison.Ordinal);
+        Assert.Contains("Homecoming", card.HeroSubtitle, StringComparison.Ordinal);
+        Assert.Contains("TV-14", card.Details, StringComparison.Ordinal);
+        var railTitle = Assert.Single(gallery.RecentlyAddedLibraries).Title;
+        Assert.Contains("My library", railTitle, StringComparison.Ordinal);
+        Assert.DoesNotContain("Recently Added", railTitle, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void BackdropFailureDisposesArtworkDecodedForTheSameCard()
     {

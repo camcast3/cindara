@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <data name="Brand.Name" xml:space="preserve"><value>Cindara</value></data>
+  <data name="Brand.Monogram" xml:space="preserve"><value>C</value></data>
+  <data name="Auth.Tagline" xml:space="preserve"><value>Your media. Native everywhere.</value></data>
+  <data name="Auth.Server" xml:space="preserve"><value>Jellyfin server</value></data>
+  <data name="Auth.ServerAddress" xml:space="preserve"><value>Jellyfin server address</value></data>
+  <data name="Auth.ServerExample" xml:space="preserve"><value>https://jellyfin.example.com</value></data>
+  <data name="Auth.Connect" xml:space="preserve"><value>Connect</value></data>
+  <data name="Auth.SavedAccounts" xml:space="preserve"><value>Saved accounts</value></data>
+  <data name="Auth.SignInHeading" xml:space="preserve"><value>Jellyfin sign in</value></data>
+  <data name="Auth.UsernameName" xml:space="preserve"><value>Jellyfin username</value></data>
+  <data name="Auth.Username" xml:space="preserve"><value>Username</value></data>
+  <data name="Auth.PasswordName" xml:space="preserve"><value>Jellyfin password</value></data>
+  <data name="Auth.Password" xml:space="preserve"><value>Password</value></data>
+  <data name="Auth.SignIn" xml:space="preserve"><value>Sign in</value></data>
+  <data name="Auth.ChooseSaved" xml:space="preserve"><value>Choose saved Jellyfin account</value></data>
+  <data name="Auth.RemoveSaved" xml:space="preserve"><value>Remove saved account</value></data>
+  <data name="Auth.AddServer" xml:space="preserve"><value>Add another server</value></data>
+  <data name="Auth.StorageNotice" xml:space="preserve"><value>Passwords are never saved. Tokens use your operating system's protected storage.</value></data>
+  <data name="Action.Back" xml:space="preserve"><value>Back</value></data>
+  <data name="Action.Continue" xml:space="preserve"><value>Continue</value></data>
+  <data name="Action.Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Nav.Home" xml:space="preserve"><value>Home</value></data>
+  <data name="Nav.Libraries" xml:space="preserve"><value>Libraries</value></data>
+  <data name="Nav.Search" xml:space="preserve"><value>Search</value></data>
+  <data name="Nav.Downloads" xml:space="preserve"><value>Downloads</value></data>
+  <data name="Nav.Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Nav.ReturnHome" xml:space="preserve"><value>Return to Home</value></data>
+  <data name="Nav.BackHome" xml:space="preserve"><value>Back to Home</value></data>
+  <data name="State.Selected" xml:space="preserve"><value>Selected</value></data>
+  <data name="State.Busy" xml:space="preserve"><value>Working. Please wait.</value></data>
+  <data name="State.On" xml:space="preserve"><value>On</value></data>
+  <data name="State.Off" xml:space="preserve"><value>Off</value></data>
+  <data name="Home.Tagline" xml:space="preserve"><value>Your media. Your space.</value></data>
+  <data name="Home.Ready" xml:space="preserve"><value>Your account is ready. Home rails arrive with library browsing; the approved design preview is available now.</value></data>
+  <data name="Home.Preview" xml:space="preserve"><value>Preview my media</value></data>
+  <data name="Placeholder.Libraries" xml:space="preserve"><value>Library browsing is coming next. Your saved Jellyfin account is ready.</value></data>
+  <data name="Placeholder.Search" xml:space="preserve"><value>Search and media details will arrive after library browsing.</value></data>
+  <data name="Placeholder.Downloads" xml:space="preserve"><value>Offline media is not available yet. Downloads keeps its place in your navigation.</value></data>
+  <data name="Settings.Account" xml:space="preserve"><value>Account</value></data>
+  <data name="Settings.Display" xml:space="preserve"><value>Display</value></data>
+  <data name="Settings.Controls" xml:space="preserve"><value>Controls</value></data>
+  <data name="Settings.SessionReady" xml:space="preserve"><value>Your secure Jellyfin session is ready.</value></data>
+  <data name="Settings.SwitchAccount" xml:space="preserve"><value>Switch account</value></data>
+  <data name="Settings.SignOut" xml:space="preserve"><value>Sign out</value></data>
+  <data name="Settings.DisplayHeading" xml:space="preserve"><value>Fullscreen and desktop</value></data>
+  <data name="Settings.DisplayHelp" xml:space="preserve"><value>Cindara starts fullscreen on the current display. F11 or the controller menu button toggles a desktop window. The shell follows window size and display scaling.</value></data>
+  <data name="Settings.WindowOptions" xml:space="preserve"><value>Window and exit options</value></data>
+  <data name="Settings.ControlsHeading" xml:space="preserve"><value>Controller, keyboard, and mouse</value></data>
+  <data name="Settings.ControlsHelp" xml:space="preserve"><value>D-pad / left stick or arrow keys move focus. Accept or Enter selects. Back or Escape returns. Tab cycles actions. Controller Accept on a text field opens the on-screen keyboard. Mouse clicks and scrolling remain available.</value></data>
+  <data name="Window.Options" xml:space="preserve"><value>Window / exit</value></data>
+  <data name="Window.Title" xml:space="preserve"><value>Window and exit</value></data>
+  <data name="Window.Return" xml:space="preserve"><value>Return to Cindara</value></data>
+  <data name="Window.Desktop" xml:space="preserve"><value>Use a desktop window</value></data>
+  <data name="Window.Fullscreen" xml:space="preserve"><value>Use fullscreen</value></data>
+  <data name="Window.Exit" xml:space="preserve"><value>Exit Cindara</value></data>
+  <data name="Window.ChooseAccount" xml:space="preserve"><value>Choose saved account</value></data>
+  <data name="Keyboard.EnterText" xml:space="preserve"><value>Enter text</value></data>
+  <data name="Keyboard.Shift" xml:space="preserve"><value>Shift</value></data>
+  <data name="Keyboard.Space" xml:space="preserve"><value>Space</value></data>
+  <data name="Keyboard.Backspace" xml:space="preserve"><value>Backspace</value></data>
+  <data name="Keyboard.Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="Keyboard.Done" xml:space="preserve"><value>Done</value></data>
+  <data name="Input.Ready" xml:space="preserve"><value>Controller ready</value></data>
+  <data name="Input.Connect" xml:space="preserve"><value>Connect a controller</value></data>
+  <data name="Input.Prompts" xml:space="preserve"><value>{0} | D-pad / left stick: move | [{1}]: select | [{2}]: back | [{3}] / F11: fullscreen</value></data>
+  <data name="Input.Unavailable" xml:space="preserve"><value>No controller available. Keyboard and mouse remain available. F11: fullscreen.</value></data>
+  <data name="Accessibility.Title" xml:space="preserve"><value>Accessibility</value></data>
+  <data name="Accessibility.TextScale" xml:space="preserve"><value>Text size: {0:P0}</value></data>
+  <data name="Accessibility.HighContrast" xml:space="preserve"><value>High contrast: {0}</value></data>
+  <data name="Accessibility.ReducedMotion" xml:space="preserve"><value>Reduced motion: {0}</value></data>
+  <data name="Accessibility.CycleText" xml:space="preserve"><value>Select to cycle between standard, large, and extra-large text.</value></data>
+  <data name="Accessibility.Toggle" xml:space="preserve"><value>Select to change this setting.</value></data>
+  <data name="Accessibility.LoadError" xml:space="preserve"><value>Accessibility settings could not be loaded. Standard presentation is in use. Check permissions or repair accessibility.json before saving.</value></data>
+  <data name="Accessibility.SaveError" xml:space="preserve"><value>Accessibility settings could not be saved. Your previous settings remain active.</value></data>
+  <data name="Gallery.Saved" xml:space="preserve"><value>Saved</value></data>
+  <data name="Gallery.Shows" xml:space="preserve"><value>TV shows</value></data>
+  <data name="Gallery.Movies" xml:space="preserve"><value>Movies</value></data>
+  <data name="Gallery.Anime" xml:space="preserve"><value>Anime</value></data>
+  <data name="Gallery.More" xml:space="preserve"><value>More</value></data>
+  <data name="Gallery.HomeTab" xml:space="preserve"><value>Home tab</value></data>
+  <data name="Gallery.TrendingTab" xml:space="preserve"><value>Trending tab</value></data>
+  <data name="Gallery.ActivityTab" xml:space="preserve"><value>Activity tab</value></data>
+  <data name="Gallery.ProfileTab" xml:space="preserve"><value>Profile tab</value></data>
+  <data name="Gallery.Trending" xml:space="preserve"><value>Trending</value></data>
+  <data name="Gallery.Activity" xml:space="preserve"><value>Activity</value></data>
+  <data name="Gallery.Profile" xml:space="preserve"><value>Profile</value></data>
+  <data name="Gallery.ContinueWatching" xml:space="preserve"><value>Continue Watching</value></data>
+  <data name="Gallery.PreviewOnly" xml:space="preserve"><value>Design preview only. This action is not yet available.</value></data>
+  <data name="Gallery.Progress" xml:space="preserve"><value>Playback progress</value></data>
+  <data name="Gallery.ReadHelp" xml:space="preserve"><value>Page Up / Page Down: scroll the media description.</value></data>
+  <data name="Language.Title" xml:space="preserve"><value>Language</value></data>
+  <data name="Language.Selection" xml:space="preserve"><value>Language: English</value></data>
+  <data name="Language.English" xml:space="preserve"><value>English</value></data>
+  <data name="Language.EnglishOnly" xml:space="preserve"><value>English is the only supported language for now.</value></data>
+  <data name="Home.Retry" xml:space="preserve"><value>Retry loading Home</value></data>
+  <data name="Action.CancelLoading" xml:space="preserve"><value>Cancel loading</value></data>
+  <data name="Action.Exit" xml:space="preserve"><value>Exit</value></data>
+</root>
