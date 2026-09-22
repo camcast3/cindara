@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Cindara.Core.Diagnostics;
 
 namespace Cindara.Core.Authentication;
 
@@ -13,8 +14,10 @@ public sealed class JellyfinAuthenticationService : IAuthenticationService, IDis
 
     public JellyfinAuthenticationService(
         ISessionStore sessionStore,
-        JellyfinClientIdentity clientIdentity)
-        : this(CreateSecureTransport(), sessionStore, clientIdentity)
+        JellyfinClientIdentity clientIdentity,
+        LocalDiagnostics? diagnostics = null)
+        : this(diagnostics is null ? CreateSecureTransport()
+            : new DiagnosticHttpHandler(diagnostics, CreateSecureTransport()), sessionStore, clientIdentity)
     {
     }
 

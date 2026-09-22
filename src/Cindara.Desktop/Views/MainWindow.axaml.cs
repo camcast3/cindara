@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Core.Diagnostics;
 using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.Input;
 using Cindara.Desktop.Localization;
@@ -27,6 +28,7 @@ public partial class MainWindow : Window
     private string? _screen;
     private bool _closed;
     private bool _openHomeOnReady;
+    private readonly LocalDiagnostics? _diagnostics;
 
     public PresentationPreferences Preferences { get; }
 
@@ -34,10 +36,13 @@ public partial class MainWindow : Window
     {
     }
 
-    public MainWindow(IControllerInputSource controllerInput, PresentationPreferences? preferences = null)
+    public MainWindow(IControllerInputSource controllerInput, PresentationPreferences? preferences = null,
+        LocalDiagnostics? diagnostics = null)
     {
         _controllerInput = controllerInput;
+        _diagnostics = diagnostics;
         InitializeComponent();
+        DiagnosticsButton.IsVisible = diagnostics is not null;
         Shell.HomeLoadingAction = CancelLoadingButton;
         FlowDirection = Loc.IsRightToLeft
             ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight;
@@ -147,7 +152,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnControllerTimerTick(object? sender, EventArgs eventArgs) => _controllerInput.Poll();
+    private void OnControllerTimerTick(object? sender, EventArgs eventArgs)
+    {
+        try
+        {
+            _controllerInput.Poll();
+        }
+        catch (Exception exception)
+        {
+            _diagnostics?.Record(DiagnosticArea.Controller, DiagnosticAction.PollController,
+                DiagnosticOutcome.Failed, DiagnosticLevel.Error, exception);
+            throw;
+        }
+    }
 
     private void OnHomeLoadPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
@@ -201,6 +218,12 @@ public partial class MainWindow : Window
             : _viewModel.IsSignInVisible ? "sign-in"
             : _viewModel.AreSavedSessionsVisible ? "accounts"
             : _viewModel.IsServerEntryVisible ? "server" : "loading";
+        if (_diagnosticsOpen)
+        {
+            _screen = screen;
+            return;
+        }
+
         if (_screen == screen)
         {
             _navigation.EnsureFocus();
@@ -382,6 +405,11 @@ public partial class MainWindow : Window
 
     private void GoBack()
     {
+        if (_exporting)
+        {
+            return;
+        }
+
         if (ModalOverlay.IsVisible)
         {
             DismissModal();
@@ -502,6 +530,7 @@ public partial class MainWindow : Window
 
     private void ClearModal()
     {
+        _diagnosticsOpen = false;
         if (_keyboardDraft is not null)
         {
             _keyboardDraft.Text = string.Empty;

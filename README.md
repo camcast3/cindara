@@ -21,6 +21,10 @@ Settings action opens the in-app settings.
 Settings contains exactly **Language: English**, **Exit**, and **Back to Home**.
 Expanded account, display, input, and appearance settings are deferred to
 [the settings feature request](https://github.com/camcast3/cindara/issues/27).
+The separate login/shell footer **Diagnostics** action shows local technical
+details and sanitized errors, with an explicit support-bundle preview and export.
+It makes no diagnostic network requests or uploads. Logs are capped at 1 MiB
+and retained for seven days; see [diagnostics and privacy](docs/diagnostics.md).
 D-pad/left stick or arrows navigate, Accept/Enter selects, and Back/Escape
 dismisses dialogs or returns to the navigation rail. Start/Options/+ or F11
 toggles fullscreen; **Settings → Exit** closes the app.

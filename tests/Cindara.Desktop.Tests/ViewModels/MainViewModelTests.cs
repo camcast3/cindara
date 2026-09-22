@@ -1,4 +1,5 @@
 using Cindara.Core.Authentication;
+using Cindara.Core.Diagnostics;
 using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
 using Cindara.Desktop.Localization;
@@ -10,6 +11,34 @@ namespace Cindara.Desktop.Tests.ViewModels;
 [Collection(LocalizationTestGroup.Name)]
 public sealed class MainViewModelTests
 {
+    [Fact]
+    public async Task DiagnosticsCaptureAuthenticationStorageFailureWithNoAccountMetadata()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"cindara-auth-diagnostics-{Guid.NewGuid():N}");
+        try
+        {
+            var diagnostics = new LocalDiagnostics(directory);
+            var authentication = new TestAuthenticationService { FailRefresh = true };
+            using var model = new MainViewModel(new StubServerClient(), authentication, diagnostics: diagnostics);
+            await model.InitializeCommand.ExecuteAsync(null);
+            Assert.Contains(diagnostics.RecentErrors,
+                entry => entry.Errors.Contains("Authentication.SecureStorageUnavailable"));
+            var entries = diagnostics.Snapshot();
+            Assert.All(entries, entry => Assert.Equal(1, entry.Operation));
+            Assert.Equal(DiagnosticOutcome.Failed, entries[^1].Outcome);
+            Assert.All(Directory.GetFiles(directory), file =>
+            {
+                var text = File.ReadAllText(file);
+                Assert.DoesNotContain(Server.BaseUri.Host, text, StringComparison.Ordinal);
+                Assert.DoesNotContain(Server.DisplayName, text, StringComparison.Ordinal);
+            });
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

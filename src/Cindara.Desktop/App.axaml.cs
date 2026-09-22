@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Cindara.Core.Authentication;
+using Cindara.Core.Diagnostics;
 using Cindara.Core.Jellyfin;
 using Cindara.Desktop.Authentication;
 using Cindara.Desktop.Input;
@@ -26,7 +27,9 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var httpClient = new HttpClient
+            var diagnostics = Program.Diagnostics;
+            var httpClient = new HttpClient(diagnostics is null ? new HttpClientHandler()
+                : new DiagnosticHttpHandler(diagnostics, new HttpClientHandler()))
             {
                 Timeout = TimeSpan.FromSeconds(15),
             };
@@ -44,25 +47,29 @@ public partial class App : Application
                 deviceId,
                 Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0");
             var authenticationService = new JellyfinAuthenticationService(
-                sessionStore,
-                clientIdentity);
-            var mediaPreviewClient = new JellyfinMediaPreviewClient(clientIdentity);
+                diagnostics is null ? sessionStore : new DiagnosticSessionStore(sessionStore, diagnostics),
+                clientIdentity, diagnostics);
+            var mediaPreviewClient = new JellyfinMediaPreviewClient(clientIdentity, diagnostics);
             var viewModel = new MainViewModel(
                 new JellyfinServerClient(httpClient),
                 authenticationService,
-                mediaPreviewClient);
+                mediaPreviewClient, diagnostics);
             desktop.Exit += (_, _) =>
             {
                 viewModel.Dispose();
                 mediaPreviewClient.Dispose();
                 authenticationService.Dispose();
                 httpClient.Dispose();
+                sessionStore.Dispose();
             };
 
-            desktop.MainWindow = new MainWindow(new SdlGamepadInputSource())
+            desktop.MainWindow = new MainWindow(new SdlGamepadInputSource(diagnostics), diagnostics: diagnostics)
             {
                 DataContext = viewModel,
             };
+            diagnostics?.Record(DiagnosticArea.Startup, DiagnosticAction.Start, DiagnosticOutcome.Completed);
+            diagnostics?.Record(DiagnosticArea.Playback, DiagnosticAction.PlaybackUnavailable,
+                DiagnosticOutcome.Unavailable);
         }
 
         base.OnFrameworkInitializationCompleted();

@@ -15,6 +15,9 @@ button labels. Account, display, input, and appearance settings are deferred to
 [the expanded settings feature request](https://github.com/camcast3/cindara/issues/27).
 There is no intermediate Home/preview launcher or top Home/Trending/Activity/Profile
 bar. Back/Escape in media Home moves focus to its single Home navigation action.
+The login/shell footer also offers **Diagnostics**, separate from Settings actions.
+Its focus-trapped dialogs support controller/keyboard review of paged support
+files, explicit export, and cancellation; see [the support workflow](diagnostics.md).
 
 The product owner deferred appearance controls from the UI. The underlying
 presentation primitives remain available for developer/headless coverage only:

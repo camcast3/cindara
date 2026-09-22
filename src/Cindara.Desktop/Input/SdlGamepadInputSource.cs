@@ -1,3 +1,4 @@
+using Cindara.Core.Diagnostics;
 using SDL3;
 
 namespace Cindara.Desktop.Input;
@@ -13,6 +14,7 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
     private static readonly SDL.GamepadAxis[] MappedAxes = [SDL.GamepadAxis.LeftX, SDL.GamepadAxis.LeftY];
     private readonly ISdlGamepadBackend _backend;
     private readonly ControllerInputState _state;
+    private readonly LocalDiagnostics? _diagnostics;
     private readonly Dictionary<uint, nint> _gamepads = [];
     private readonly Dictionary<uint, ControllerInfo> _controllers = [];
     private bool _applicationActive;
@@ -20,14 +22,15 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
     private bool _backendInitialized;
     private bool _disposed;
 
-    public SdlGamepadInputSource()
-        : this(new SdlGamepadBackend(), TimeProvider.System)
+    public SdlGamepadInputSource(LocalDiagnostics? diagnostics = null)
+        : this(new SdlGamepadBackend(), TimeProvider.System, diagnostics)
     {
     }
 
-    internal SdlGamepadInputSource(ISdlGamepadBackend backend, TimeProvider timeProvider)
+    internal SdlGamepadInputSource(ISdlGamepadBackend backend, TimeProvider timeProvider, LocalDiagnostics? diagnostics = null)
     {
         _backend = backend;
+        _diagnostics = diagnostics;
         _state = new ControllerInputState(timeProvider);
         _state.ActionPressed += (_, args) => ActionPressed?.Invoke(this, args);
         _state.ActiveControllerChanged += (_, args) => ActiveControllerChanged?.Invoke(this, args);
@@ -80,6 +83,7 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
         }
 
         _initialized = true;
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Controller, DiagnosticAction.InitializeController);
         _state.SetApplicationActive(false);
 
         try
@@ -87,6 +91,8 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
             if (!_backend.Initialize())
             {
                 InitializationError = $"SDL could not initialize gamepad input: {_backend.GetError()}";
+                _diagnostics?.Record(DiagnosticArea.Controller, DiagnosticAction.InitializeController,
+                    DiagnosticOutcome.Unavailable, DiagnosticLevel.Error);
                 return;
             }
 
@@ -104,14 +110,17 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
             }
 
             _state.SetApplicationActive(_applicationActive);
+            operation?.Complete();
         }
         catch (DllNotFoundException exception)
         {
+            operation?.Fail(exception);
             IsAvailable = false;
             InitializationError = $"SDL gamepad runtime was not found: {exception.Message}";
         }
         catch (EntryPointNotFoundException exception)
         {
+            operation?.Fail(exception);
             IsAvailable = false;
             InitializationError = $"The bundled SDL gamepad runtime is incompatible: {exception.Message}";
         }
@@ -192,6 +201,8 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
         var gamepad = _backend.OpenGamepad(controllerId);
         if (gamepad == 0)
         {
+            _diagnostics?.Record(DiagnosticArea.Controller, DiagnosticAction.OpenController,
+                DiagnosticOutcome.Failed, DiagnosticLevel.Warning);
             return;
         }
 
@@ -199,6 +210,7 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
         var info = _backend.GetInfo(controllerId, gamepad);
         _controllers.Add(controllerId, info);
         _state.Connect(info);
+        _diagnostics?.Record(DiagnosticArea.Controller, DiagnosticAction.ControllerConnected, DiagnosticOutcome.Completed);
         SuppressHeldControls(controllerId, gamepad);
         ConnectionChanged?.Invoke(
             this,
@@ -216,6 +228,7 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
         _controllers.Remove(controllerId);
         _backend.CloseGamepad(gamepad);
         _state.Disconnect(controllerId);
+        _diagnostics?.Record(DiagnosticArea.Controller, DiagnosticAction.ControllerDisconnected, DiagnosticOutcome.Completed);
 
         ConnectionChanged?.Invoke(
             this,
