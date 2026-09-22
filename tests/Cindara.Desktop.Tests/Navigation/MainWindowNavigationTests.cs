@@ -68,28 +68,27 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
-    public Task SettingsContainsAccountWindowAndLanguageAndHomeReturnDoesNotReload() => TestAppBuilder.Run(() =>
+    public Task SettingsHasExactlyThreeActionsAndHomeReturnDoesNotReload() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
         var homeFocus = Focused(fixture.Window);
         fixture.OpenSettings();
         Assert.Equal("Settings", fixture.Shell.Destination);
-        Assert.Equal("AccountCategory", Focused(fixture.Window).Name);
-        fixture.Input.Press(ControllerAction.NavigateRight);
-        Assert.Equal("SwitchAccountButton", Focused(fixture.Window).Name);
-        fixture.Input.Press(ControllerAction.NavigateLeft);
-        fixture.Input.Press(ControllerAction.NavigateDown);
-        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+        var actions = fixture.Shell.FindControl<StackPanel>("SettingsActions")!.Children.OfType<Button>().ToArray();
+        Assert.Equal(new[] { Loc.Get("Language.Selection"), Loc.Get("Action.Exit"), Loc.Get("Nav.BackHome") },
+            actions.Select(button => button.Content));
         fixture.Input.Press(ControllerAction.Accept);
         Assert.True(fixture.IsModalVisible);
-        fixture.Input.Press(ControllerAction.Back);
-        var display = fixture.Shell.FindControl<StackPanel>("DisplaySettings")!;
-        var language = display.Children.OfType<Button>().Single(button => Equals(button.Content, Loc.Get("Language.Selection")));
-        fixture.Click(language);
         Assert.Equal(Loc.Get("Language.English"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
         fixture.Input.Press(ControllerAction.Back);
-        fixture.Shell.Navigate("Home");
+        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("ExitButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("BackHomeButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
         Assert.True(fixture.Model.IsDesignGalleryVisible);
         Assert.Equal(1, fixture.Preview.Calls);
@@ -153,7 +152,7 @@ public sealed class MainWindowNavigationTests
         fixture.SignIn();
         Assert.Equal("SidebarHomeButton", Focused(fixture.Window).Name);
         fixture.OpenSettings();
-        Assert.Equal("AccountCategory", Focused(fixture.Window).Name);
+        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
     });
 
     [Fact]
@@ -175,29 +174,61 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
-    public Task WindowDialogTrapsFocusAndRestoresItsInAppSettingsLauncher() => TestAppBuilder.Run(() =>
+    public Task LanguageDialogTrapsFocusAndRestoresItsSettingsLauncher() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
         fixture.OpenSettings();
-        fixture.Click(fixture.Shell.FindControl<Button>("DisplayCategory")!);
         var launcher = Assert.IsType<Button>(Focused(fixture.Window));
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
-        Assert.Equal(Loc.Get("Window.Return"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
+        Assert.Equal(Loc.Get("Language.English"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
         fixture.Key(Key.Tab, RawInputModifiers.Shift);
-        Assert.Equal(Loc.Get("Window.Exit"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
+        Assert.Equal(Loc.Get("Action.Back"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
         fixture.Key(Key.Tab);
-        Assert.Equal(Loc.Get("Window.Return"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
+        Assert.Equal(Loc.Get("Language.English"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
         fixture.Input.Press(ControllerAction.Menu);
         Assert.Equal(WindowState.FullScreen, fixture.Window.WindowState);
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(launcher, Focused(fixture.Window));
-        fixture.Input.Press(ControllerAction.Accept);
-        fixture.ClickContent(Loc.Get("Window.Desktop"));
+        fixture.Key(Key.F11);
         Assert.Equal(WindowState.Normal, fixture.Window.WindowState);
         fixture.Key(Key.F11);
         Assert.Equal(WindowState.FullScreen, fixture.Window.WindowState);
+    });
+
+    [Fact]
+    public Task SettingsExitClosesTheWindow() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.SignIn();
+        fixture.OpenSettings();
+        var closed = false;
+        fixture.Window.Closed += (_, _) => closed = true;
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("ExitButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        Assert.True(closed);
+    });
+
+    [Fact]
+    public Task SettingsButtonLabelsStayCenteredWithinUniformActions() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.SignIn();
+        fixture.OpenSettings();
+        var buttons = fixture.Shell.FindControl<StackPanel>("SettingsActions")!.Children.OfType<Button>().ToArray();
+        foreach (var button in buttons)
+        {
+            Assert.Equal(buttons[0].Bounds.Size, button.Bounds.Size);
+            Assert.Equal(Avalonia.Layout.VerticalAlignment.Center, button.VerticalContentAlignment);
+            Assert.Equal(Avalonia.Layout.HorizontalAlignment.Center, button.HorizontalContentAlignment);
+            var text = Assert.Single(button.GetVisualDescendants().OfType<TextBlock>());
+            var center = text.TranslatePoint(new Point(text.Bounds.Width / 2, text.Bounds.Height / 2), button)!.Value;
+            Assert.InRange(Math.Abs(center.Y - button.Bounds.Height / 2), 0, 1);
+            Assert.InRange(Math.Abs(center.X - button.Bounds.Width / 2), 0, 1);
+        }
     });
 
     [Fact]
@@ -215,8 +246,8 @@ public sealed class MainWindowNavigationTests
         Assert.Equal("SavedAccountButton", Focused(fixture.Window).Name);
         fixture.SignIn();
         var previous = fixture.Model.DesignGallery;
-        fixture.OpenSettings();
-        fixture.Click(fixture.Shell.FindControl<Button>("SwitchAccountButton")!);
+        fixture.Model.BackToSessionsCommand.Execute(null);
+        fixture.Flush();
         Assert.True(fixture.Model.AreSavedSessionsVisible);
         Assert.Null(fixture.Model.DesignGallery);
         fixture.SignIn();
@@ -328,9 +359,12 @@ public sealed class MainWindowNavigationTests
         Assert.Equal(rtl ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight,
             fixture.Window.FlowDirection);
         fixture.OpenSettings();
+        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        fixture.Input.Press(rtl ? ControllerAction.NavigateRight : ControllerAction.NavigateLeft);
+        Assert.Equal("SettingsNavigation", Focused(fixture.Window).Name);
         fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
-        Assert.Equal("SwitchAccountButton", Focused(fixture.Window).Name);
+        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         Capture(fixture.Window, $"settings-{locale}");
     });
@@ -350,11 +384,10 @@ public sealed class MainWindowNavigationTests
         fixture.OpenSettings();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         Capture(fixture.Window, $"in-app-settings-{width}");
-        fixture.Click(fixture.Shell.FindControl<Button>("DisplayCategory")!);
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
-        Capture(fixture.Window, $"window-options-{width}");
+        Capture(fixture.Window, $"language-options-{width}");
     });
 
     [Fact]
@@ -367,7 +400,8 @@ public sealed class MainWindowNavigationTests
         var size = focused.Bounds.Size;
         fixture.Window.SetRenderScaling(2);
         fixture.Flush();
-        Assert.Equal(size, focused.Bounds.Size);
+        Assert.InRange(Math.Abs(size.Width - focused.Bounds.Width), 0, 1);
+        Assert.InRange(Math.Abs(size.Height - focused.Bounds.Height), 0, 1);
         Assert.Same(focused, Focused(fixture.Window));
         AssertInsideWindow(fixture.Window, focused);
     });

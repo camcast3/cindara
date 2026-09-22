@@ -26,42 +26,23 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
-            <Grid x:Name="SettingsPage" IsVisible="False" RowDefinitions="Auto,*" RowSpacing="24">
+            <StackPanel x:Name="SettingsPage" IsVisible="False" Spacing="32"
+                        Width="600" HorizontalAlignment="Left">
                 <TextBlock Classes="display" Text="{loc:Tr Nav.Settings}" />
-                <Grid Grid.Row="1" ColumnDefinitions="Auto,*" ColumnSpacing="40">
-                    <StackPanel x:Name="SettingsCategories" Spacing="16">
-                        <Button x:Name="AccountCategory" Classes="nav selected" Content="{loc:Tr Settings.Account}"
-                                MinWidth="240" MaxWidth="450"
-                                HorizontalAlignment="Stretch" Click="OnCategoryClicked" Tag="Account" />
-                        <Button x:Name="DisplayCategory" Classes="nav" Content="{loc:Tr Settings.Display}"
-                                MinWidth="240" MaxWidth="450"
-                                HorizontalAlignment="Stretch" Click="OnCategoryClicked" Tag="Display" />
-                        <Button x:Name="ControlsCategory" Classes="nav" Content="{loc:Tr Settings.Controls}"
-                                MinWidth="240" MaxWidth="450"
-                                HorizontalAlignment="Stretch" Click="OnCategoryClicked" Tag="Controls" />
+                <Border Classes="settings-card">
+                    <StackPanel x:Name="SettingsActions" Spacing="16">
+                        <Button x:Name="SettingsLanguageButton" Classes="settings-action"
+                                HorizontalAlignment="Stretch"
+                                Content="{loc:Tr Language.Selection}" Click="OnLanguageClicked" />
+                        <Button x:Name="ExitButton" Classes="settings-action"
+                                HorizontalAlignment="Stretch"
+                                Content="{loc:Tr Action.Exit}" Click="OnExitClicked" />
+                        <Button x:Name="BackHomeButton" Classes="settings-action"
+                                HorizontalAlignment="Stretch"
+                                Content="{loc:Tr Nav.BackHome}" Click="OnHomeClicked" />
                     </StackPanel>
-                    <StackPanel x:Name="AccountSettings" Grid.Column="1" Spacing="24">
-                        <TextBlock Classes="heading" Text="{Binding AuthenticatedAccount}" />
-                        <TextBlock Classes="secondary" Text="{loc:Tr Settings.SessionReady}" />
-                        <Button x:Name="SwitchAccountButton" Command="{Binding BackToSessionsCommand}"
-                                Content="{loc:Tr Settings.SwitchAccount}" />
-                        <Button Command="{Binding LogoutCommand}" Content="{loc:Tr Settings.SignOut}" />
-                    </StackPanel>
-                    <StackPanel x:Name="DisplaySettings" Grid.Column="1" IsVisible="False" Spacing="24">
-                        <TextBlock Classes="heading" Text="{loc:Tr Settings.DisplayHeading}" />
-                        <TextBlock Classes="secondary" TextWrapping="Wrap"
-                                   Text="{loc:Tr Settings.DisplayHelp}" />
-                        <Button Content="{loc:Tr Settings.WindowOptions}" Click="OnWindowOptionsClicked" />
-                        <Button Content="{loc:Tr Language.Selection}" Click="OnLanguageClicked" />
-                    </StackPanel>
-                    <StackPanel x:Name="ControlsSettings" Grid.Column="1" IsVisible="False" Spacing="24">
-                        <TextBlock Classes="heading" Text="{loc:Tr Settings.ControlsHeading}" />
-                        <TextBlock Classes="secondary" TextWrapping="Wrap"
-                                   Text="{loc:Tr Settings.ControlsHelp}" />
-                        <Button Content="{loc:Tr Settings.WindowOptions}" Click="OnWindowOptionsClicked" />
-                    </StackPanel>
-                </Grid>
-            </Grid>
+                </Border>
+            </StackPanel>
         </Grid>
         </ScrollViewer>
         <Border x:Name="NavigationRail" Width="88" HorizontalAlignment="Left"

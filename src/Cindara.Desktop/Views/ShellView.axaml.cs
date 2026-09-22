@@ -11,13 +11,10 @@ public partial class ShellView : UserControl
 {
     private readonly Dictionary<string, Control> _contentMemory = [];
     private string _destination = "Home";
-    private Button _category;
 
     public ShellView()
     {
         InitializeComponent();
-        _category = AccountCategory;
-        SetSelected(AccountCategory, true);
         SetSelected(HomeNavigation, true);
         AddHandler(GotFocusEvent, OnShellFocused);
         AddHandler(LostFocusEvent, (_, _) => UpdateRail());
@@ -26,13 +23,13 @@ public partial class ShellView : UserControl
     }
 
     public event EventHandler? DestinationChanged;
-    public event EventHandler? WindowOptionsRequested;
+    public event EventHandler? ExitRequested;
     public event EventHandler? LanguageRequested;
     public string Destination => _destination;
     public Control InitialFocus => _destination switch
     {
         "Home" => RetryHomeButton.IsEffectivelyVisible && RetryHomeButton.IsEffectivelyEnabled ? RetryHomeButton : HomeNavigation,
-        "Settings" => _category,
+        "Settings" => SettingsLanguageButton,
         _ => NavigationButtons.Children.OfType<Button>().Single(button => Equals(button.Tag, _destination)),
     };
     public Control ContentFocus =>
@@ -42,7 +39,6 @@ public partial class ShellView : UserControl
     public void Reset()
     {
         _contentMemory.Clear();
-        SelectCategory(AccountCategory);
         Navigate("Home");
     }
 
@@ -105,34 +101,6 @@ public partial class ShellView : UserControl
             }
         }
 
-        if (_destination == "Settings" && focused is not null)
-        {
-            if (SettingsCategories.Children.Contains(focused))
-            {
-                if (direction == NavigationDirection.Right)
-                {
-                    SelectCategory((Button)focused);
-                    ActiveSettings().GetVisualDescendants().OfType<Button>()
-                        .FirstOrDefault(button => button.IsEffectivelyEnabled)?.Focus(NavigationMethod.Directional);
-                    return true;
-                }
-
-                if (direction is NavigationDirection.Up or NavigationDirection.Down)
-                {
-                    var categories = SettingsCategories.Children.OfType<Button>().ToArray();
-                    var categoryIndex = Array.IndexOf(categories, focused);
-                    categories[Math.Clamp(categoryIndex + (direction == NavigationDirection.Up ? -1 : 1), 0, categories.Length - 1)]
-                        .Focus(NavigationMethod.Directional);
-                    return true;
-                }
-            }
-            else if (direction == NavigationDirection.Left)
-            {
-                _category.Focus(NavigationMethod.Directional);
-                return true;
-            }
-        }
-
         if (direction == NavigationDirection.Left)
         {
             FocusRail();
@@ -146,21 +114,6 @@ public partial class ShellView : UserControl
         .Single(button => Equals(button.Tag, _destination)).Focus(NavigationMethod.Directional);
 
     public bool IsRailFocused => NavigationButtons.IsKeyboardFocusWithin;
-
-    private StackPanel ActiveSettings() => _category == AccountCategory
-        ? AccountSettings : _category == DisplayCategory ? DisplaySettings : ControlsSettings;
-
-    private void SelectCategory(Button category)
-    {
-        _category = category;
-        AccountSettings.IsVisible = category == AccountCategory;
-        DisplaySettings.IsVisible = category == DisplayCategory;
-        ControlsSettings.IsVisible = category == ControlsCategory;
-        foreach (var button in SettingsCategories.Children.OfType<Button>())
-        {
-            SetSelected(button, button == category);
-        }
-    }
 
     private static void SetSelected(Button button, bool selected)
     {
@@ -192,15 +145,10 @@ public partial class ShellView : UserControl
     }
 
     private void OnDestinationClicked(object? sender, RoutedEventArgs args) => Navigate((string)((Button)sender!).Tag!);
-    private void OnCategoryClicked(object? sender, RoutedEventArgs args)
-    {
-        SelectCategory((Button)sender!);
-        ActiveSettings().GetVisualDescendants().OfType<Button>().FirstOrDefault(button => button.IsEffectivelyEnabled)?
-            .Focus(NavigationMethod.Directional);
-    }
+    private void OnHomeClicked(object? sender, RoutedEventArgs args) => Navigate("Home");
 
-    private void OnWindowOptionsClicked(object? sender, RoutedEventArgs args) =>
-        WindowOptionsRequested?.Invoke(this, EventArgs.Empty);
+    private void OnExitClicked(object? sender, RoutedEventArgs args) =>
+        ExitRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnLanguageClicked(object? sender, RoutedEventArgs args) =>
         LanguageRequested?.Invoke(this, EventArgs.Empty);

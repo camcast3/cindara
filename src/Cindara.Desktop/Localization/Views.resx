@@ -98,4 +98,5 @@
   <data name="Language.EnglishOnly" xml:space="preserve"><value>English is the only supported language for now.</value></data>
   <data name="Home.Retry" xml:space="preserve"><value>Retry loading Home</value></data>
   <data name="Action.CancelLoading" xml:space="preserve"><value>Cancel loading</value></data>
+  <data name="Action.Exit" xml:space="preserve"><value>Exit</value></data>
 </root>

@@ -73,7 +73,7 @@ public partial class MainWindow : Window
             _screen = null;
             Dispatcher.UIThread.Post(RefreshScreen, DispatcherPriority.Loaded);
         };
-        Shell.WindowOptionsRequested += (_, _) => ShowWindowOptions();
+        Shell.ExitRequested += (_, _) => Close();
         Shell.LanguageRequested += (_, _) => ShowLanguage();
         GalleryView.SettingsRequested += (_, _) =>
         {
@@ -208,6 +208,7 @@ public partial class MainWindow : Window
         }
 
         _screen = screen;
+        var contentFocus = Shell.ContentFocus;
         UpdateLayout();
         var initial = screen switch
         {
@@ -218,7 +219,6 @@ public partial class MainWindow : Window
             "loading" => LanguageButton,
             _ => Shell.InitialFocus,
         };
-        var contentFocus = Shell.ContentFocus;
         _navigation.SetScope(MainSurface, initial, screen);
         if (screen == "gallery")
         {
@@ -407,21 +407,6 @@ public partial class MainWindow : Window
         WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
 
     private void OnLanguage(object? sender, RoutedEventArgs args) => ShowLanguage();
-
-    private void ShowWindowOptions()
-    {
-        if (ModalOverlay.IsVisible)
-        {
-            return;
-        }
-
-        BeginModal(Loc.Get("Window.Title"));
-        AddModalButton(Loc.Get("Window.Return"), DismissModal);
-        AddModalButton(Loc.Get("Window.Desktop"), () => { WindowState = WindowState.Normal; DismissModal(); });
-        AddModalButton(Loc.Get("Window.Fullscreen"), () => { WindowState = WindowState.FullScreen; DismissModal(); });
-        AddModalButton(Loc.Get("Window.Exit"), Close);
-        FocusModal();
-    }
 
     private void ShowLanguage()
     {

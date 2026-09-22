@@ -26,22 +26,23 @@ details, and playback flows remain assigned to #3, #5, and #4.
 
 `ShellView` owns the production frame, not browsing data. Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
-There is no intermediate preview launcher or Back to Home button. Libraries,
+There is no intermediate preview launcher or redundant Home-screen back button. Libraries,
 Search, and Downloads show honest unavailable-content states and retain rail
-focus. Settings initially focuses Account; right enters
-the selected category's settings, left returns, and up/down stays within the
-category column. Account switching and sign-out use the existing session commands.
+focus. Settings exposes exactly Language: English, Exit, and Back to Home;
+initial focus is Language. Up/down traverses the three actions, and left
+returns to the rail. Button labels are centered with consistent padding.
+Expanded settings are deferred to [#27](https://github.com/camcast3/cindara/issues/27).
 
 The rail expands on focus or hover and collapses to original vector icons when
 content is focused. Up/down follows Home, Libraries, Search, Downloads, Settings
 without wrapping. Accept opens the focused destination. Right returns to remembered
 content in the current destination; left or Back from content enters its selected
 rail item. Back from the settings rail returns to media Home without reloading it.
-Window/exit choices and account controls are available inside signed-in Settings.
+Exit closes the app; Back to Home restores media and focus without reloading.
 The login screen offers only the English language selector alongside authentication.
 
 `FocusNavigationService` scopes navigation to the active screen or dialog.
-Explicit rail/category links take priority; other controls use transformed bounds,
+Explicit rail links take priority; other controls use transformed bounds,
 aligned candidates, nearest directional edge, distance, and stable visual order.
 Screen focus is remembered, and hidden, disabled, or removed controls recover to
 the nearest available action. Initial focus waits for layout. Tab/Shift+Tab cycle
@@ -49,7 +50,7 @@ inside the current scope. Modal choices disable background interaction, trap
 directional and keyboard focus, start on a safe action, and restore their launcher
 on selection or Back. Account changes discard old screen focus.
 
-The saved-account picker and window/exit choices use these primitives. Controller
+The saved-account and language pickers use these primitives. Controller
 Accept on an authentication text field opens a modal keyboard with letters, digits,
 punctuation, Shift, Space, Backspace, Clear, Done, and Cancel. Physical typing and
 paste still work in the field; passwords stay masked and drafts are discarded on
@@ -205,7 +206,7 @@ heading position. Automatic vertical bring-into-view is suppressed to avoid a
 snap before the transition; horizontal card visibility remains automatic.
 
 The preview has a single Home navigation action in the sidebar. Settings opens
-the account/display/controller settings frame; returning Home preserves the
+the three-action settings panel; returning Home preserves the
 loaded media and focused card. The top tab bar has been removed pending a
 product decision about its purpose.
 TV uses a screen-and-stand glyph; Anime has its own torii gate glyph, accessible
@@ -283,12 +284,16 @@ an explanatory empty state and returns up to the field.
 ### Settings
 
 ```text
-[Rail]  [Category list]  [Setting rows / value / toggle]
+[Rail]  Settings
+        [Language: English]
+        [Exit]
+        [Back to Home]
 ```
 
-Initial focus: first category. Right enters its first setting; left returns to
-the selected category. Up/down stays within a column. A modal choice traps
-focus between options and its primary action until selection or Back.
+Initial focus: Language. Up/down moves between the three actions; left returns
+to the rail. The language picker traps focus until selection or Back and currently
+offers English only. Exit closes the app, while Back to Home restores media
+without a new load. No category navigation or expanded settings are exposed yet.
 
 ### Playback overlay
 

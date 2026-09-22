@@ -44,6 +44,7 @@
 
     <Style Selector="Button">
         <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Body}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="FocusAdorner" Value="{x:Null}" />
         <Setter Property="BorderThickness" Value="3" />
         <Setter Property="BorderBrush" Value="Transparent" />
@@ -120,6 +121,20 @@
         <Setter Property="BorderThickness" Value="3" />
     </Style>
 
+    <Style Selector="Button.settings-action">
+        <Setter Property="MinHeight" Value="64" />
+        <Setter Property="MinWidth" Value="240" />
+        <Setter Property="Padding" Value="24,16" />
+        <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Heading}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.settings-card">
+        <Setter Property="Padding" Value="32" />
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Surface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Medium}" />
+    </Style>
     <Style Selector="Button.card">
         <Setter Property="Padding" Value="0" />
         <!-- The rounded :focus border below replaces the default rectangular focus adorner. -->

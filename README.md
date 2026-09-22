@@ -16,17 +16,18 @@ account and return it to sign-in.
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
 Settings. Library/search/download content remains explicitly unavailable until
 its roadmap work lands. Signing in opens the current media Home directly, without
-a preview launcher, top tab bar, or Back to Home button. The Home sidebar's
+a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
-Settings contains account switching, sign-out, display, and controller guidance.
+Settings contains exactly **Language: English**, **Exit**, and **Back to Home**.
+Expanded account, display, input, and appearance settings are deferred to
+[the settings feature request](https://github.com/camcast3/cindara/issues/27).
 D-pad/left stick or arrows navigate, Accept/Enter selects, and Back/Escape
 dismisses dialogs or returns to the navigation rail. Start/Options/+ or F11
-toggles fullscreen; **Settings → Display → Window and exit options** provides
-explicit desktop and exit actions.
+toggles fullscreen; **Settings → Exit** closes the app.
 Accept on a text field opens an on-screen keyboard. Saved accounts use the same
 focus-trapped choice dialog as the rest of the shell.
 
-The login screen and **Settings → Display** offer **Language: English**.
+The login screen and **Settings** offer **Language: English**.
 English is the only supported UI language. Appearance controls are deferred;
 the text/contrast/motion foundation remains covered by developer tests but is
 not exposed or restored from saved appearance settings. `CINDARA_CULTURE`

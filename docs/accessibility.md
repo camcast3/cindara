@@ -7,10 +7,12 @@ translations must retain these contracts as they are implemented.
 
 ## Current settings surface
 
-The login screen and **Settings → Display** expose **Language: English**, with
+The login screen and **Settings** expose **Language: English**, with
 English as the only supported choice. The selected language is exposed in
-visible text and automation state. Account switching, sign-out, and window/exit
-options live in the signed-in Settings screen, reached from the media sidebar.
+visible text and automation state. The signed-in Settings screen contains only
+**Language: English**, **Exit**, and **Back to Home**, with consistently centered
+button labels. Account, display, input, and appearance settings are deferred to
+[the expanded settings feature request](https://github.com/camcast3/cindara/issues/27).
 There is no intermediate Home/preview launcher or top Home/Trending/Activity/Profile
 bar. Back/Escape in media Home moves focus to its single Home navigation action.
 
