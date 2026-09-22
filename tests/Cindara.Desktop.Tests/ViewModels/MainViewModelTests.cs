@@ -1,12 +1,46 @@
 using Cindara.Core.Authentication;
 using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
+using Cindara.Desktop.Localization;
+using Cindara.Desktop.Tests.Localization;
 using Cindara.Desktop.ViewModels;
 
 namespace Cindara.Desktop.Tests.ViewModels;
 
+[Collection(LocalizationTestGroup.Name)]
 public sealed class MainViewModelTests
 {
+    [Fact]
+    public async Task FrenchStatusUsesResourcesAndLeavesServerNameUntouched()
+    {
+        using var scope = new CultureScope("fr-CA");
+        using var viewModel = new MainViewModel(new StubServerClient(), new TestAuthenticationService())
+        {
+            ServerAddress = Server.BaseUri.ToString(),
+        };
+
+        Assert.Equal("Chargement des sessions Jellyfin enregistrées...", viewModel.StatusMessage);
+        await viewModel.ConnectCommand.ExecuteAsync(null);
+
+        Assert.Equal("Connecté à Living Room. Connectez-vous avec votre compte Jellyfin.",
+            viewModel.StatusMessage);
+        Assert.Equal(string.Empty, viewModel.Username);
+    }
+
+    [Fact]
+    public async Task PseudoStatusPreservesUsernamesAndServerData()
+    {
+        using var scope = new CultureScope("qps-ploc");
+        using var viewModel = new MainViewModel(new StubServerClient(), new TestAuthenticationService());
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+        await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("[!! ", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("Living Room", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("viewer", viewModel.AuthenticatedAccount, StringComparison.Ordinal);
+        Assert.Contains("https://media.example.com", viewModel.AuthenticatedAccount, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task LogoutRefreshFailureRestoresCommandsAndShowsError()
     {
@@ -26,7 +60,7 @@ public sealed class MainViewModelTests
         Assert.False(viewModel.IsBusy);
         Assert.True(viewModel.IsServerEntryVisible);
         Assert.False(viewModel.IsAuthenticatedVisible);
-        Assert.Equal("Saved session metadata could not be read.", viewModel.StatusMessage);
+        Assert.Equal(Loc.Get("Error.Authentication.SecureStorageUnavailable"), viewModel.StatusMessage);
         Assert.True(viewModel.ConnectCommand.CanExecute(null));
     }
 
@@ -84,7 +118,7 @@ public sealed class MainViewModelTests
         await viewModel.UseSavedSessionCommand.ExecuteAsync(null);
 
         Assert.False(viewModel.IsBusy);
-        Assert.Contains("Could not restore the saved session.", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains(Loc.Get($"Error.Authentication.{error}"), viewModel.StatusMessage, StringComparison.Ordinal);
         Assert.Contains("Saved session metadata could not be read.", viewModel.StatusMessage, StringComparison.Ordinal);
         Assert.Contains(other, viewModel.SavedSessions);
         if (error == AuthenticationError.RevokedSession)
@@ -335,7 +369,7 @@ public sealed class MainViewModelTests
         Assert.False(viewModel.IsBusy);
         Assert.False(viewModel.ShowDesignGalleryCommand.CanExecute(null));
         Assert.Contains(other, viewModel.SavedSessions);
-        Assert.Contains("Preview failed", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains(Loc.Get("Error.Preview.AccessDenied"), viewModel.StatusMessage, StringComparison.Ordinal);
         Assert.Equal(failInvalidation,
             viewModel.StatusMessage.Contains("Could not invalidate", StringComparison.Ordinal));
         Assert.Equal(failRefresh,
@@ -380,7 +414,7 @@ public sealed class MainViewModelTests
         Assert.True(viewModel.IsAuthenticatedVisible);
         Assert.False(viewModel.IsSignInVisible);
         Assert.True(viewModel.ShowDesignGalleryCommand.CanExecute(null));
-        Assert.Equal("Preview failed.", viewModel.StatusMessage);
+        Assert.Equal(Loc.Get($"Error.Preview.{error}"), viewModel.StatusMessage);
     }
 
     [Theory]

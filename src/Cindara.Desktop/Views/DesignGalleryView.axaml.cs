@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.ViewModels;
 
@@ -15,6 +16,7 @@ public partial class DesignGalleryView : UserControl
     private Button? _focusedCard;
     private Button? _lastHeaderTab;
     private bool _pinAfterLayout;
+    private PresentationPreferences _preferences = new();
 
     public DesignGalleryView()
     {
@@ -26,6 +28,7 @@ public partial class DesignGalleryView : UserControl
         }
 
         SizeChanged += OnSizeChanged;
+        DataContextChanged += (_, _) => HeroTextScroll.Offset = default;
         HeroPanel.SizeChanged += (_, _) =>
         {
             UpdateHeroArtwork();
@@ -43,31 +46,46 @@ public partial class DesignGalleryView : UserControl
         };
     }
 
-    private void OnSizeChanged(object? sender, SizeChangedEventArgs eventArgs)
+    public void ApplyPreferences(PresentationPreferences preferences)
     {
-        var profile = GalleryViewportProfile.Create(eventArgs.NewSize.Width, eventArgs.NewSize.Height);
+        _preferences = preferences;
+        HeroArtwork.IsVisible = !preferences.HighContrast;
+        UpdateViewport(Bounds.Size);
+    }
+
+    private void OnSizeChanged(object? sender, SizeChangedEventArgs eventArgs) => UpdateViewport(eventArgs.NewSize);
+
+    private void UpdateViewport(Size size)
+    {
+        if (size.Width <= 0 || size.Height <= 0)
+        {
+            return;
+        }
+
+        var profile = GalleryViewportProfile.Create(size.Width, size.Height);
         var scale = profile.CardScale;
         var heroScale = profile.HeroScale;
+        var textScale = _preferences.TextScale;
         var heroHeight = profile.HeroHeight;
         _heroHeight = heroHeight;
         Resources["Gallery.HeroHeight"] = heroHeight;
         Resources["Gallery.HeroContentWidth"] = Math.Min(
             880 * heroScale,
-            eventArgs.NewSize.Width * 0.46);
-        Resources["Gallery.HeroHeaderSize"] = 18 * heroScale;
-        Resources["Gallery.HeroTitleSize"] = 56 * heroScale;
-        Resources["Gallery.HeroTitleLineHeight"] = 64 * heroScale;
-        Resources["Gallery.HeroSubtitleSize"] = 28 * heroScale;
-        Resources["Gallery.HeroBodySize"] = 22 * heroScale;
-        Resources["Gallery.HeroBodyLineHeight"] = 30 * heroScale;
+            size.Width * 0.6);
+        Resources["Gallery.HeroHeaderSize"] = 18 * heroScale * textScale;
+        Resources["Gallery.HeroTitleSize"] = 56 * heroScale * textScale;
+        Resources["Gallery.HeroTitleLineHeight"] = 64 * heroScale * textScale;
+        Resources["Gallery.HeroSubtitleSize"] = 28 * heroScale * textScale;
+        Resources["Gallery.HeroBodySize"] = 22 * heroScale * textScale;
+        Resources["Gallery.HeroBodyLineHeight"] = 30 * heroScale * textScale;
         Resources["Gallery.HeroTextMargin"] = new Thickness(0, 28 * heroScale, 0, 0);
         Resources["Gallery.HeroTextSpacing"] = new Thickness(0, 0, 0, 12 * heroScale);
         Resources["Gallery.ContinueWidth"] = 290 * scale;
         Resources["Gallery.ContinueHeight"] = 163 * scale;
         Resources["Gallery.PosterWidth"] = 156 * scale;
         Resources["Gallery.PosterHeight"] = 234 * scale;
-        Resources["Gallery.CardTitleSize"] = 14 * scale;
-        Resources["Gallery.CardCaptionSize"] = 12 * scale;
+        Resources["Gallery.CardTitleSize"] = 14 * scale * textScale;
+        Resources["Gallery.CardCaptionSize"] = 12 * scale * textScale;
         Resources["Gallery.ItemSpacing"] = 16 * scale;
     }
 
@@ -93,6 +111,11 @@ public partial class DesignGalleryView : UserControl
         if (sender is Button { DataContext: MediaPreviewCardViewModel item }
             && DataContext is DesignGalleryViewModel gallery)
         {
+            if (!ReferenceEquals(gallery.Featured, item))
+            {
+                HeroTextScroll.Offset = default;
+            }
+
             gallery.SelectFeatured(item);
             var card = (Button)sender;
             _focusedCard = card;
@@ -129,8 +152,25 @@ public partial class DesignGalleryView : UserControl
     public bool FocusTopNavigation() =>
         (_lastHeaderTab ?? HomeTabButton).Focus(NavigationMethod.Directional);
 
+    public void ScrollDescription(bool forward)
+    {
+        var step = HeroTextScroll.Viewport.Height * (forward ? 1 : -1);
+        HeroTextScroll.Offset = new Vector(0, Math.Clamp(HeroTextScroll.Offset.Y + step, 0,
+            Math.Max(0, HeroTextScroll.Extent.Height - HeroTextScroll.Viewport.Height)));
+    }
+
     public bool TryMoveGalleryFocus(NavigationDirection direction)
     {
+        if (FlowDirection == Avalonia.Media.FlowDirection.RightToLeft)
+        {
+            direction = direction switch
+            {
+                NavigationDirection.Left => NavigationDirection.Right,
+                NavigationDirection.Right => NavigationDirection.Left,
+                _ => direction,
+            };
+        }
+
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
         var tabs = TopNavigationPanel.Children.OfType<Button>().ToArray();
         var tabIndex = Array.FindIndex(tabs, tab => ReferenceEquals(tab, focused));

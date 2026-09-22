@@ -51,8 +51,9 @@ The saved-account picker and window/exit choices use these primitives. Controlle
 Accept on an authentication text field opens a modal keyboard with letters, digits,
 punctuation, Shift, Space, Backspace, Clear, Done, and Cancel. Physical typing and
 paste still work in the field; passwords stay masked and drafts are discarded on
-dismissal. Full international text entry, platform keyboard integration, and
-localization remain accessibility work in #11.
+dismissal. Startup localization and pseudo-localization are available; full
+international controller text entry and platform keyboard integration remain
+future work. Physical Unicode typing and paste are retained.
 
 The production frame and dialogs fit a 1920x1080 reference surface uniformly,
 including the existing 48-pixel safe-area token. At 3840x2160 logical pixels they
@@ -74,8 +75,9 @@ the navigation actions.
 
 `Styles/Tokens.axaml` is the source of truth. The base palette uses `#080B12`
 behind raised `#131925` and `#1C2535` surfaces. Primary text (`#F5F8FC`) and
-secondary text (`#B3BED0`) exceed WCAG AA against those surfaces; muted text is
-reserved for large, non-essential captions. Teal `#64D8CB` identifies focus,
+secondary text (`#B3BED0`) exceed WCAG AA against those surfaces; muted caption
+text (`#8490A5`) also exceeds 4.5:1, including on the raised surface.
+Teal `#64D8CB` identifies focus,
 selection, and primary action. Error, warning, and success never rely on color
 alone.
 
@@ -84,13 +86,23 @@ body, and caption roles. Spacing follows a 4/8/16/24/40 scale. Corners use
 8/14/24 radii. Every action has at least a 48 by 48 logical-pixel focus target
 at 1080p. Focus uses a high-contrast three- or four-pixel outline plus
 elevation; hover may raise the surface, pressed reduces emphasis, selected
-keeps a teal outline, disabled reduces opacity, loading uses skeletons, and
-errors add a labeled pink boundary.
+keeps an outline (navigation uses a bottom border), disabled reduces opacity,
+loading uses labeled skeletons, and errors add a labeled pink boundary.
+Accent-filled primary actions use a dark inner focus border and light outer
+ring so neither the button fill nor surrounding dark surface masks focus.
 
 Standard motion is 200 ms, with 120 ms for direct feedback and 320 ms for
 large context changes. Scale focused cards to at most 1.04 in production so
-neighbors do not shift. When reduced motion is enabled, remove scale and
-translation, shorten fades to 80 ms, and keep the focus outline instantaneous.
+neighbors do not shift. When reduced motion is enabled, motion tokens become
+zero, Fluent button press transforms are disabled, gallery scrolling is
+immediate, and indeterminate busy animation is replaced by static status text.
+Focus outlines remain instantaneous in every mode.
+
+Presentation preferences apply at window scope: text roles scale to 125% or
+150%, high contrast replaces Cindara and Fluent control palettes, and default
+restoration reverses every override. There is no OS preference auto-detection.
+See [the accessibility contract and manual test matrix](accessibility.md) for
+persistence, localization, pseudo-locales, contrast coverage, and limits.
 
 ## TV viewport behavior
 
@@ -140,7 +152,7 @@ The current preview implements header/rail directional navigation. Back/Escape
 closes the gallery without leaving fullscreen and restores its Home launcher.
 Start/Options/+ and F11 toggle fullscreen. Modals consume controller Menu so it
 cannot change the background; F11 remains the explicit keyboard escape path.
-Reduced-motion settings remain accessibility work.
+Reduced-motion settings are available before and after authentication.
 
 ### Home
 
@@ -299,8 +311,9 @@ states include a reason and next action. Skeletons are non-focusable and use
 the final component's dimensions.
 
 Keyboard focus must always be visible. Screen-reader names describe the action
-and media title rather than artwork. Text supports 200% scaling without
-clipping critical controls. No essential status is communicated only through
+and media title rather than artwork. The current application text scale supports
+100/125/150%; 200% text remains a future layout target, distinct from OS DPI.
+No essential status is communicated only through
 motion, color, artwork, or sound.
 
 ## Shell validation

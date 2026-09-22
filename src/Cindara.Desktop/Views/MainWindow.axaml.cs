@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
@@ -7,7 +9,9 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.Input;
+using Cindara.Desktop.Localization;
 using Cindara.Desktop.Navigation;
 using Cindara.Desktop.ViewModels;
 
@@ -23,15 +27,33 @@ public partial class MainWindow : Window
     private TextBox? _keyboardDraft;
     private string? _screen;
     private bool _closed;
+    private readonly PresentationSettingsStore? _presentationStore;
+    private bool _presentationLoadFailed;
+
+    public PresentationPreferences Preferences { get; private set; } = new();
 
     public MainWindow() : this(new SdlGamepadInputSource())
     {
     }
 
-    public MainWindow(IControllerInputSource controllerInput)
+    public MainWindow(IControllerInputSource controllerInput, PresentationSettingsStore? presentationStore = null)
     {
         _controllerInput = controllerInput;
         InitializeComponent();
+        FlowDirection = Loc.IsRightToLeft
+            ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight;
+        _presentationStore = presentationStore;
+        try
+        {
+            Preferences = presentationStore?.Load() ?? new();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            _presentationLoadFailed = true;
+            ShowPresentationError("Accessibility.LoadError");
+        }
+
+        ApplyPresentation();
         _navigation = new FocusNavigationService(this);
         _controllerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _controllerTimer.Tick += OnControllerTimerTick;
@@ -54,6 +76,7 @@ public partial class MainWindow : Window
             Dispatcher.UIThread.Post(RefreshScreen, DispatcherPriority.Loaded);
         };
         Shell.WindowOptionsRequested += (_, _) => ShowWindowOptions();
+        Shell.AccessibilityRequested += (_, _) => ShowAccessibility();
     }
 
     private async void OnOpened(object? sender, EventArgs eventArgs)
@@ -121,6 +144,11 @@ public partial class MainWindow : Window
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
+        if (args.PropertyName == nameof(MainViewModel.IsBusy))
+        {
+            BusyIndicator.IsIndeterminate = _viewModel?.IsBusy is true && !Preferences.ReducedMotion;
+        }
+
         if (args.PropertyName is nameof(MainViewModel.IsServerEntryVisible)
             or nameof(MainViewModel.IsSignInVisible) or nameof(MainViewModel.AreSavedSessionsVisible)
             or nameof(MainViewModel.IsAuthenticatedVisible) or nameof(MainViewModel.IsDesignGalleryVisible)
@@ -204,10 +232,10 @@ public partial class MainWindow : Window
         var accept = ControllerGlyphs.GetLabel(layout, ControllerAction.Accept);
         var back = ControllerGlyphs.GetLabel(layout, ControllerAction.Back);
         var menu = ControllerGlyphs.GetLabel(layout, ControllerAction.Menu);
-        var name = controller?.Name ?? (_controllerInput.ConnectedGamepads > 0 ? "Controller ready" : "Connect a controller");
+        var name = controller?.Name ?? Loc.Get(_controllerInput.ConnectedGamepads > 0 ? "Input.Ready" : "Input.Connect");
         _viewModel?.SetControllerStatus(_controllerInput.IsAvailable
-            ? $"{name} | D-pad / left stick: move | [{accept}]: select | [{back}]: back | [{menu}] / F11: fullscreen"
-            : $"{_controllerInput.InitializationError ?? "No controller available."} Keyboard and mouse remain available. F11: fullscreen.");
+            ? Loc.Format("Input.Prompts", name, accept, back, menu)
+            : Loc.Get("Input.Unavailable"));
     }
 
     private void OnControllerActionPressed(object? sender, ControllerActionEventArgs args)
@@ -251,7 +279,13 @@ public partial class MainWindow : Window
 
     private void OnShellKeyDown(object? sender, KeyEventArgs args)
     {
-        if (args.Key == Key.F11)
+        if (args.Key is Key.PageUp or Key.PageDown && !ModalOverlay.IsVisible
+            && _viewModel?.IsDesignGalleryVisible is true)
+        {
+            GalleryView.ScrollDescription(args.Key == Key.PageDown);
+            args.Handled = true;
+        }
+        else if (args.Key == Key.F11)
         {
             ToggleFullscreen();
             args.Handled = true;
@@ -363,12 +397,110 @@ public partial class MainWindow : Window
             return;
         }
 
-        BeginModal("Window and exit");
-        AddModalButton("Return to Cindara", DismissModal);
-        AddModalButton("Use a desktop window", () => { WindowState = WindowState.Normal; DismissModal(); });
-        AddModalButton("Use fullscreen", () => { WindowState = WindowState.FullScreen; DismissModal(); });
-        AddModalButton("Exit Cindara", Close);
+        BeginModal(Loc.Get("Window.Title"));
+        AddModalButton(Loc.Get("Window.Return"), DismissModal);
+        AddModalButton(Loc.Get("Window.Desktop"), () => { WindowState = WindowState.Normal; DismissModal(); });
+        AddModalButton(Loc.Get("Window.Fullscreen"), () => { WindowState = WindowState.FullScreen; DismissModal(); });
+        AddModalButton(Loc.Get("Accessibility.Title"), ShowAccessibility);
+        AddModalButton(Loc.Get("Window.Exit"), Close);
         FocusModal();
+    }
+
+    private void ShowAccessibility()
+    {
+        if (ModalOverlay.IsVisible)
+        {
+            // Replace window options while retaining the original non-modal focus owner.
+            ModalActions.Children.Clear();
+            ModalTitle.Text = Loc.Get("Accessibility.Title");
+            AutomationProperties.SetName(ModalOverlay, ModalTitle.Text);
+            _navigation.Forget("modal");
+        }
+        else
+        {
+            BeginModal(Loc.Get("Accessibility.Title"));
+        }
+
+        if (_presentationLoadFailed)
+        {
+            ModalActions.Children.Add(new TextBlock
+            {
+                Text = Loc.Get("Accessibility.LoadError"),
+                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                Classes = { "secondary" },
+            });
+        }
+
+        var scale = AddPreference("Accessibility.TextScale", Loc.Format("Accessibility.TextScale", Preferences.TextScale),
+            "Accessibility.CycleText");
+        var contrast = AddPreference("Accessibility.HighContrast", StateLabel("Accessibility.HighContrast", Preferences.HighContrast),
+            "Accessibility.Toggle");
+        var motion = AddPreference("Accessibility.ReducedMotion", StateLabel("Accessibility.ReducedMotion", Preferences.ReducedMotion),
+            "Accessibility.Toggle");
+        scale.Click += (_, _) =>
+        {
+            UpdatePreferences(Preferences with { TextScale = Preferences.TextScale == 1 ? 1.25 : Preferences.TextScale == 1.25 ? 1.5 : 1 });
+            scale.Content = Loc.Format("Accessibility.TextScale", Preferences.TextScale);
+        };
+        contrast.Click += (_, _) =>
+        {
+            UpdatePreferences(Preferences with { HighContrast = !Preferences.HighContrast });
+            contrast.Content = StateLabel("Accessibility.HighContrast", Preferences.HighContrast);
+        };
+        motion.Click += (_, _) =>
+        {
+            UpdatePreferences(Preferences with { ReducedMotion = !Preferences.ReducedMotion });
+            motion.Content = StateLabel("Accessibility.ReducedMotion", Preferences.ReducedMotion);
+        };
+        var error = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "secondary" } };
+        error.Bind(TextBlock.TextProperty, PresentationStatus.GetObservable(TextBlock.TextProperty));
+        AutomationProperties.SetLiveSetting(error, AutomationLiveSetting.Assertive);
+        ModalActions.Children.Add(error);
+        AddModalButton(Loc.Get("Action.Back"), DismissModal);
+        FocusModal();
+
+        Button AddPreference(string id, string label, string help)
+        {
+            var button = AddModalButton(label, () => { });
+            AutomationProperties.SetAutomationId(button, id);
+            AutomationProperties.SetHelpText(button, Loc.Get(help));
+            button.IsEnabled = !_presentationLoadFailed;
+            return button;
+        }
+    }
+
+    private static string StateLabel(string key, bool enabled) =>
+        Loc.Format(key, Loc.Get(enabled ? "State.On" : "State.Off"));
+
+    private void UpdatePreferences(PresentationPreferences preferences)
+    {
+        try
+        {
+            _presentationStore?.Save(preferences);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            ShowPresentationError("Accessibility.SaveError");
+            return;
+        }
+
+        Preferences = preferences;
+        PresentationStatus.Text = string.Empty;
+        PresentationStatus.IsVisible = false;
+        ApplyPresentation();
+    }
+
+    private void ApplyPresentation()
+    {
+        PresentationTheme.Apply(this, Preferences);
+        GalleryView.ApplyPreferences(Preferences);
+        BusyIndicator.IsIndeterminate = _viewModel?.IsBusy is true && !Preferences.ReducedMotion;
+    }
+
+    private void ShowPresentationError(string key)
+    {
+        PresentationStatus.Text = Loc.Get(key);
+        PresentationStatus.IsVisible = true;
     }
 
     private void OnChooseAccount(object? sender, RoutedEventArgs args)
@@ -378,17 +510,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        BeginModal("Choose saved account");
+        BeginModal(Loc.Get("Window.ChooseAccount"));
         foreach (var profile in _viewModel.SavedSessions)
         {
-            AddModalButton(profile.DisplayName, () =>
+            AddModalButton(LocaleFormat.SessionDisplayName(profile), () =>
             {
                 _viewModel.SelectedSavedSession = profile;
                 DismissModal();
             });
         }
 
-        AddModalButton("Cancel", DismissModal);
+        AddModalButton(Loc.Get("Action.Cancel"), DismissModal);
         FocusModal();
     }
 
@@ -397,6 +529,7 @@ public partial class MainWindow : Window
         _navigation.Remember();
         _modalReturnFocus = FocusManager?.GetFocusedElement() as Control;
         ModalTitle.Text = title;
+        AutomationProperties.SetName(ModalOverlay, title);
         ModalActions.Children.Clear();
         ModalOverlay.IsVisible = true;
         MainSurface.IsEnabled = false;
@@ -453,13 +586,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        BeginModal(AutomationProperties.GetName(target) ?? target.PlaceholderText ?? "Enter text");
-        var draft = new TextBox { Text = target.Text, PasswordChar = target.PasswordChar, MinWidth = 800 };
+        BeginModal(AutomationProperties.GetName(target) ?? target.PlaceholderText ?? Loc.Get("Keyboard.EnterText"));
+        var draft = new TextBox { Text = target.Text, PasswordChar = target.PasswordChar, MinWidth = 800, FlowDirection = target.FlowDirection };
         AutomationProperties.SetName(draft, ModalTitle.Text);
         draft.CaretIndex = draft.Text?.Length ?? 0;
         _keyboardDraft = draft;
         ModalActions.Children.Add(draft);
-        var keys = new UniformGrid { Columns = 12 };
+        var keys = new UniformGrid { Columns = 12, FlowDirection = Avalonia.Media.FlowDirection.LeftToRight };
         var letters = new List<Button>();
         foreach (var character in "1234567890-=" + "qwertyuiop[]" + "asdfghjkl;'\\"
                      + "zxcvbnm,./`" + "!@#$%^&*()_+{}:\"|<>?~")
@@ -475,7 +608,7 @@ public partial class MainWindow : Window
 
         ModalActions.Children.Add(keys);
         var actions = new WrapPanel();
-        AddKeyboardAction("Shift", () =>
+        AddKeyboardAction(Loc.Get("Keyboard.Shift"), () =>
         {
             foreach (var letter in letters)
             {
@@ -483,8 +616,8 @@ public partial class MainWindow : Window
                 letter.Content = char.IsLower(value[0]) ? value.ToUpperInvariant() : value.ToLowerInvariant();
             }
         });
-        AddKeyboardAction("Space", () => InsertText(draft, " "));
-        AddKeyboardAction("Backspace", () =>
+        AddKeyboardAction(Loc.Get("Keyboard.Space"), () => InsertText(draft, " "));
+        AddKeyboardAction(Loc.Get("Keyboard.Backspace"), () =>
         {
             if (draft.SelectionStart == draft.SelectionEnd && draft.CaretIndex > 0)
             {
@@ -494,14 +627,14 @@ public partial class MainWindow : Window
 
             InsertText(draft, string.Empty);
         });
-        AddKeyboardAction("Clear", () => draft.Text = string.Empty);
-        AddKeyboardAction("Done", () =>
+        AddKeyboardAction(Loc.Get("Keyboard.Clear"), () => draft.Text = string.Empty);
+        AddKeyboardAction(Loc.Get("Keyboard.Done"), () =>
         {
             target.Text = draft.Text;
             target.CaretIndex = target.Text?.Length ?? 0;
             DismissModal();
         });
-        AddKeyboardAction("Cancel", DismissModal);
+        AddKeyboardAction(Loc.Get("Action.Cancel"), DismissModal);
         ModalActions.Children.Add(actions);
         FocusModal();
 

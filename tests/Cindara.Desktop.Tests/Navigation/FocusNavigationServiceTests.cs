@@ -7,6 +7,33 @@ namespace Cindara.Desktop.Tests.Navigation;
 public sealed class FocusNavigationServiceTests
 {
     [Fact]
+    public Task DirectionalMovementUsesPhysicalDirectionInMirroredScopes() => TestAppBuilder.Run(() =>
+    {
+        var first = ButtonAt(0, 0);
+        var second = ButtonAt(0, 0);
+        var scope = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            FlowDirection = Avalonia.Media.FlowDirection.RightToLeft,
+            Children = { first, second },
+        };
+        var window = Show(scope);
+        try
+        {
+            var navigation = new FocusNavigationService(window);
+            navigation.SetScope(scope, first);
+            navigation.Move(NavigationDirection.Left);
+            Assert.Same(second, window.FocusManager!.GetFocusedElement());
+            navigation.Move(NavigationDirection.Right);
+            Assert.Same(first, window.FocusManager.GetFocusedElement());
+        }
+        finally
+        {
+            window.Close();
+        }
+    });
+
+    [Fact]
     public Task SpatialMovesPreferAlignedTargetsAndUseStableOrder() => TestAppBuilder.Run(() =>
     {
         var origin = ButtonAt(0, 0);

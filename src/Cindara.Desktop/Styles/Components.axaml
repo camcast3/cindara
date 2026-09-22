@@ -2,21 +2,28 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Style Selector="Window">
         <Setter Property="FontFamily" Value="avares://Avalonia.Fonts.Inter/Assets#Inter" />
+        <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.Text}" />
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Background}" />
     </Style>
 
+    <Style Selector="TextBlock">
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
     <Style Selector="TextBlock.display">
+        <Setter Property="AutomationProperties.HeadingLevel" Value="1" />
         <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Display}" />
         <Setter Property="FontWeight" Value="Bold" />
         <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.Text}" />
     </Style>
     <Style Selector="TextBlock.title">
+        <Setter Property="AutomationProperties.HeadingLevel" Value="1" />
         <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Title}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.Text}" />
     </Style>
     <Style Selector="TextBlock.heading">
+        <Setter Property="AutomationProperties.HeadingLevel" Value="2" />
         <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Heading}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.Text}" />
@@ -45,6 +52,9 @@
         <Setter Property="Padding" Value="18,12" />
         <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Small}" />
     </Style>
+    <Style Selector="Button /template/ ContentPresenter">
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
     <Style Selector="Button.primary">
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Accent}" />
         <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.OnAccent}" />
@@ -52,13 +62,11 @@
     </Style>
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.AccentStrong}" />
-    </Style>
-    <Style Selector="Button.primary:focus /template/ ContentPresenter">
-        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Text}" />
-        <Setter Property="BorderThickness" Value="3" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.OnAccent}" />
     </Style>
     <Style Selector="Button.primary:pressed /template/ ContentPresenter">
-        <Setter Property="Opacity" Value="0.82" />
+        <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Accent}" />
+        <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.OnAccent}" />
     </Style>
     <Style Selector="Button:disabled">
         <Setter Property="Opacity" Value="0.42" />
@@ -67,11 +75,25 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Accent}" />
         <Setter Property="BorderThickness" Value="3" />
     </Style>
+    <!-- The dark inner border contrasts with teal; the light outer ring contrasts with the surface. -->
+    <Style Selector="Button.primary:focus /template/ ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.OnAccent}" />
+        <Setter Property="BorderThickness" Value="3" />
+        <Setter Property="BoxShadow" Value="{DynamicResource Cindara.Elevation.PrimaryFocus}" />
+    </Style>
     <Style Selector="TextBox">
         <Setter Property="MinHeight" Value="48" />
         <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Body}" />
+        <Setter Property="SelectionForegroundBrush" Value="{DynamicResource Cindara.Brush.OnAccent}" />
     </Style>
     <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Accent}" />
+        <Setter Property="BorderThickness" Value="3" />
+    </Style>
+    <Style Selector="MenuItem">
+        <Setter Property="FontSize" Value="{DynamicResource Cindara.Type.Body}" />
+    </Style>
+    <Style Selector="MenuItem:selected /template/ Border#PART_LayoutRoot">
         <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Accent}" />
         <Setter Property="BorderThickness" Value="3" />
     </Style>
@@ -90,6 +112,8 @@
     <Style Selector="Button.nav.selected /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
         <Setter Property="Foreground" Value="{DynamicResource Cindara.Brush.AccentStrong}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.AccentStrong}" />
+        <Setter Property="BorderThickness" Value="0,0,0,3" />
     </Style>
     <Style Selector="Button.nav:focus /template/ ContentPresenter">
         <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Accent}" />
@@ -155,5 +179,34 @@
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
         <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Small}" />
         <Setter Property="Opacity" Value="0.65" />
+    </Style>
+
+    <Style Selector="Window.high-contrast Button">
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Border}" />
+    </Style>
+    <Style Selector="Window.high-contrast Button.card">
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Window.high-contrast Button:disabled">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Window.high-contrast Button.card.loading">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Window.reduced-motion Button">
+        <Setter Property="Transitions" Value="{x:Null}" />
+        <Setter Property="RenderTransform" Value="none" />
+    </Style>
+    <Style Selector="Window.reduced-motion Button:pressed">
+        <Setter Property="RenderTransform" Value="none" />
+    </Style>
+    <Style Selector="Window.reduced-motion ToolTip">
+        <Setter Property="Transitions" Value="{x:Null}" />
+    </Style>
+    <Style Selector="Window.reduced-motion ProgressBar /template/ Panel#DeterminateRoot">
+        <Setter Property="Transitions" Value="{x:Null}" />
+    </Style>
+    <Style Selector="Window.reduced-motion ProgressBar /template/ Panel#IndeterminateRoot">
+        <Setter Property="Transitions" Value="{x:Null}" />
     </Style>
 </Styles>

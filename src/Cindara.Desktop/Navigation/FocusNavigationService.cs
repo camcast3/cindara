@@ -41,7 +41,7 @@ public sealed class FocusNavigationService(TopLevel topLevel)
         if (!_waitingForLayout && _scope is not null && topLevel.FocusManager?.GetFocusedElement() is Control focused
             && Candidates().Contains(focused))
         {
-            _memory[_key!] = new FocusMemory(focused, BoundsInScope(focused));
+            _memory[_key!] = new FocusMemory(focused, BoundsInWindow(focused));
         }
     }
 
@@ -86,9 +86,9 @@ public sealed class FocusNavigationService(TopLevel topLevel)
         }
         else
         {
-            var origin = BoundsInScope(current);
+            var origin = BoundsInWindow(current);
             target = candidates.Where(candidate => candidate != current)
-                .Select(candidate => (Control: candidate, Bounds: BoundsInScope(candidate)))
+                .Select(candidate => (Control: candidate, Bounds: BoundsInWindow(candidate)))
                 .Where(candidate => IsInDirection(origin, candidate.Bounds, direction))
                 .OrderBy(candidate => OrthogonalGap(origin, candidate.Bounds, direction) > 0)
                 .ThenBy(candidate => PrimaryGap(origin, candidate.Bounds, direction))
@@ -134,7 +134,7 @@ public sealed class FocusNavigationService(TopLevel topLevel)
 
             target = candidates.Contains(memory.Control)
                 ? memory.Control
-                : candidates.OrderBy(candidate => Distance(memory.Bounds, BoundsInScope(candidate))).FirstOrDefault();
+                : candidates.OrderBy(candidate => Distance(memory.Bounds, BoundsInWindow(candidate))).FirstOrDefault();
         }
 
         if (target is null && _initial is not null && AwaitingLayout(_initial))
@@ -165,10 +165,11 @@ public sealed class FocusNavigationService(TopLevel topLevel)
                 .Any(ancestor => ancestor is Button or TextBox))
         .ToArray();
 
-    private Rect BoundsInScope(Control control)
+    private Rect BoundsInWindow(Control control)
     {
-        var start = control.TranslatePoint(default, _scope!) ?? default;
-        var end = control.TranslatePoint(new Point(control.Bounds.Width, control.Bounds.Height), _scope!) ?? start;
+        // Scope coordinates can be mirrored; directions must follow the on-screen position.
+        var start = control.TranslatePoint(default, topLevel) ?? default;
+        var end = control.TranslatePoint(new Point(control.Bounds.Width, control.Bounds.Height), topLevel) ?? start;
         return new Rect(start, end);
     }
 

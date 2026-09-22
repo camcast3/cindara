@@ -23,6 +23,13 @@ toggles fullscreen; **Window / exit** provides explicit desktop and exit actions
 Accept on a text field opens an on-screen keyboard. Saved accounts use the same
 focus-trapped choice dialog as the rest of the shell.
 
+Accessibility preferences are available before sign-in through **Window / exit**
+and from Settings: 100/125/150% text, high contrast, and reduced motion, with
+local persistence. `CINDARA_CULTURE` selects a startup locale; `qps-ploc` and
+`qps-plocm` exercise expanded and right-to-left pseudo-localization.
+See [accessibility and localization](docs/accessibility.md) for defaults,
+limitations, validation, and the keyboard/screen-reader release checklist.
+
 SDL3 handles controller hotplug, directional repeat, and active-device prompts
 without resetting focus. Input received while the window is inactive is
 discarded; held controls must return to neutral after reactivation. Xbox uses

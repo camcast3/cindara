@@ -3,10 +3,11 @@
         xmlns:automation="using:Avalonia.Automation"
         xmlns:vm="using:Cindara.Desktop.ViewModels"
         xmlns:views="using:Cindara.Desktop.Views"
+        xmlns:loc="using:Cindara.Desktop.Localization"
         x:Class="Cindara.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Width="1280" Height="720" MinWidth="720" MinHeight="480"
-        WindowState="FullScreen" Title="Cindara">
+        WindowState="FullScreen" Title="{loc:Tr Brand.Name}">
     <Grid>
         <Grid x:Name="MainSurface">
             <Viewbox x:Name="ShellViewport" Stretch="Uniform">
@@ -15,47 +16,49 @@
                         <Grid>
                             <ScrollViewer x:Name="AuthenticationSurface"
                                           HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                                <Border Width="720" Padding="{DynamicResource Cindara.Space.Safe1080}"
+                                <Border MinWidth="720" MaxWidth="1100" Padding="{DynamicResource Cindara.Space.Safe1080}"
                                         HorizontalAlignment="Center" VerticalAlignment="Center"
                                         Background="{DynamicResource Cindara.Brush.Surface}"
                                         CornerRadius="{DynamicResource Cindara.Radius.Large}">
                                     <StackPanel Spacing="18">
-                                        <TextBlock Classes="display" Text="Cindara" />
-                                        <TextBlock Classes="secondary" Text="Your media. Native everywhere." />
+                                        <TextBlock Classes="display" Text="{loc:Tr Brand.Name}" />
+                                        <TextBlock Classes="secondary" Text="{loc:Tr Auth.Tagline}" />
                                         <StackPanel x:Name="ServerEntry" IsVisible="{Binding IsServerEntryVisible}" Spacing="16">
-                                            <TextBlock Classes="label" Text="Jellyfin server" />
+                                            <TextBlock Classes="label" Text="{loc:Tr Auth.Server}" />
                                             <TextBox x:Name="ServerAddressTextBox"
-                                                     AutomationProperties.Name="Jellyfin server address"
-                                                     PlaceholderText="https://jellyfin.example.com"
+                                                     AutomationProperties.Name="{loc:Tr Auth.ServerAddress}"
+                                                     FlowDirection="LeftToRight"
+                                                     PlaceholderText="{loc:Tr Auth.ServerExample}"
                                                      Text="{Binding ServerAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                            <Button Classes="primary" Command="{Binding ConnectCommand}" Content="Connect" />
+                                            <Button Classes="primary" Command="{Binding ConnectCommand}" Content="{loc:Tr Auth.Connect}" />
                                             <Button x:Name="BackToSavedAccountsButton"
                                                     IsVisible="{Binding !!SavedSessions.Count}"
-                                                    Command="{Binding BackToSessionsCommand}" Content="Saved accounts" />
+                                                    Command="{Binding BackToSessionsCommand}" Content="{loc:Tr Auth.SavedAccounts}" />
                                         </StackPanel>
                                         <StackPanel x:Name="SignIn" IsVisible="{Binding IsSignInVisible}" Spacing="16">
-                                            <TextBlock Classes="label" Text="Jellyfin sign in" />
-                                            <TextBox x:Name="UsernameTextBox" AutomationProperties.Name="Jellyfin username"
-                                                     PlaceholderText="Username"
+                                            <TextBlock Classes="label" Text="{loc:Tr Auth.SignInHeading}" />
+                                            <TextBox x:Name="UsernameTextBox" AutomationProperties.Name="{loc:Tr Auth.UsernameName}"
+                                                     PlaceholderText="{loc:Tr Auth.Username}"
                                                      Text="{Binding Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                            <TextBox AutomationProperties.Name="Jellyfin password" PasswordChar="*"
-                                                     PlaceholderText="Password"
+                                            <TextBox AutomationProperties.Name="{loc:Tr Auth.PasswordName}" PasswordChar="*"
+                                                     PlaceholderText="{loc:Tr Auth.Password}"
                                                      Text="{Binding Password, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                            <Button Classes="primary" Command="{Binding SignInCommand}" Content="Sign in" />
-                                            <Button Command="{Binding BackToSessionsCommand}" Content="Back" />
+                                            <Button Classes="primary" Command="{Binding SignInCommand}" Content="{loc:Tr Auth.SignIn}" />
+                                            <Button Command="{Binding BackToSessionsCommand}" Content="{loc:Tr Action.Back}" />
                                         </StackPanel>
                                         <StackPanel x:Name="SavedAccounts" IsVisible="{Binding AreSavedSessionsVisible}" Spacing="16">
-                                            <TextBlock Classes="label" Text="Saved accounts" />
+                                            <TextBlock Classes="label" Text="{loc:Tr Auth.SavedAccounts}" />
                                             <Button x:Name="SavedAccountButton" Click="OnChooseAccount"
                                                     IsEnabled="{Binding !IsBusy}"
-                                                    AutomationProperties.Name="Choose saved Jellyfin account"
-                                                    Content="{Binding SelectedSavedSession.DisplayName}" />
-                                            <Button Classes="primary" Command="{Binding UseSavedSessionCommand}" Content="Continue" />
-                                            <Button Command="{Binding RemoveSavedSessionCommand}" Content="Remove saved account" />
-                                            <Button Command="{Binding AddServerCommand}" Content="Add another server" />
+                                                    AutomationProperties.Name="{loc:Tr Auth.ChooseSaved}"
+                                                    AutomationProperties.HelpText="{Binding SelectedSavedSessionDisplayName}"
+                                                    Content="{Binding SelectedSavedSessionDisplayName}" />
+                                            <Button Classes="primary" Command="{Binding UseSavedSessionCommand}" Content="{loc:Tr Action.Continue}" />
+                                            <Button Command="{Binding RemoveSavedSessionCommand}" Content="{loc:Tr Auth.RemoveSaved}" />
+                                            <Button Command="{Binding AddServerCommand}" Content="{loc:Tr Auth.AddServer}" />
                                         </StackPanel>
                                         <TextBlock Classes="caption" TextWrapping="Wrap"
-                                                   Text="Passwords are never saved. Tokens use your operating system's protected storage." />
+                                                   Text="{loc:Tr Auth.StorageNotice}" />
                                     </StackPanel>
                                 </Border>
                             </ScrollViewer>
@@ -63,13 +66,19 @@
                         </Grid>
                         <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="24">
                             <StackPanel Spacing="8">
-                                <ProgressBar Height="3" IsIndeterminate="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+                                <ProgressBar x:Name="BusyIndicator" Height="3" IsVisible="{Binding IsBusy}"
+                                             AutomationProperties.Name="{loc:Tr State.Busy}" />
+                                <TextBlock Classes="caption" Text="{loc:Tr State.Busy}" IsVisible="{Binding IsBusy}"
+                                           automation:AutomationProperties.LiveSetting="Polite" />
+                                <TextBlock x:Name="PresentationStatus" Classes="caption" IsVisible="False"
+                                           automation:AutomationProperties.LiveSetting="Assertive" TextWrapping="Wrap" />
                                 <TextBlock Classes="secondary" automation:AutomationProperties.LiveSetting="Polite"
                                            Text="{Binding StatusMessage}" TextWrapping="Wrap" />
                                 <TextBlock x:Name="ControllerPrompts" Classes="secondary" TextWrapping="Wrap"
                                            Text="{Binding ControllerStatus}" />
                             </StackPanel>
-                            <Button Grid.Column="1" x:Name="WindowOptionsButton" Content="Window / exit"
+                            <Button Grid.Column="1" x:Name="WindowOptionsButton" Content="{loc:Tr Window.Options}"
+                                    MaxWidth="450"
                                     VerticalAlignment="Center" Click="OnWindowOptions" />
                         </Grid>
                     </Grid>
@@ -79,20 +88,25 @@
                 <views:DesignGalleryView x:Name="GalleryView" DataContext="{Binding DesignGallery}" />
                 <Button x:Name="GalleryBackButton" Margin="0,24,24,0"
                         HorizontalAlignment="Right" VerticalAlignment="Top"
-                        Command="{Binding HideDesignGalleryCommand}" Content="Back to Home" />
+                        MaxWidth="450" Command="{Binding HideDesignGalleryCommand}" Content="{loc:Tr Nav.BackHome}" />
                 <Border VerticalAlignment="Bottom" Background="{DynamicResource Cindara.Brush.Background}"
                         Padding="24,8" IsHitTestVisible="False">
-                    <TextBlock Classes="caption" Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
+                    <StackPanel>
+                        <TextBlock Classes="caption" Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />
+                        <TextBlock Classes="caption" Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
+                    </StackPanel>
                 </Border>
             </Grid>
         </Grid>
-        <Border x:Name="ModalOverlay" IsVisible="False" Background="#B3080B12">
+        <Border x:Name="ModalOverlay" IsVisible="False" Background="#B3080B12"
+                AutomationProperties.ControlTypeOverride="Group" AutomationProperties.AccessibilityView="Control">
             <Viewbox Stretch="Uniform">
                 <Grid Width="1920" Height="1080">
                     <Border Classes="dialog" MaxWidth="1200" Margin="{DynamicResource Cindara.Space.Safe1080}"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <StackPanel Spacing="24">
-                            <TextBlock x:Name="ModalTitle" Classes="title" />
+                            <TextBlock x:Name="ModalTitle" Classes="title"
+                                       automation:AutomationProperties.LiveSetting="Assertive" />
                             <ScrollViewer MaxHeight="700" HorizontalScrollBarVisibility="Disabled">
                                 <StackPanel x:Name="ModalActions" Spacing="16" />
                             </ScrollViewer>

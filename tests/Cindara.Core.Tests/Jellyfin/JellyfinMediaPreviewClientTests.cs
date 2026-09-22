@@ -81,36 +81,47 @@ public sealed class JellyfinMediaPreviewClientTests
 
         var continuing = Assert.Single(home.ContinueWatching);
         Assert.Equal("Pilot", continuing.Name);
-        Assert.Equal("Northstar · S1 E2", continuing.Subtitle);
+        var metadata = Assert.IsType<MediaPreviewMetadata>(continuing.Metadata);
+        Assert.Equal(new MediaPreviewMetadata("Pilot", "Northstar", 1, 2, null, null, null, false), metadata);
+        Assert.Empty(continuing.Subtitle);
+        Assert.Empty(continuing.Details);
         Assert.Equal(42.5, continuing.PlaybackProgress);
         Assert.Equal([1, 2, 3], continuing.Artwork);
         Assert.Equal("Northstar", home.Featured?.Name);
-        Assert.Equal("S1 E2 · Pilot", home.Featured?.Subtitle);
+        Assert.Equal(metadata with { PreferSeriesTitle = true }, home.Featured?.Metadata);
         Assert.Equal([4, 5, 6], home.Featured?.Backdrop);
         Assert.Collection(
             home.RecentlyAddedLibraries,
             rail =>
             {
-                Assert.Equal("Recently Added in TV Shows", rail.Title);
+                Assert.Equal("TV Shows", rail.LibraryName);
+                Assert.Equal("TV Shows", rail.Title);
                 var episode = Assert.Single(rail.Items);
                 Assert.Equal("Second Nature", episode.Name);
-                Assert.Equal("S1 E6 · Return Migration", episode.Subtitle);
+                Assert.Equal(new MediaPreviewMetadata("Return Migration", "Second Nature", 1, 6,
+                    null, null, null, true), episode.Metadata);
             },
             rail =>
             {
-                Assert.Equal("Recently Added in Movies", rail.Title);
-                Assert.Equal("Moon Garden", Assert.Single(rail.Items).Name);
+                Assert.Equal("Movies", rail.LibraryName);
+                var movie = Assert.Single(rail.Items);
+                Assert.Equal("Moon Garden", movie.Name);
+                Assert.Equal(new MediaPreviewMetadata("Moon Garden", null, null, null,
+                    2026, TimeSpan.FromMinutes(65).Ticks, "PG-13", true), movie.Metadata);
+                Assert.Empty(movie.Subtitle);
+                Assert.Empty(movie.Details);
             },
             rail =>
             {
-                Assert.Equal("Recently Added in Anime", rail.Title);
+                Assert.Equal("Anime", rail.LibraryName);
                 Assert.Collection(
                     rail.Items,
                     series => Assert.Equal("Skyward", series.Name),
                     season =>
                     {
                         Assert.Equal("That Time I Got Reincarnated as a Slime", season.Name);
-                        Assert.Equal("Season 3", season.Subtitle);
+                        Assert.Equal("Season 3", season.Metadata?.Name);
+                        Assert.True(season.Metadata?.PreferSeriesTitle);
                     });
             });
         Assert.All(handler.Requests, request =>
@@ -203,7 +214,7 @@ public sealed class JellyfinMediaPreviewClientTests
                     "anime" => Json(
                         """[{"Id":"anime-1","Name":"Skyward","Type":"Series","ProductionYear":2025,"ImageTags":{}},{"Id":"season-3","Name":"Season 3","Type":"Season","SeriesName":"That Time I Got Reincarnated as a Slime","IndexNumber":3,"ImageTags":{}}]"""),
                     "movies" => Json(
-                        """[{"Id":"movie-1","Name":"Moon Garden","Type":"Movie","ProductionYear":2026,"ImageTags":{}}]"""),
+                        """[{"Id":"movie-1","Name":"Moon Garden","Type":"Movie","ProductionYear":2026,"RunTimeTicks":39000000000,"OfficialRating":"PG-13","ImageTags":{}}]"""),
                     _ => throw new InvalidOperationException($"Unexpected parent: {parentId}"),
                 };
             }

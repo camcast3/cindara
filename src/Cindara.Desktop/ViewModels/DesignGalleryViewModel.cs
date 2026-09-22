@@ -1,5 +1,6 @@
 using Avalonia.Media;
 using Cindara.Core.Jellyfin;
+using Cindara.Desktop.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Cindara.Desktop.ViewModels;
@@ -60,7 +61,10 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
                 home.Featured is null ? null : CreateCard(home.Featured),
                 home.ContinueWatching.Select(CreateCard).ToArray(),
                 home.RecentlyAddedLibraries.Select(rail => new MediaPreviewRailViewModel(
-                    rail.Title, rail.Items.Select(CreateCard).ToArray())).ToArray());
+                    rail.LibraryName is { } libraryName
+                        ? Loc.Format("Format.RecentlyAdded", libraryName)
+                        : rail.Title,
+                    rail.Items.Select(CreateCard).ToArray())).ToArray());
             completed = true;
             return gallery;
         }
@@ -131,11 +135,25 @@ public sealed class MediaPreviewCardViewModel : IDisposable
     internal MediaPreviewCardViewModel(MediaPreviewItem item, Func<byte[], PreviewImage> decode)
     {
         Name = item.Name;
-        Subtitle = item.Subtitle;
         HeroName = item.HeroName ?? item.Name;
-        HeroSubtitle = item.HeroSubtitle ?? item.Subtitle;
         Overview = item.Overview ?? string.Empty;
-        Details = item.Details;
+        if (item.Metadata is { } metadata)
+        {
+            Subtitle = LocaleFormat.Subtitle(
+                metadata.Name, item.MediaType, metadata.SeriesName, metadata.SeasonNumber,
+                metadata.EpisodeNumber, metadata.ProductionYear, metadata.PreferSeriesTitle);
+            HeroSubtitle = LocaleFormat.Subtitle(
+                metadata.Name, item.MediaType, metadata.SeriesName, metadata.SeasonNumber,
+                metadata.EpisodeNumber, metadata.ProductionYear, preferSeriesTitle: true);
+            Details = LocaleFormat.Details(metadata.ProductionYear, metadata.RunTimeTicks, metadata.OfficialRating);
+        }
+        else
+        {
+            Subtitle = item.Subtitle;
+            HeroSubtitle = item.HeroSubtitle ?? item.Subtitle;
+            Details = item.Details;
+        }
+
         PlaybackProgress = item.PlaybackProgress ?? 0;
         var completed = false;
         try

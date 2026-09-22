@@ -1,21 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Cindara.Desktop.ViewModels"
+             xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.ShellView"
              x:DataType="vm:MainViewModel">
     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="40">
-        <Grid Grid.Column="1">
+        <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+        <Grid>
             <StackPanel x:Name="HomePage" Spacing="24">
                 <Button x:Name="HomeHeader" Classes="nav header-tab selected"
-                        Content="Home" HorizontalAlignment="Left" Click="OnHomeClicked" />
+                        Content="{loc:Tr Nav.Home}" HorizontalAlignment="Left" Click="OnHomeClicked" />
                 <Border Classes="hero">
                     <StackPanel Spacing="24">
-                        <TextBlock Classes="display" Text="Your media. Your space." />
+                        <TextBlock Classes="display" Text="{loc:Tr Home.Tagline}" />
                         <TextBlock Classes="secondary" Text="{Binding AuthenticatedAccount}" />
                         <TextBlock Classes="secondary" TextWrapping="Wrap"
-                                   Text="Your account is ready. Home rails arrive with library browsing; the approved design preview is available now." />
+                                   Text="{loc:Tr Home.Ready}" />
                         <Button x:Name="PreviewButton" Classes="primary"
-                                Command="{Binding ShowDesignGalleryCommand}" Content="Preview my media" />
+                                Command="{Binding ShowDesignGalleryCommand}" Content="{loc:Tr Home.Preview}" />
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -24,80 +26,85 @@
                 <Border Classes="hero">
                     <StackPanel Spacing="24">
                         <TextBlock x:Name="DestinationMessage" Classes="secondary" TextWrapping="Wrap" />
-                        <Button x:Name="ReturnHomeButton" Content="Return to Home" Click="OnHomeClicked" />
+                        <Button x:Name="ReturnHomeButton" Content="{loc:Tr Nav.ReturnHome}" Click="OnHomeClicked" />
                     </StackPanel>
                 </Border>
             </StackPanel>
             <Grid x:Name="SettingsPage" IsVisible="False" RowDefinitions="Auto,*" RowSpacing="24">
-                <TextBlock Classes="display" Text="Settings" />
-                <Grid Grid.Row="1" ColumnDefinitions="240,*" ColumnSpacing="40">
+                <TextBlock Classes="display" Text="{loc:Tr Nav.Settings}" />
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,*" ColumnSpacing="40">
                     <StackPanel x:Name="SettingsCategories" Spacing="16">
-                        <Button x:Name="AccountCategory" Classes="nav selected" Content="Account"
+                        <Button x:Name="AccountCategory" Classes="nav selected" Content="{loc:Tr Settings.Account}"
+                                MinWidth="240" MaxWidth="450"
                                 HorizontalAlignment="Stretch" Click="OnCategoryClicked" Tag="Account" />
-                        <Button x:Name="DisplayCategory" Classes="nav" Content="Display"
+                        <Button x:Name="DisplayCategory" Classes="nav" Content="{loc:Tr Settings.Display}"
+                                MinWidth="240" MaxWidth="450"
                                 HorizontalAlignment="Stretch" Click="OnCategoryClicked" Tag="Display" />
-                        <Button x:Name="ControlsCategory" Classes="nav" Content="Controls"
+                        <Button x:Name="ControlsCategory" Classes="nav" Content="{loc:Tr Settings.Controls}"
+                                MinWidth="240" MaxWidth="450"
                                 HorizontalAlignment="Stretch" Click="OnCategoryClicked" Tag="Controls" />
                     </StackPanel>
                     <StackPanel x:Name="AccountSettings" Grid.Column="1" Spacing="24">
                         <TextBlock Classes="heading" Text="{Binding AuthenticatedAccount}" />
-                        <TextBlock Classes="secondary" Text="Your secure Jellyfin session is ready." />
+                        <TextBlock Classes="secondary" Text="{loc:Tr Settings.SessionReady}" />
                         <Button x:Name="SwitchAccountButton" Command="{Binding BackToSessionsCommand}"
-                                Content="Switch account" />
-                        <Button Command="{Binding LogoutCommand}" Content="Sign out" />
+                                Content="{loc:Tr Settings.SwitchAccount}" />
+                        <Button Command="{Binding LogoutCommand}" Content="{loc:Tr Settings.SignOut}" />
                     </StackPanel>
                     <StackPanel x:Name="DisplaySettings" Grid.Column="1" IsVisible="False" Spacing="24">
-                        <TextBlock Classes="heading" Text="Fullscreen and desktop" />
+                        <TextBlock Classes="heading" Text="{loc:Tr Settings.DisplayHeading}" />
                         <TextBlock Classes="secondary" TextWrapping="Wrap"
-                                   Text="Cindara starts fullscreen on the current display. F11 or the controller menu button toggles a desktop window. The shell follows window size and display scaling." />
-                        <Button Content="Window and exit options" Click="OnWindowOptionsClicked" />
+                                   Text="{loc:Tr Settings.DisplayHelp}" />
+                        <Button Content="{loc:Tr Settings.WindowOptions}" Click="OnWindowOptionsClicked" />
+                        <Button Content="{loc:Tr Accessibility.Title}" Click="OnAccessibilityClicked" />
                     </StackPanel>
                     <StackPanel x:Name="ControlsSettings" Grid.Column="1" IsVisible="False" Spacing="24">
-                        <TextBlock Classes="heading" Text="Controller, keyboard, and mouse" />
+                        <TextBlock Classes="heading" Text="{loc:Tr Settings.ControlsHeading}" />
                         <TextBlock Classes="secondary" TextWrapping="Wrap"
-                                   Text="D-pad / left stick or arrow keys move focus. Accept or Enter selects. Back or Escape returns. Tab cycles actions. Controller Accept on a text field opens the on-screen keyboard. Mouse clicks and scrolling remain available." />
-                        <Button Content="Window and exit options" Click="OnWindowOptionsClicked" />
+                                   Text="{loc:Tr Settings.ControlsHelp}" />
+                        <Button Content="{loc:Tr Settings.WindowOptions}" Click="OnWindowOptionsClicked" />
                     </StackPanel>
                 </Grid>
             </Grid>
         </Grid>
+        </ScrollViewer>
         <Border x:Name="NavigationRail" Width="88" HorizontalAlignment="Left"
                 VerticalAlignment="Top" Background="{DynamicResource Cindara.Brush.Surface}"
                 CornerRadius="{DynamicResource Cindara.Radius.Medium}">
             <StackPanel x:Name="NavigationButtons" Spacing="16" Margin="8">
                 <Button x:Name="HomeNavigation" Classes="nav selected" Tag="Home" Click="OnDestinationClicked"
-                        AutomationProperties.Name="Home" ToolTip.Tip="Home" HorizontalAlignment="Stretch">
+                        AutomationProperties.Name="{loc:Tr Nav.Home}" ToolTip.Tip="{loc:Tr Nav.Home}" HorizontalAlignment="Stretch">
                     <StackPanel Orientation="Horizontal" Spacing="16">
                         <PathIcon Width="28" Height="28" Data="M 2,12 L 12,3 L 22,12 M 5,10 L 5,22 L 10,22 L 10,15 L 14,15 L 14,22 L 19,22 L 19,10" />
-                        <TextBlock Text="Home" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Tr Nav.Home}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
                     </StackPanel>
                 </Button>
                 <Button x:Name="LibrariesNavigation" Classes="nav" Tag="Libraries" Click="OnDestinationClicked"
-                        AutomationProperties.Name="Libraries" ToolTip.Tip="Libraries" HorizontalAlignment="Stretch">
+                        AutomationProperties.Name="{loc:Tr Nav.Libraries}" ToolTip.Tip="{loc:Tr Nav.Libraries}" HorizontalAlignment="Stretch">
                     <StackPanel Orientation="Horizontal" Spacing="16">
                         <PathIcon Width="28" Height="28" Data="M 2,3 L 7,3 L 7,22 L 2,22 Z M 10,3 L 15,3 L 15,22 L 10,22 Z M 18,3 L 22,3 L 22,22 L 18,22 Z" />
-                        <TextBlock Text="Libraries" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Tr Nav.Libraries}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
                     </StackPanel>
                 </Button>
                 <Button x:Name="SearchNavigation" Classes="nav" Tag="Search" Click="OnDestinationClicked"
-                        AutomationProperties.Name="Search" ToolTip.Tip="Search" HorizontalAlignment="Stretch">
+                        AutomationProperties.Name="{loc:Tr Nav.Search}" ToolTip.Tip="{loc:Tr Nav.Search}" HorizontalAlignment="Stretch">
                     <StackPanel Orientation="Horizontal" Spacing="16">
                         <PathIcon Width="28" Height="28" Data="M 10,2 A 8,8 0 1 0 10,18 A 8,8 0 1 0 10,2 M 16,16 L 23,23 L 21,24 L 14,18 Z" />
-                        <TextBlock Text="Search" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Tr Nav.Search}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
                     </StackPanel>
                 </Button>
                 <Button x:Name="DownloadsNavigation" Classes="nav" Tag="Downloads" Click="OnDestinationClicked"
-                        AutomationProperties.Name="Downloads" ToolTip.Tip="Downloads" HorizontalAlignment="Stretch">
+                        AutomationProperties.Name="{loc:Tr Nav.Downloads}" ToolTip.Tip="{loc:Tr Nav.Downloads}" HorizontalAlignment="Stretch">
                     <StackPanel Orientation="Horizontal" Spacing="16">
                         <PathIcon Width="28" Height="28" Data="M 10,2 L 14,2 L 14,12 L 20,12 L 12,20 L 4,12 L 10,12 Z M 2,22 L 22,22 L 22,24 L 2,24 Z" />
-                        <TextBlock Text="Downloads" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Tr Nav.Downloads}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
                     </StackPanel>
                 </Button>
                 <Button x:Name="SettingsNavigation" Classes="nav" Tag="Settings" Click="OnDestinationClicked"
-                        AutomationProperties.Name="Settings" ToolTip.Tip="Settings" HorizontalAlignment="Stretch">
+                        AutomationProperties.Name="{loc:Tr Nav.Settings}" ToolTip.Tip="{loc:Tr Nav.Settings}" HorizontalAlignment="Stretch">
                     <StackPanel Orientation="Horizontal" Spacing="16">
                         <PathIcon Width="28" Height="28" Data="M 2,5 L 22,5 L 22,7 L 2,7 Z M 2,17 L 22,17 L 22,19 L 2,19 Z M 6,2 L 10,2 L 10,10 L 6,10 Z M 15,14 L 19,14 L 19,22 L 15,22 Z" />
-                        <TextBlock Text="Settings" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Tr Nav.Settings}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
                     </StackPanel>
                 </Button>
             </StackPanel>

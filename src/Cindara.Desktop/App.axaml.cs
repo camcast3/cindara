@@ -4,8 +4,10 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Cindara.Core.Authentication;
 using Cindara.Core.Jellyfin;
+using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.Authentication;
 using Cindara.Desktop.Input;
+using Cindara.Desktop.Localization;
 using Cindara.Desktop.ViewModels;
 using Cindara.Desktop.Views;
 
@@ -15,6 +17,9 @@ public partial class App : Application
 {
     public override void Initialize()
     {
+        var buildLocale = Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == "CindaraPseudoLocale")?.Value;
+        Loc.Configure(Environment.GetEnvironmentVariable("CINDARA_CULTURE") ?? buildLocale);
         AvaloniaXamlLoader.Load(this);
     }
 
@@ -55,7 +60,8 @@ public partial class App : Application
                 httpClient.Dispose();
             };
 
-            desktop.MainWindow = new MainWindow(new SdlGamepadInputSource())
+            desktop.MainWindow = new MainWindow(new SdlGamepadInputSource(),
+                new PresentationSettingsStore(Path.Combine(applicationData, "accessibility.json")))
             {
                 DataContext = viewModel,
             };

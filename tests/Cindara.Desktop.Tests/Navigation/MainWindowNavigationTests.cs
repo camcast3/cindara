@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
 using Avalonia.Controls;
@@ -11,15 +12,240 @@ using Avalonia.VisualTree;
 using Cindara.Core.Authentication;
 using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
+using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.Input;
+using Cindara.Desktop.Localization;
+using Cindara.Desktop.Tests.Localization;
 using Cindara.Desktop.ViewModels;
 using Cindara.Desktop.Views;
 
 namespace Cindara.Desktop.Tests.Navigation;
 
+[Collection(LocalizationTestGroup.Name)]
 public sealed class MainWindowNavigationTests
 {
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads", "Settings"];
+
+    [Fact]
+    public Task EnlargedGalleryDescriptionCanBePagedWithoutClippingText() => TestAppBuilder.Run(() =>
+    {
+        var item = new MediaPreviewItem("id", "A long media title", "Subtitle", "Movie", null, null,
+            string.Concat(Enumerable.Repeat("A long description with readable words. ", 100)),
+            "Details", null);
+        using var model = DesignGalleryViewModel.Create(new MediaPreviewHome(item, [], []));
+        var view = new DesignGalleryView { DataContext = model };
+        var window = new Window { Content = view, Width = 1280, Height = 720 };
+        try
+        {
+            var preferences = new PresentationPreferences(1.5, HighContrast: true, ReducedMotion: true);
+            PresentationTheme.Apply(window, preferences);
+            view.ApplyPreferences(preferences);
+            window.Show();
+            window.UpdateLayout();
+            var description = view.FindControl<ScrollViewer>("HeroTextScroll")!;
+            Assert.True(description.Viewport.Height > 0);
+            Assert.True(description.Extent.Height > description.Viewport.Height);
+            view.ScrollDescription(true);
+            window.UpdateLayout();
+            Assert.True(description.Offset.Y > 0);
+            view.ScrollDescription(false);
+            Assert.Equal(0, description.Offset.Y);
+            Assert.False(view.FindControl<Border>("HeroArtwork")!.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    });
+
+    [Fact]
+    public Task AccessibilityPreferencesAreKeyboardOperableBeforeSignInAndPersist() => TestAppBuilder.Run(() =>
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"cindara-accessibility-{Guid.NewGuid():N}");
+        var store = new PresentationSettingsStore(Path.Combine(directory, "accessibility.json"));
+        try
+        {
+            using var fixture = new ShellFixture(savedAccounts: false, store);
+            var window = fixture.Window;
+            window.FindControl<Button>("WindowOptionsButton")!.Focus();
+            PressEnter();
+            PressTab();
+            PressTab();
+            PressTab();
+            Assert.Equal(Loc.Get("Accessibility.Title"), Assert.IsType<Button>(Focused(window)).Content);
+            PressEnter();
+            Assert.Equal("Accessibility.TextScale", AutomationProperties.GetAutomationId(Focused(window)));
+            PressEnter();
+            Assert.Equal(1.25, window.Preferences.TextScale);
+            Assert.Equal(1.25, store.Load().TextScale);
+            PressTab();
+            PressEnter();
+            Assert.True(window.Preferences.HighContrast);
+            Assert.True(store.Load().HighContrast);
+            PressTab();
+            PressEnter();
+            Assert.True(window.Preferences.ReducedMotion);
+            fixture.Model.IsBusy = true;
+            fixture.Flush();
+            Assert.False(window.FindControl<ProgressBar>("BusyIndicator")!.IsIndeterminate);
+            fixture.Model.IsBusy = false;
+            fixture.Flush();
+            var action = Focused(window);
+            Assert.Contains(Loc.Get("State.On"), new ButtonAutomationPeer((Button)action).GetName(), StringComparison.Ordinal);
+            Assert.True(action.IsFocused);
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+            fixture.Flush();
+            Assert.Equal("WindowOptionsButton", Focused(window).Name);
+
+            void PressEnter()
+            {
+                window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                window.KeyRelease(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                fixture.Flush();
+            }
+
+            void PressTab()
+            {
+                window.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null);
+                fixture.Flush();
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    });
+
+    [Fact]
+    public Task PresentationSaveFailureKeepsPriorSettingsAndAnnouncesFailure() => TestAppBuilder.Run(() =>
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"cindara-presentation-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "accessibility.json");
+        var store = new PresentationSettingsStore(path);
+        store.Save(new PresentationPreferences());
+        try
+        {
+            using var fixture = new ShellFixture(false, store);
+            File.Delete(path);
+            Directory.Delete(directory);
+            File.WriteAllText(directory, "block creation of the settings directory");
+            fixture.Click("WindowOptionsButton");
+            fixture.ClickContent(Loc.Get("Accessibility.Title"));
+            fixture.ClickContent(Loc.Format("Accessibility.TextScale", 1d));
+            Assert.Equal(1, fixture.Window.Preferences.TextScale);
+            Assert.Equal(Loc.Get("Accessibility.SaveError"), fixture.Window.FindControl<TextBlock>("PresentationStatus")!.Text);
+            Assert.True(fixture.Window.FindControl<Border>("ModalOverlay")!.IsVisible);
+            Assert.Equal("Accessibility.TextScale", AutomationProperties.GetAutomationId(Focused(fixture.Window)));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            else
+            {
+                File.Delete(directory);
+            }
+        }
+    });
+
+    [Fact]
+    public Task CorruptPresentationSettingsSurfaceAnErrorWithoutOverwritingFile() => TestAppBuilder.Run(() =>
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "{broken");
+            using var fixture = new ShellFixture(false, new PresentationSettingsStore(path));
+            Assert.True(fixture.Window.FindControl<TextBlock>("PresentationStatus")!.IsVisible);
+            fixture.Click("WindowOptionsButton");
+            fixture.ClickContent(Loc.Get("Accessibility.Title"));
+            var preferences = fixture.Window.FindControl<StackPanel>("ModalActions")!.Children.OfType<Button>()
+                .Where(button => AutomationProperties.GetAutomationId(button)?.StartsWith("Accessibility.", StringComparison.Ordinal) is true);
+            Assert.All(preferences, button => Assert.False(button.IsEnabled));
+            Assert.Equal("{broken", File.ReadAllText(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    });
+
+    [Fact]
+    public Task InteractiveControlsExposeNativeNamesRolesAndPasswordState() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture(false);
+        AssertAccessible(fixture.Window);
+        var server = fixture.Window.FindControl<TextBox>("ServerAddressTextBox")!;
+        Assert.Equal(Loc.Get("Auth.ServerAddress"), new TextBoxAutomationPeer(server).GetName());
+        fixture.Model.ServerAddress = "https://jellyfin.example";
+        fixture.Model.ConnectCommand.Execute(null);
+        fixture.Flush();
+        AssertAccessible(fixture.Window);
+        var password = fixture.Window.GetVisualDescendants().OfType<TextBox>()
+            .Single(field => field.IsEffectivelyVisible && field.PasswordChar != default);
+        Assert.Equal('*', password.PasswordChar);
+        Assert.Equal(AutomationControlType.Edit, new TextBoxAutomationPeer(password).GetAutomationControlType());
+        Assert.Equal(Loc.Get("Auth.PasswordName"), new TextBoxAutomationPeer(password).GetName());
+
+        static void AssertAccessible(Window window)
+        {
+            foreach (var button in window.GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible))
+            {
+                var peer = new ButtonAutomationPeer(button);
+                Assert.False(string.IsNullOrWhiteSpace(peer.GetName()));
+                Assert.Equal(AutomationControlType.Button, peer.GetAutomationControlType());
+                Assert.Equal(button.IsEffectivelyEnabled, peer.IsEnabled());
+            }
+        }
+    });
+
+    [Theory]
+    [InlineData("qps-ploc", false)]
+    [InlineData("qps-plocm", true)]
+    public Task PseudoLocalizedLargeTextKeepsCoreActionsReachable(string locale, bool rtl) => TestAppBuilder.Run(() =>
+    {
+        var culture = Loc.Culture.Name;
+        try
+        {
+            Loc.Configure(locale);
+            using var fixture = new ShellFixture();
+            fixture.Window.WindowState = WindowState.Normal;
+            fixture.Window.Width = 1920;
+            fixture.Window.Height = 1080;
+            fixture.Click("WindowOptionsButton");
+            fixture.ClickContent(Loc.Get("Accessibility.Title"));
+            fixture.ClickContent(Loc.Format("Accessibility.TextScale", 1d));
+            fixture.ClickContent(Loc.Format("Accessibility.TextScale", 1.25));
+            fixture.Window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+            fixture.Flush();
+            fixture.SignIn();
+            var shell = fixture.Window.FindControl<ShellView>("Shell")!;
+            Assert.Equal(rtl ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight,
+                fixture.Window.FlowDirection);
+            Assert.Contains('[', new ButtonAutomationPeer(shell.FindControl<Button>("HomeHeader")!).GetName());
+            fixture.Input.Press(rtl ? ControllerAction.NavigateRight : ControllerAction.NavigateLeft);
+            Assert.Equal("HomeNavigation", Focused(fixture.Window).Name);
+            Assert.Equal(Loc.Get("State.Selected"), AutomationProperties.GetHelpText(Focused(fixture.Window)));
+            fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+            Assert.Equal("HomeHeader", Focused(fixture.Window).Name);
+            shell.Navigate("Settings");
+            fixture.Flush();
+            AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+            fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+            Assert.Equal("SwitchAccountButton", Focused(fixture.Window).Name);
+            AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+            Capture(fixture.Window, $"accessibility-{locale}");
+        }
+        finally
+        {
+            Loc.Configure(culture);
+        }
+    });
 
     [Theory]
     [InlineData(false)]
@@ -189,6 +415,8 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
         Assert.Equal("second", fixture.Model.SelectedSavedSession!.UserId);
+        Assert.Equal(LocaleFormat.SessionDisplayName(fixture.Model.SelectedSavedSession),
+            fixture.Window.FindControl<Button>("SavedAccountButton")!.Content);
         Assert.False(window.FindControl<Border>("ModalOverlay")!.IsVisible);
         Assert.Equal("SavedAccountButton", Focused(window).Name);
         fixture.Input.Press(ControllerAction.NavigateDown);
@@ -388,18 +616,20 @@ public sealed class MainWindowNavigationTests
         var end = control.TranslatePoint(new Point(control.Bounds.Width, control.Bounds.Height), window)!.Value;
         Assert.InRange(start.X, 0, window.ClientSize.Width);
         Assert.InRange(start.Y, 0, window.ClientSize.Height);
-        Assert.InRange(end.X, start.X + 1, window.ClientSize.Width);
-        Assert.InRange(end.Y, start.Y + 1, window.ClientSize.Height);
+        Assert.InRange(end.X, 0, window.ClientSize.Width);
+        Assert.InRange(end.Y, 0, window.ClientSize.Height);
+        Assert.True(Math.Abs(end.X - start.X) > 0);
+        Assert.True(Math.Abs(end.Y - start.Y) > 0);
     }
 
     private static Control Focused(Window window) => Assert.IsAssignableFrom<Control>(window.FocusManager!.GetFocusedElement());
 
     private sealed class ShellFixture : IDisposable
     {
-        public ShellFixture(bool savedAccounts = true)
+        public ShellFixture(bool savedAccounts = true, PresentationSettingsStore? store = null)
         {
             Model = new MainViewModel(new ServerClient(), new AuthenticationService(savedAccounts), new PreviewClient());
-            Window = new TestMainWindow(Input) { DataContext = Model };
+            Window = new TestMainWindow(Input, store) { DataContext = Model };
             Window.Show();
             Window.Activate();
             Flush();
@@ -447,7 +677,7 @@ public sealed class MainWindowNavigationTests
         }
     }
 
-    private sealed class TestMainWindow(IControllerInputSource input) : MainWindow(input)
+    private sealed class TestMainWindow(IControllerInputSource input, PresentationSettingsStore? store) : MainWindow(input, store)
     {
         // The headless backend does not synthesize OS deactivation when another window opens.
         public void DeactivateForTest() => typeof(WindowBase)

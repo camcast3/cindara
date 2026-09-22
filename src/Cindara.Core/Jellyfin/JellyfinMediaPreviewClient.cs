@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -93,7 +92,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 ? featured with
                 {
                     Name = BuildName(featuredSource, preferSeriesTitle: true),
-                    Subtitle = BuildSubtitle(featuredSource, preferSeriesTitle: true),
+                    Metadata = CreateMetadata(featuredSource, preferSeriesTitle: true),
                     Backdrop = backdrop ?? featured.Artwork,
                 }
                 : featured with { Backdrop = backdrop ?? featured.Artwork };
@@ -137,8 +136,9 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 cancellationToken).ConfigureAwait(false);
             return new MediaPreviewRail(
                 view.Id!,
-                $"Recently Added in {view.Name}",
-                items);
+                view.Name!,
+                items,
+                LibraryName: view.Name);
         });
 
         return await Task.WhenAll(tasks).ConfigureAwait(false);
@@ -246,17 +246,17 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             previews.Add(new MediaPreviewItem(
                 item.Id,
                 BuildName(item, preferSeriesTitle: !landscape),
-                BuildSubtitle(item, preferSeriesTitle: !landscape),
+                string.Empty,
                 item.Type ?? "Unknown",
                 artwork,
                 backdrop ?? artwork,
                 item.Overview,
-                BuildDetails(item),
+                string.Empty,
                 item.UserData?.PlayedPercentage is { } percentage
                     ? Math.Clamp(percentage, 0, 100)
                     : null,
                 HeroName: BuildName(item, preferSeriesTitle: true),
-                HeroSubtitle: BuildSubtitle(item, preferSeriesTitle: true)));
+                Metadata: CreateMetadata(item, preferSeriesTitle: !landscape)));
         }
 
         return previews;
@@ -393,49 +393,16 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 ? item.SeriesId
                 : item.Id!;
 
-    private static string BuildSubtitle(JellyfinItem item, bool preferSeriesTitle)
-    {
-        if (!string.IsNullOrWhiteSpace(item.SeriesName))
-        {
-            if (item.Type == "Season" && preferSeriesTitle)
-            {
-                return item.Name!;
-            }
-
-            var episodeNumber = item.ParentIndexNumber is { } season && item.IndexNumber is { } number
-                ? $"S{season.ToString(CultureInfo.InvariantCulture)} E{number.ToString(CultureInfo.InvariantCulture)}"
-                : "Episode";
-            return preferSeriesTitle
-                ? $"{episodeNumber} · {item.Name}"
-                : $"{item.SeriesName} · {episodeNumber}";
-        }
-
-        return item.ProductionYear?.ToString(CultureInfo.InvariantCulture) ?? "Jellyfin";
-    }
-
-    private static string BuildDetails(JellyfinItem item)
-    {
-        var details = new List<string>(3);
-        if (item.ProductionYear is { } year)
-        {
-            details.Add(year.ToString(CultureInfo.InvariantCulture));
-        }
-
-        if (item.RunTimeTicks is > 0)
-        {
-            var runtime = TimeSpan.FromTicks(item.RunTimeTicks.Value);
-            details.Add(runtime.TotalHours >= 1
-                ? $"{(int)runtime.TotalHours}h {runtime.Minutes}m"
-                : $"{runtime.Minutes}m");
-        }
-
-        if (!string.IsNullOrWhiteSpace(item.OfficialRating))
-        {
-            details.Add(item.OfficialRating);
-        }
-
-        return string.Join("  ·  ", details);
-    }
+    private static MediaPreviewMetadata CreateMetadata(JellyfinItem item, bool preferSeriesTitle) =>
+        new(
+            item.Name!,
+            item.SeriesName,
+            item.ParentIndexNumber,
+            item.IndexNumber,
+            item.ProductionYear,
+            item.RunTimeTicks,
+            item.OfficialRating,
+            preferSeriesTitle);
 
     private sealed record ItemResult(JellyfinItem[]? Items);
 

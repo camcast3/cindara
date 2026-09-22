@@ -1,6 +1,7 @@
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Cindara.Core.Jellyfin;
+using Cindara.Desktop.Localization;
 
 namespace Cindara.Desktop.ViewModels;
 
@@ -27,7 +28,7 @@ internal sealed class PreviewImage(IImage source, IDisposable resource) : IDispo
         {
             throw new MediaPreviewException(
                 MediaPreviewError.InvalidResponse,
-                "Jellyfin returned artwork that could not be decoded. Try refreshing the preview.",
+                Loc.Get("Error.Preview.Artwork"),
                 exception);
         }
     }
