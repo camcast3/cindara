@@ -13,6 +13,23 @@ persisted. Access tokens are stored with Secret Service on Linux, DPAPI on
 Windows, or Keychain on macOS; rejected tokens remove only the affected
 account and return it to sign-in.
 
+The controller-first shell exposes Home, Libraries, Search, Downloads, and
+Settings. Library/search/download content remains explicitly unavailable until
+its roadmap work lands; Home can open the authenticated design preview.
+Settings contains account switching, sign-out, display, and controller guidance.
+D-pad/left stick or arrows navigate, Accept/Enter selects, and Back/Escape
+dismisses dialogs or returns to the navigation rail. Start/Options/+ or F11
+toggles fullscreen; **Window / exit** provides explicit desktop and exit actions.
+Accept on a text field opens an on-screen keyboard. Saved accounts use the same
+focus-trapped choice dialog as the rest of the shell.
+
+SDL3 handles controller hotplug, directional repeat, and active-device prompts
+without resetting focus. Input received while the window is inactive is
+discarded; held controls must return to neutral after reactivation. Xbox uses
+A/B, PlayStation Cross/Circle, and Nintendo B/A for the same physical
+south/east accept/back positions. Keyboard and mouse remain available without
+a controller.
+
 Credential-bearing requests require HTTPS. Plain HTTP is accepted only for
 loopback development servers.
 
@@ -36,7 +53,7 @@ Cindara.sln
 ├── src/Cindara.Desktop       Avalonia shell with native SDL3 controller input
 ├── tests/Cindara.Core.Tests  Shared-core unit tests
 └── tests/Cindara.Desktop.Tests
-                              Desktop input mapping tests
+                              Desktop input, navigation, and headless UI tests
 ```
 
 - **Cindara.Core** has no UI or platform dependencies. It owns Jellyfin API

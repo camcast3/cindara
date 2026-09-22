@@ -4,21 +4,71 @@ namespace Cindara.Desktop.Input;
 
 public sealed class SdlGamepadInputSource : IControllerInputSource
 {
+    private static readonly SDL.GamepadButton[] MappedButtons =
+    [
+        SDL.GamepadButton.DPadUp, SDL.GamepadButton.DPadDown,
+        SDL.GamepadButton.DPadLeft, SDL.GamepadButton.DPadRight,
+        SDL.GamepadButton.South, SDL.GamepadButton.East, SDL.GamepadButton.Start,
+    ];
+    private static readonly SDL.GamepadAxis[] MappedAxes = [SDL.GamepadAxis.LeftX, SDL.GamepadAxis.LeftY];
+    private readonly ISdlGamepadBackend _backend;
+    private readonly ControllerInputState _state;
     private readonly Dictionary<uint, nint> _gamepads = [];
-    private readonly Dictionary<(uint ControllerId, SDL.GamepadAxis Axis), ControllerAction>
-        _activeAxisActions = [];
+    private readonly Dictionary<uint, ControllerInfo> _controllers = [];
+    private bool _applicationActive;
     private bool _initialized;
+    private bool _backendInitialized;
     private bool _disposed;
+
+    public SdlGamepadInputSource()
+        : this(new SdlGamepadBackend(), TimeProvider.System)
+    {
+    }
+
+    internal SdlGamepadInputSource(ISdlGamepadBackend backend, TimeProvider timeProvider)
+    {
+        _backend = backend;
+        _state = new ControllerInputState(timeProvider);
+        _state.ActionPressed += (_, args) => ActionPressed?.Invoke(this, args);
+        _state.ActiveControllerChanged += (_, args) => ActiveControllerChanged?.Invoke(this, args);
+    }
 
     public event EventHandler<ControllerActionEventArgs>? ActionPressed;
 
     public event EventHandler<ControllerConnectionEventArgs>? ConnectionChanged;
+
+    public event EventHandler? ActiveControllerChanged;
 
     public bool IsAvailable { get; private set; }
 
     public string? InitializationError { get; private set; }
 
     public int ConnectedGamepads => _gamepads.Count;
+
+    public ControllerInfo? ActiveController => _disposed ? null : _state.ActiveController;
+
+    public void SetApplicationActive(bool isActive)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_applicationActive == isActive)
+        {
+            return;
+        }
+
+        if (isActive && IsAvailable)
+        {
+            // Drain events accumulated without focus before enabling actions. Native
+            // snapshots also suppress controls whose down edge was never delivered.
+            Poll();
+            foreach (var (id, gamepad) in _gamepads)
+            {
+                SuppressHeldControls(id, gamepad);
+            }
+        }
+
+        _applicationActive = isActive;
+        _state.SetApplicationActive(isActive);
+    }
 
     public void Initialize()
     {
@@ -30,24 +80,39 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
         }
 
         _initialized = true;
+        _state.SetApplicationActive(false);
 
         try
         {
-            if (!SDL.Init(SDL.InitFlags.Gamepad))
+            if (!_backend.Initialize())
             {
-                InitializationError = $"SDL could not initialize gamepad input: {SDL.GetError()}";
+                InitializationError = $"SDL could not initialize gamepad input: {_backend.GetError()}";
                 return;
             }
 
+            _backendInitialized = true;
             IsAvailable = true;
+            foreach (var controllerId in _backend.GetGamepads())
+            {
+                AddGamepad(controllerId);
+            }
+
             Poll();
+            foreach (var (id, gamepad) in _gamepads)
+            {
+                SuppressHeldControls(id, gamepad);
+            }
+
+            _state.SetApplicationActive(_applicationActive);
         }
         catch (DllNotFoundException exception)
         {
+            IsAvailable = false;
             InitializationError = $"SDL gamepad runtime was not found: {exception.Message}";
         }
         catch (EntryPointNotFoundException exception)
         {
+            IsAvailable = false;
             InitializationError = $"The bundled SDL gamepad runtime is incompatible: {exception.Message}";
         }
     }
@@ -61,7 +126,7 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
             return;
         }
 
-        while (SDL.PollEvent(out var sdlEvent))
+        while (_backend.PollEvent(out var sdlEvent))
         {
             switch ((SDL.EventType)sdlEvent.Type)
             {
@@ -74,14 +139,21 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
                     break;
 
                 case SDL.EventType.GamepadButtonDown:
-                    RaiseAction(sdlEvent.GButton);
+                case SDL.EventType.GamepadButtonUp:
+                    SetButton(sdlEvent.GButton, (SDL.EventType)sdlEvent.Type == SDL.EventType.GamepadButtonDown);
                     break;
 
                 case SDL.EventType.GamepadAxisMotion:
-                    RaiseAxisAction(sdlEvent.GAxis);
+                    SetAxis(sdlEvent.GAxis.Which, (SDL.GamepadAxis)sdlEvent.GAxis.Axis, sdlEvent.GAxis.Value);
+                    break;
+
+                case SDL.EventType.GamepadRemapped:
+                    UpdateGamepad(sdlEvent.GDevice.Which);
                     break;
             }
         }
+
+        _state.Poll();
     }
 
     public void Dispose()
@@ -93,15 +165,17 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
 
         foreach (var gamepad in _gamepads.Values)
         {
-            SDL.CloseGamepad(gamepad);
+            _backend.CloseGamepad(gamepad);
         }
 
         _gamepads.Clear();
-        _activeAxisActions.Clear();
+        _controllers.Clear();
+        _state.SetApplicationActive(false);
 
-        if (IsAvailable)
+        if (_backendInitialized)
         {
-            SDL.QuitSubSystem(SDL.InitFlags.Gamepad);
+            _backend.Quit();
+            _backendInitialized = false;
         }
 
         IsAvailable = false;
@@ -115,17 +189,20 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
             return;
         }
 
-        var gamepad = SDL.OpenGamepad(controllerId);
+        var gamepad = _backend.OpenGamepad(controllerId);
         if (gamepad == 0)
         {
             return;
         }
 
         _gamepads.Add(controllerId, gamepad);
-        var name = SDL.GetGamepadName(gamepad) ?? "Gamepad";
+        var info = _backend.GetInfo(controllerId, gamepad);
+        _controllers.Add(controllerId, info);
+        _state.Connect(info);
+        SuppressHeldControls(controllerId, gamepad);
         ConnectionChanged?.Invoke(
             this,
-            new ControllerConnectionEventArgs(controllerId, name, true));
+            new ControllerConnectionEventArgs(controllerId, info.Name, true, info.Layout));
     }
 
     private void RemoveGamepad(uint controllerId)
@@ -135,52 +212,58 @@ public sealed class SdlGamepadInputSource : IControllerInputSource
             return;
         }
 
-        var name = SDL.GetGamepadName(gamepad) ?? "Gamepad";
-        SDL.CloseGamepad(gamepad);
-        foreach (var key in _activeAxisActions.Keys
-                     .Where(key => key.ControllerId == controllerId)
-                     .ToArray())
-        {
-            _activeAxisActions.Remove(key);
-        }
+        var info = _controllers[controllerId];
+        _controllers.Remove(controllerId);
+        _backend.CloseGamepad(gamepad);
+        _state.Disconnect(controllerId);
 
         ConnectionChanged?.Invoke(
             this,
-            new ControllerConnectionEventArgs(controllerId, name, false));
+            new ControllerConnectionEventArgs(controllerId, info.Name, false, info.Layout));
     }
 
-    private void RaiseAction(SDL.GamepadButtonEvent buttonEvent)
+    private void UpdateGamepad(uint controllerId)
     {
-        if (SdlGamepadButtonMapper.TryMap(
-                (SDL.GamepadButton)buttonEvent.Button,
-                out var action))
+        if (_gamepads.TryGetValue(controllerId, out var gamepad))
         {
-            ActionPressed?.Invoke(
-                this,
-                new ControllerActionEventArgs(buttonEvent.Which, action));
+            var info = _backend.GetInfo(controllerId, gamepad);
+            _controllers[controllerId] = info;
+            _state.Connect(info);
+            SuppressHeldControls(controllerId, gamepad);
         }
     }
 
-    private void RaiseAxisAction(SDL.GamepadAxisEvent axisEvent)
+    private void SetButton(SDL.GamepadButtonEvent buttonEvent, bool isDown)
     {
-        var axis = (SDL.GamepadAxis)axisEvent.Axis;
-        var key = (axisEvent.Which, axis);
-
-        if (!SdlGamepadAxisMapper.TryMap(axis, axisEvent.Value, out var action))
+        if (SdlGamepadButtonMapper.TryMap((SDL.GamepadButton)buttonEvent.Button, out var action))
         {
-            _activeAxisActions.Remove(key);
-            return;
+            _state.SetControl(buttonEvent.Which, buttonEvent.Button, isDown ? action : null);
+        }
+    }
+
+    private void SetAxis(uint controllerId, SDL.GamepadAxis axis, short value, bool suppress = false)
+    {
+        if (axis is SDL.GamepadAxis.LeftX or SDL.GamepadAxis.LeftY)
+        {
+            _state.SetControl(
+                controllerId,
+                256 + (int)axis,
+                SdlGamepadAxisMapper.TryMap(axis, value, out var action) ? action : null,
+                suppress);
+        }
+    }
+
+    private void SuppressHeldControls(uint controllerId, nint gamepad)
+    {
+        foreach (var button in MappedButtons)
+        {
+            SdlGamepadButtonMapper.TryMap(button, out var action);
+            _state.SetControl(controllerId, (int)button, _backend.GetButton(gamepad, button) ? action : null, true);
         }
 
-        if (_activeAxisActions.TryGetValue(key, out var activeAction)
-            && activeAction == action)
+        foreach (var axis in MappedAxes)
         {
-            return;
+            SetAxis(controllerId, axis, _backend.GetAxis(gamepad, axis), true);
         }
-
-        _activeAxisActions[key] = action;
-        ActionPressed?.Invoke(
-            this,
-            new ControllerActionEventArgs(axisEvent.Which, action));
     }
 }

@@ -17,9 +17,58 @@ temporary full-screen layer.
 
 The approved authenticated preview uses a compact icon rail with Search, Home,
 Saved, TV, Movies, Anime, and More, plus Home/Trending/Activity/Profile header
-buttons. This PR establishes their appearance and focus behavior, not the
-destination screens. Production navigation and library/details/playback flows
-remain assigned to #9, #3, #5, and #4.
+buttons. These are non-production preview controls, not destination screens.
+The production shell implements the five destinations above; library content,
+details, and playback flows remain assigned to #3, #5, and #4.
+
+## Implemented shell navigation
+
+`ShellView` owns the production frame, not browsing data. Home initially focuses
+its header; its preview action opens the approved gallery and Back restores the
+launcher. Libraries, Search, and Downloads show honest unavailable-content states
+with Return to Home actions. Settings initially focuses Account; right enters
+the selected category's settings, left returns, and up/down stays within the
+category column. Account switching and sign-out use the existing session commands.
+
+The rail expands on focus or hover and collapses to original vector icons when
+content is focused. Up/down follows Home, Libraries, Search, Downloads, Settings
+without wrapping. Accept opens the focused destination. Right returns to remembered
+content in the current destination; left or Back from content enters its selected
+rail item. Back from the rail opens window/exit choices, rather than exiting
+fullscreen unexpectedly. The persistent Window / exit action is also accessible
+by directional navigation, Tab, and mouse. The preview remains a separate layer.
+
+`FocusNavigationService` scopes navigation to the active screen or dialog.
+Explicit rail/category links take priority; other controls use transformed bounds,
+aligned candidates, nearest directional edge, distance, and stable visual order.
+Screen focus is remembered, and hidden, disabled, or removed controls recover to
+the nearest available action. Initial focus waits for layout. Tab/Shift+Tab cycle
+inside the current scope. Modal choices disable background interaction, trap
+directional and keyboard focus, start on a safe action, and restore their launcher
+on selection or Back. Account changes discard old screen focus.
+
+The saved-account picker and window/exit choices use these primitives. Controller
+Accept on an authentication text field opens a modal keyboard with letters, digits,
+punctuation, Shift, Space, Backspace, Clear, Done, and Cancel. Physical typing and
+paste still work in the field; passwords stay masked and drafts are discarded on
+dismissal. Full international text entry, platform keyboard integration, and
+localization remain accessibility work in #11.
+
+The production frame and dialogs fit a 1920x1080 reference surface uniformly,
+including the existing 48-pixel safe-area token. At 3840x2160 logical pixels they
+scale 2x; a physical 4K display at 200% DPI uses 1920x1080 logical pixels and is not
+scaled twice. Layout follows viewport and DPI changes without cached physical
+dimensions. The approved preview keeps its separate density policy below.
+
+SDL input never transfers keyboard focus between controls when a controller
+connects, disconnects, or becomes active. Fresh input selects the active device;
+only its most recently held direction repeats (400 ms delay, 100 ms interval).
+Accept/Back/Menu never repeat. Events are drained while inactive, and held
+buttons/axes are suppressed until released/neutral after startup, hotplug, or
+reactivation. Prompts use Xbox A/B, PlayStation Cross/Circle/Options, Nintendo
+B/A/+, or generic South/East/Start labels. Accept always means physical South;
+the Nintendo labels intentionally follow the physical layout rather than swapping
+the navigation actions.
 
 ## Tokens and accessibility
 
@@ -87,12 +136,11 @@ Directional links below describe the target production shell. **A/Enter/Space** 
 **B/Escape** returns or dismisses, and **Start/F11** toggles fullscreen. Mouse
 click maps to activation, pointer hover maps to hover (not keyboard focus), and
 wheel/trackpad scroll maps to rail or grid scrolling.
-The current preview implements header/rail directional navigation. Controller
-Back closes the gallery without leaving fullscreen; outside the gallery it
-provides a fullscreen escape. Start toggles fullscreen in either context.
-The complete keyboard shortcuts, reduced-motion
-settings, modal behavior, and production destinations are follow-up shell and
-accessibility work.
+The current preview implements header/rail directional navigation. Back/Escape
+closes the gallery without leaving fullscreen and restores its Home launcher.
+Start/Options/+ and F11 toggle fullscreen. Modals consume controller Menu so it
+cannot change the background; F11 remains the explicit keyboard escape path.
+Reduced-motion settings remain accessibility work.
 
 ### Home
 
@@ -158,9 +206,9 @@ libraries within each group retain the server's order and are never merged.
 The product owner approved this design for review on 2026-09-21 after live
 authenticated-media iteration on an ultrawide monitor and a physical 4K TV.
 The preview launches fullscreen and uses logical viewport dimensions so Windows
-DPI scaling is not applied twice. Moving the native window between mixed-DPI
-screens during testing required a resize refresh; display migration and startup
-screen selection remain part of the production shell work.
+DPI scaling is not applied twice. The production shell now relies on live logical
+layout for display migration; its DPI-change behavior has headless coverage.
+Startup uses the OS-selected display rather than persisting a display preference.
 
 This gallery intentionally caps rows at 20 items and preloads a bounded subset
 of recently-added backdrops, falling back to card artwork elsewhere. Header and
@@ -254,3 +302,26 @@ Keyboard focus must always be visible. Screen-reader names describe the action
 and media title rather than artwork. Text supports 200% scaling without
 clipping critical controls. No essential status is communicated only through
 motion, color, artwork, or sound.
+
+## Shell validation
+
+Headless Avalonia tests exercise actual controls and routed keyboard/mouse events,
+including initial focus, deterministic spatial movement, removed/disabled controls,
+saved-account selection, modal trapping/restoration, controller text entry, active
+device prompts, inactive-window rejection, gallery round trips, and settings.
+Layout tests cover 1920x1080 and 3840x2160, plus a 1x/2x DPI transition.
+
+Run the affected surfaces with:
+
+```shell
+dotnet test tests/Cindara.Desktop.Tests --configuration Release --filter "FullyQualifiedName~Navigation|FullyQualifiedName~Input|FullyQualifiedName~DesignSystem|FullyQualifiedName~MainViewModel"
+```
+
+Setting `CINDARA_NAV_CAPTURE` to a local artifact directory also saves synthetic
+1080p/4K shell, rail, settings, account, and keyboard/dialog renderings from the
+UI tests. These contain no real accounts or media. Synthetic 1080p/4K and 200%-DPI
+renderings were visually reviewed during #9 implementation. Rendered review
+does not replace physical couch testing:
+before release, exercise D-pad/stick hold, controller switching/unplug, alt-tab
+with a held button, modal Back, text entry, and windowed/fullscreen transitions
+on a real 1080p/4K display and Bazzite/Steam Game Mode.

@@ -1,8 +1,14 @@
-using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Cindara.Desktop.Input;
+using Cindara.Desktop.Navigation;
 using Cindara.Desktop.ViewModels;
 
 namespace Cindara.Desktop.Views;
@@ -11,10 +17,14 @@ public partial class MainWindow : Window
 {
     private readonly IControllerInputSource _controllerInput;
     private readonly DispatcherTimer _controllerTimer;
+    private readonly FocusNavigationService _navigation;
     private MainViewModel? _viewModel;
+    private Control? _modalReturnFocus;
+    private TextBox? _keyboardDraft;
+    private string? _screen;
+    private bool _closed;
 
-    public MainWindow()
-        : this(new SdlGamepadInputSource())
+    public MainWindow() : this(new SdlGamepadInputSource())
     {
     }
 
@@ -22,49 +32,84 @@ public partial class MainWindow : Window
     {
         _controllerInput = controllerInput;
         InitializeComponent();
-
-        _controllerTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(16),
-        };
+        _navigation = new FocusNavigationService(this);
+        _controllerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _controllerTimer.Tick += OnControllerTimerTick;
-
         Opened += OnOpened;
         Closed += OnClosed;
+        Activated += (_, _) => OnApplicationActiveChanged();
+        Deactivated += (_, _) => OnApplicationActiveChanged();
+        LayoutUpdated += (_, _) =>
+        {
+            if (IsActive && !_closed)
+            {
+                _navigation.EnsureFocus();
+            }
+        };
+        AddHandler(GotFocusEvent, (_, _) => _navigation.Remember());
+        AddHandler(KeyDownEvent, OnShellKeyDown, RoutingStrategies.Tunnel);
+        Shell.DestinationChanged += (_, _) =>
+        {
+            _screen = null;
+            Dispatcher.UIThread.Post(RefreshScreen, DispatcherPriority.Loaded);
+        };
+        Shell.WindowOptionsRequested += (_, _) => ShowWindowOptions();
     }
 
     private async void OnOpened(object? sender, EventArgs eventArgs)
     {
-        _controllerInput.ActionPressed += OnControllerActionPressed;
-        _controllerInput.ConnectionChanged += OnControllerConnectionChanged;
-        _controllerInput.Initialize();
-
-        if (DataContext is MainViewModel viewModel)
+        _viewModel = DataContext as MainViewModel;
+        if (_viewModel is not null)
         {
-            _viewModel = viewModel;
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-            await viewModel.InitializeCommand.ExecuteAsync(null);
-            viewModel.SetControllerStatus(
-                _controllerInput.IsAvailable
-                    ? "Controller ready: D-pad or left stick navigates, A selects, and Start toggles fullscreen."
-                    : _controllerInput.InitializationError ?? "Controller input is unavailable.");
         }
 
+        _controllerInput.ActionPressed += OnControllerActionPressed;
+        _controllerInput.ConnectionChanged += OnControllerConnectionChanged;
+        _controllerInput.ActiveControllerChanged += OnActiveControllerChanged;
+        _controllerInput.SetApplicationActive(IsActive);
+        _controllerInput.Initialize();
         if (_controllerInput.IsAvailable)
         {
             _controllerTimer.Start();
         }
 
-        FocusCurrentState();
+        UpdateControllerStatus();
+        if (_viewModel is not null)
+        {
+            await _viewModel.InitializeCommand.ExecuteAsync(null);
+        }
+
+        if (!_closed)
+        {
+            RefreshScreen();
+        }
+    }
+
+    private void OnApplicationActiveChanged()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        _controllerInput.SetApplicationActive(IsActive);
+        if (IsActive)
+        {
+            _navigation.EnsureFocus();
+        }
     }
 
     private void OnClosed(object? sender, EventArgs eventArgs)
     {
+        _closed = true;
         _controllerTimer.Stop();
         _controllerTimer.Tick -= OnControllerTimerTick;
         _controllerInput.ActionPressed -= OnControllerActionPressed;
         _controllerInput.ConnectionChanged -= OnControllerConnectionChanged;
+        _controllerInput.ActiveControllerChanged -= OnActiveControllerChanged;
         _controllerInput.Dispose();
+        ClearModal();
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
@@ -72,79 +117,107 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnControllerTimerTick(object? sender, EventArgs eventArgs) =>
-        _controllerInput.Poll();
+    private void OnControllerTimerTick(object? sender, EventArgs eventArgs) => _controllerInput.Poll();
 
-    private void OnViewModelPropertyChanged(
-        object? sender,
-        System.ComponentModel.PropertyChangedEventArgs eventArgs)
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
-        if (eventArgs.PropertyName is nameof(MainViewModel.IsServerEntryVisible)
-            or nameof(MainViewModel.IsSignInVisible)
-            or nameof(MainViewModel.AreSavedSessionsVisible)
-            or nameof(MainViewModel.IsAuthenticatedVisible)
-            or nameof(MainViewModel.IsDesignGalleryVisible))
+        if (args.PropertyName is nameof(MainViewModel.IsServerEntryVisible)
+            or nameof(MainViewModel.IsSignInVisible) or nameof(MainViewModel.AreSavedSessionsVisible)
+            or nameof(MainViewModel.IsAuthenticatedVisible) or nameof(MainViewModel.IsDesignGalleryVisible)
+            or nameof(MainViewModel.IsBusy))
         {
-            Dispatcher.UIThread.Post(FocusCurrentState, DispatcherPriority.Loaded);
+            Dispatcher.UIThread.Post(RefreshScreen, DispatcherPriority.Loaded);
         }
     }
 
-    private void FocusCurrentState()
+    private void RefreshScreen()
     {
-        if (_viewModel is null)
+        if (_closed || _viewModel is null)
         {
             return;
         }
 
-        if (_viewModel.IsSignInVisible)
+        ShellViewport.IsVisible = !_viewModel.IsDesignGalleryVisible;
+        Shell.IsVisible = _viewModel.IsAuthenticatedVisible;
+        AuthenticationSurface.IsVisible = !Shell.IsVisible;
+        var screen = _viewModel.IsDesignGalleryVisible ? "gallery"
+            : _viewModel.IsAuthenticatedVisible ? $"shell:{Shell.Destination}"
+            : _viewModel.IsSignInVisible ? "sign-in"
+            : _viewModel.AreSavedSessionsVisible ? "accounts"
+            : _viewModel.IsServerEntryVisible ? "server" : "loading";
+        if (_screen == screen)
         {
-            UsernameTextBox.Focus();
+            _navigation.EnsureFocus();
+            return;
         }
-        else if (_viewModel.AreSavedSessionsVisible)
+
+        if (ModalOverlay.IsVisible)
         {
-            SavedSessionsComboBox.Focus();
+            ClearModal();
         }
-        else if (_viewModel.IsDesignGalleryVisible)
+
+        // Account boundaries must not restore focus into a previous account's preview.
+        if (_screen?.StartsWith("shell:", StringComparison.Ordinal) is true && !Shell.IsVisible
+            || _screen == "gallery" && !Shell.IsVisible)
+        {
+            _navigation.Reset();
+            Shell.Reset();
+        }
+
+        var returningFromGallery = _screen == "gallery" && Shell.IsVisible;
+        _screen = screen;
+        UpdateLayout();
+        var initial = screen switch
+        {
+            "sign-in" => UsernameTextBox,
+            "accounts" => SavedAccountButton,
+            "server" => (Control)ServerAddressTextBox,
+            "gallery" => GalleryBackButton,
+            "loading" => WindowOptionsButton,
+            _ => Shell.InitialFocus,
+        };
+        var contentFocus = Shell.ContentFocus;
+        _navigation.SetScope(MainSurface, initial, screen);
+        if (screen == "gallery")
         {
             GalleryView.FocusTopNavigation();
         }
-        else if (_viewModel.IsAuthenticatedVisible)
+        else if (returningFromGallery)
         {
-            PreviewButton.Focus();
+            _navigation.Focus(Shell.PreviewAction);
         }
-        else if (_viewModel.IsServerEntryVisible)
+        else if (Shell.IsVisible)
         {
-            ServerAddressTextBox.Focus();
+            _navigation.Focus(contentFocus);
         }
     }
 
-    private void OnControllerConnectionChanged(
-        object? sender,
-        ControllerConnectionEventArgs eventArgs)
+    private void OnControllerConnectionChanged(object? sender, ControllerConnectionEventArgs args) =>
+        UpdateControllerStatus();
+
+    private void OnActiveControllerChanged(object? sender, EventArgs args) => UpdateControllerStatus();
+
+    private void UpdateControllerStatus()
     {
-        if (DataContext is not MainViewModel viewModel)
+        var controller = _controllerInput.ActiveController;
+        var layout = controller?.Layout ?? ControllerLayout.Generic;
+        var accept = ControllerGlyphs.GetLabel(layout, ControllerAction.Accept);
+        var back = ControllerGlyphs.GetLabel(layout, ControllerAction.Back);
+        var menu = ControllerGlyphs.GetLabel(layout, ControllerAction.Menu);
+        var name = controller?.Name ?? (_controllerInput.ConnectedGamepads > 0 ? "Controller ready" : "Connect a controller");
+        _viewModel?.SetControllerStatus(_controllerInput.IsAvailable
+            ? $"{name} | D-pad / left stick: move | [{accept}]: select | [{back}]: back | [{menu}] / F11: fullscreen"
+            : $"{_controllerInput.InitializationError ?? "No controller available."} Keyboard and mouse remain available. F11: fullscreen.");
+    }
+
+    private void OnControllerActionPressed(object? sender, ControllerActionEventArgs args)
+    {
+        if (!IsActive || _closed)
         {
             return;
         }
 
-        viewModel.SetControllerStatus(
-            eventArgs.IsConnected
-                ? $"{eventArgs.ControllerName} connected. D-pad or left stick navigates, A selects, and Start toggles fullscreen."
-                : _controllerInput.ConnectedGamepads > 0
-                    ? $"{eventArgs.ControllerName} disconnected. {_controllerInput.ConnectedGamepads} controller(s) remain connected."
-                    : $"{eventArgs.ControllerName} disconnected. Connect another controller to continue couch navigation.");
-    }
-
-    private void OnControllerActionPressed(
-        object? sender,
-        ControllerActionEventArgs eventArgs)
-    {
-        if (!IsActive)
-        {
-            return;
-        }
-
-        switch (eventArgs.Action)
+        switch (args.Action)
         {
             case ControllerAction.NavigateUp:
                 MoveFocus(NavigationDirection.Up);
@@ -161,58 +234,291 @@ public partial class MainWindow : Window
             case ControllerAction.Accept:
                 ActivateFocusedControl();
                 break;
-            case ControllerAction.Menu:
-                WindowState = WindowState == WindowState.FullScreen
-                    ? WindowState.Normal
-                    : WindowState.FullScreen;
-                break;
             case ControllerAction.Back:
-                switch (ControllerBackNavigation.Resolve(
-                    _viewModel?.IsDesignGalleryVisible is true,
-                    WindowState == WindowState.FullScreen))
+                GoBack();
+                break;
+            case ControllerAction.Menu:
+                if (!ModalOverlay.IsVisible)
                 {
-                    case ControllerBackDestination.Account:
-                        _viewModel!.HideDesignGalleryCommand.Execute(null);
-                        break;
-                    case ControllerBackDestination.Windowed:
-                        WindowState = WindowState.Normal;
-                        break;
+                    ToggleFullscreen();
                 }
 
                 break;
             default:
-                throw new ArgumentOutOfRangeException(
-                    nameof(eventArgs),
-                    eventArgs.Action,
-                    "Unknown controller action.");
+                throw new ArgumentOutOfRangeException(nameof(args), args.Action, "Unknown controller action.");
+        }
+    }
+
+    private void OnShellKeyDown(object? sender, KeyEventArgs args)
+    {
+        if (args.Key == Key.F11)
+        {
+            ToggleFullscreen();
+            args.Handled = true;
+        }
+        else if (args.Key == Key.Escape)
+        {
+            GoBack();
+            args.Handled = true;
+        }
+        else if (args.Key == Key.Tab)
+        {
+            _navigation.Move(args.KeyModifiers.HasFlag(KeyModifiers.Shift)
+                ? NavigationDirection.Previous : NavigationDirection.Next);
+            args.Handled = true;
+        }
+        else if (FocusManager?.GetFocusedElement() is not TextBox && args.KeyModifiers == KeyModifiers.None)
+        {
+            var direction = args.Key switch
+            {
+                Key.Up => NavigationDirection.Up,
+                Key.Down => NavigationDirection.Down,
+                Key.Left => NavigationDirection.Left,
+                Key.Right => NavigationDirection.Right,
+                _ => (NavigationDirection?)null,
+            };
+            if (direction is { } value)
+            {
+                MoveFocus(value);
+                args.Handled = true;
+            }
         }
     }
 
     private void MoveFocus(NavigationDirection direction)
     {
-        if (_viewModel?.IsDesignGalleryVisible is true && GalleryView.TryMoveGalleryFocus(direction))
+        _navigation.EnsureFocus();
+        if (!ModalOverlay.IsVisible)
         {
-            return;
+            if (_viewModel?.IsDesignGalleryVisible is true && GalleryView.TryMoveGalleryFocus(direction))
+            {
+                return;
+            }
+
+            if (Shell.IsEffectivelyVisible
+                && FocusManager?.GetFocusedElement() is Control focused
+                && focused.GetVisualAncestors().Contains(Shell) && Shell.TryMove(direction))
+            {
+                return;
+            }
         }
 
-        FocusManager?.TryMoveFocus(
-            direction,
-            new FindNextElementOptions
-            {
-                SearchRoot = this,
-            });
+        _navigation.Move(direction);
     }
 
     private void ActivateFocusedControl()
     {
+        _navigation.EnsureFocus();
         switch (FocusManager?.GetFocusedElement())
         {
-            case Button button when button.Command?.CanExecute(button.CommandParameter) is true:
-                button.Command.Execute(button.CommandParameter);
+            case Button button when button.IsEffectivelyEnabled:
+                ((IInvokeProvider)new ButtonAutomationPeer(button)).Invoke();
+                break;
+            case TextBox textBox when textBox != _keyboardDraft:
+                ShowKeyboard(textBox);
                 break;
             case TextBox:
-                MoveFocus(NavigationDirection.Next);
+                _navigation.Move(NavigationDirection.Next);
                 break;
         }
+    }
+
+    private void GoBack()
+    {
+        if (ModalOverlay.IsVisible)
+        {
+            DismissModal();
+        }
+        else if (_viewModel?.IsDesignGalleryVisible is true)
+        {
+            _viewModel.HideDesignGalleryCommand.Execute(null);
+        }
+        else if (_viewModel?.IsAuthenticatedVisible is true && !Shell.IsRailFocused)
+        {
+            Shell.FocusRail();
+        }
+        else if (_viewModel?.IsSignInVisible is true
+            || _viewModel?.IsServerEntryVisible is true && _viewModel.SavedSessions.Count > 0)
+        {
+            if (_viewModel.BackToSessionsCommand.CanExecute(null))
+            {
+                _viewModel.BackToSessionsCommand.Execute(null);
+            }
+        }
+        else
+        {
+            ShowWindowOptions();
+        }
+    }
+
+    private void ToggleFullscreen() => WindowState =
+        WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
+
+    private void OnWindowOptions(object? sender, RoutedEventArgs args) => ShowWindowOptions();
+
+    private void ShowWindowOptions()
+    {
+        if (ModalOverlay.IsVisible)
+        {
+            return;
+        }
+
+        BeginModal("Window and exit");
+        AddModalButton("Return to Cindara", DismissModal);
+        AddModalButton("Use a desktop window", () => { WindowState = WindowState.Normal; DismissModal(); });
+        AddModalButton("Use fullscreen", () => { WindowState = WindowState.FullScreen; DismissModal(); });
+        AddModalButton("Exit Cindara", Close);
+        FocusModal();
+    }
+
+    private void OnChooseAccount(object? sender, RoutedEventArgs args)
+    {
+        if (_viewModel is null || _viewModel.IsBusy || ModalOverlay.IsVisible)
+        {
+            return;
+        }
+
+        BeginModal("Choose saved account");
+        foreach (var profile in _viewModel.SavedSessions)
+        {
+            AddModalButton(profile.DisplayName, () =>
+            {
+                _viewModel.SelectedSavedSession = profile;
+                DismissModal();
+            });
+        }
+
+        AddModalButton("Cancel", DismissModal);
+        FocusModal();
+    }
+
+    private void BeginModal(string title)
+    {
+        _navigation.Remember();
+        _modalReturnFocus = FocusManager?.GetFocusedElement() as Control;
+        ModalTitle.Text = title;
+        ModalActions.Children.Clear();
+        ModalOverlay.IsVisible = true;
+        MainSurface.IsEnabled = false;
+    }
+
+    private Button AddModalButton(string text, Action action)
+    {
+        var button = new Button { Content = text, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+        button.Click += (_, _) => action();
+        ModalActions.Children.Add(button);
+        return button;
+    }
+
+    private void FocusModal() => Dispatcher.UIThread.Post(() =>
+    {
+        if (ModalOverlay.IsVisible && !_closed)
+        {
+            // Each modal is a new scope; do not retain removed options or entered credentials.
+            _navigation.SetScope(ModalActions, ModalActions.GetVisualDescendants().OfType<Button>().FirstOrDefault(),
+                "modal");
+        }
+    }, DispatcherPriority.Loaded);
+
+    private void ClearModal()
+    {
+        if (_keyboardDraft is not null)
+        {
+            _keyboardDraft.Text = string.Empty;
+            _keyboardDraft = null;
+        }
+
+        ModalOverlay.IsVisible = false;
+        ModalActions.Children.Clear();
+        MainSurface.IsEnabled = true;
+        _navigation.Forget("modal");
+    }
+
+    private void DismissModal()
+    {
+        var returnFocus = _modalReturnFocus;
+        _modalReturnFocus = null;
+        ClearModal();
+        _navigation.SetScope(MainSurface, key: _screen ?? "server");
+        if (returnFocus is not null)
+        {
+            _navigation.Focus(returnFocus);
+        }
+    }
+
+    private void ShowKeyboard(TextBox target)
+    {
+        if (ModalOverlay.IsVisible)
+        {
+            return;
+        }
+
+        BeginModal(AutomationProperties.GetName(target) ?? target.PlaceholderText ?? "Enter text");
+        var draft = new TextBox { Text = target.Text, PasswordChar = target.PasswordChar, MinWidth = 800 };
+        AutomationProperties.SetName(draft, ModalTitle.Text);
+        draft.CaretIndex = draft.Text?.Length ?? 0;
+        _keyboardDraft = draft;
+        ModalActions.Children.Add(draft);
+        var keys = new UniformGrid { Columns = 12 };
+        var letters = new List<Button>();
+        foreach (var character in "1234567890-=" + "qwertyuiop[]" + "asdfghjkl;'\\"
+                     + "zxcvbnm,./`" + "!@#$%^&*()_+{}:\"|<>?~")
+        {
+            var key = new Button { Content = character.ToString(), Margin = new Avalonia.Thickness(3) };
+            key.Click += (_, _) => InsertText(draft, (string)key.Content!);
+            keys.Children.Add(key);
+            if (char.IsLetter(character))
+            {
+                letters.Add(key);
+            }
+        }
+
+        ModalActions.Children.Add(keys);
+        var actions = new WrapPanel();
+        AddKeyboardAction("Shift", () =>
+        {
+            foreach (var letter in letters)
+            {
+                var value = (string)letter.Content!;
+                letter.Content = char.IsLower(value[0]) ? value.ToUpperInvariant() : value.ToLowerInvariant();
+            }
+        });
+        AddKeyboardAction("Space", () => InsertText(draft, " "));
+        AddKeyboardAction("Backspace", () =>
+        {
+            if (draft.SelectionStart == draft.SelectionEnd && draft.CaretIndex > 0)
+            {
+                draft.SelectionStart = draft.CaretIndex - 1;
+                draft.SelectionEnd = draft.CaretIndex;
+            }
+
+            InsertText(draft, string.Empty);
+        });
+        AddKeyboardAction("Clear", () => draft.Text = string.Empty);
+        AddKeyboardAction("Done", () =>
+        {
+            target.Text = draft.Text;
+            target.CaretIndex = target.Text?.Length ?? 0;
+            DismissModal();
+        });
+        AddKeyboardAction("Cancel", DismissModal);
+        ModalActions.Children.Add(actions);
+        FocusModal();
+
+        void AddKeyboardAction(string text, Action action)
+        {
+            var button = new Button { Content = text, Margin = new Avalonia.Thickness(3) };
+            button.Click += (_, _) => action();
+            actions.Children.Add(button);
+        }
+    }
+
+    private static void InsertText(TextBox draft, string value)
+    {
+        var start = Math.Min(draft.SelectionStart, draft.SelectionEnd);
+        var length = Math.Abs(draft.SelectionEnd - draft.SelectionStart);
+        draft.Text = (draft.Text ?? string.Empty).Remove(start, length).Insert(start, value);
+        draft.CaretIndex = start + value.Length;
+        draft.SelectionStart = draft.SelectionEnd = draft.CaretIndex;
     }
 }
