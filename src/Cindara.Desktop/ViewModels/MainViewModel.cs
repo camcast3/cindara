@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Cindara.Core.Authentication;
+using Cindara.Core.Diagnostics;
 using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
 using Cindara.Desktop.Localization;
@@ -14,14 +15,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly IAuthenticationService _authenticationService;
     private readonly IJellyfinMediaPreviewClient? _mediaPreviewClient;
     private readonly Func<MediaPreviewHome, DesignGalleryViewModel> _createGallery;
+    private readonly LocalDiagnostics? _diagnostics;
     private AuthenticatedSession? _currentSession;
     private bool _disposed;
 
     public MainViewModel(
         IJellyfinServerClient serverClient,
         IAuthenticationService authenticationService,
-        IJellyfinMediaPreviewClient? mediaPreviewClient = null)
-        : this(serverClient, authenticationService, mediaPreviewClient, DesignGalleryViewModel.Create)
+        IJellyfinMediaPreviewClient? mediaPreviewClient = null,
+        LocalDiagnostics? diagnostics = null)
+        : this(serverClient, authenticationService, mediaPreviewClient, DesignGalleryViewModel.Create, diagnostics)
     {
     }
 
@@ -29,12 +32,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IJellyfinServerClient serverClient,
         IAuthenticationService authenticationService,
         IJellyfinMediaPreviewClient? mediaPreviewClient,
-        Func<MediaPreviewHome, DesignGalleryViewModel> createGallery)
+        Func<MediaPreviewHome, DesignGalleryViewModel> createGallery,
+        LocalDiagnostics? diagnostics = null)
     {
         _serverClient = serverClient;
         _authenticationService = authenticationService;
         _mediaPreviewClient = mediaPreviewClient;
         _createGallery = createGallery;
+        _diagnostics = diagnostics;
     }
 
     public ObservableCollection<SessionProfile> SavedSessions { get; } = [];
@@ -109,14 +114,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand(CanExecute = nameof(CanNavigate))]
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Storage, DiagnosticAction.LoadSessions);
         IsBusy = true;
         try
         {
             await RefreshSavedSessionsAsync(cancellationToken);
             ShowSavedSessionsOrServerEntry();
+            operation?.Complete();
         }
         catch (AuthenticationException exception)
         {
+            operation?.Fail(exception);
             ShowServerEntry();
             StatusMessage = LocalizedErrors.Get(exception);
         }
@@ -131,6 +139,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [RelayCommand(CanExecute = nameof(CanConnect))]
     private async Task ConnectAsync(CancellationToken cancellationToken)
     {
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Network, DiagnosticAction.Connect);
         IsBusy = true;
         StatusMessage = Loc.Get("Status.CheckingServer");
 
@@ -142,9 +151,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Password = string.Empty;
             ShowSignIn();
             StatusMessage = Loc.Format("Status.Connected", server.DisplayName);
+            operation?.Complete();
         }
         catch (ServerConnectionException exception)
         {
+            operation?.Fail(exception);
             StatusMessage = LocalizedErrors.Get(exception);
         }
         finally
@@ -170,6 +181,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         IsBusy = true;
         StatusMessage = Loc.Get("Status.SigningIn");
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Authentication, DiagnosticAction.SignIn);
         try
         {
             _currentSession = await _authenticationService.AuthenticateAsync(
@@ -178,9 +190,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Password = string.Empty;
             await RefreshSavedSessionsAsync(cancellationToken);
             ShowAuthenticated(_currentSession);
+            operation?.Complete();
         }
         catch (AuthenticationException exception)
         {
+            operation?.Fail(exception);
             StatusMessage = LocalizedErrors.Get(exception);
         }
         finally
@@ -202,13 +216,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         IsBusy = true;
         StatusMessage = Loc.Get("Status.CheckingSession");
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Authentication, DiagnosticAction.RestoreSession);
         try
         {
             _currentSession = await _authenticationService.RestoreAsync(profile, cancellationToken);
             ShowAuthenticated(_currentSession);
+            operation?.Complete();
         }
         catch (AuthenticationException exception)
         {
+            operation?.Fail(exception);
             StatusMessage = LocalizedErrors.Get(exception);
             if (exception.Error == AuthenticationError.RevokedSession)
             {
@@ -221,6 +238,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             }
             catch (AuthenticationException refreshException)
             {
+                operation?.Fail(refreshException);
                 StatusMessage = Loc.Format("Status.Combined",
                     LocalizedErrors.Get(exception),
                     Loc.Format("Error.SessionRefresh", LocalizedErrors.Get(refreshException)));
@@ -243,15 +261,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         IsBusy = true;
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Storage, DiagnosticAction.RemoveSession);
         try
         {
             await _authenticationService.RemoveAsync(profile, cancellationToken);
             await RefreshSavedSessionsAsync(cancellationToken);
             StatusMessage = Loc.Format("Status.RemovedAccount", LocaleFormat.SessionDisplayName(profile));
             ShowSavedSessionsOrServerEntry(false);
+            operation?.Complete();
         }
         catch (AuthenticationException exception)
         {
+            operation?.Fail(exception);
             StatusMessage = LocalizedErrors.Get(exception);
         }
         finally
@@ -270,13 +291,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         IsBusy = true;
         var profile = _currentSession.Profile;
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Authentication, DiagnosticAction.SignOut);
         try
         {
             await _authenticationService.LogoutAsync(_currentSession, cancellationToken);
             StatusMessage = Loc.Format("Status.SignedOut", LocaleFormat.SessionDisplayName(profile));
+            operation?.Complete();
         }
         catch (AuthenticationException exception)
         {
+            operation?.Fail(exception);
             StatusMessage = LocalizedErrors.Get(exception);
         }
         finally
@@ -289,6 +313,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             }
             catch (AuthenticationException exception)
             {
+                operation?.Fail(exception);
                 ShowServerEntry();
                 StatusMessage = LocalizedErrors.Get(exception);
             }
@@ -327,6 +352,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         IsBusy = true;
         StatusMessage = Loc.Get("Status.LoadingPreview");
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Network, DiagnosticAction.LoadHome);
         try
         {
             var home = await _mediaPreviewClient.GetHomeAsync(session, cancellationToken);
@@ -341,13 +367,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             DesignGallery = gallery;
             IsDesignGalleryVisible = true;
             StatusMessage = Loc.Get("Status.PreviewLoaded");
+            operation?.Complete();
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
+            operation?.Fail(exception);
             StatusMessage = Loc.Get("Status.PreviewCanceled");
         }
         catch (MediaPreviewException exception)
         {
+            operation?.Fail(exception);
             StatusMessage = LocalizedErrors.Get(exception);
             if (exception.Error == MediaPreviewError.AccessDenied)
             {
@@ -359,6 +388,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 }
                 catch (AuthenticationException invalidationException)
                 {
+                    operation?.Fail(invalidationException);
                     StatusMessage = Loc.Format("Status.Combined", StatusMessage,
                         Loc.Format("Error.SessionInvalidation", LocalizedErrors.Get(invalidationException)));
                 }
@@ -369,6 +399,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 }
                 catch (AuthenticationException refreshException)
                 {
+                    operation?.Fail(refreshException);
                     StatusMessage = Loc.Format("Status.Combined", StatusMessage,
                         Loc.Format("Error.SessionRefresh", LocalizedErrors.Get(refreshException)));
                 }

@@ -4,6 +4,31 @@
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Diagnostics.Title" xml:space="preserve"><value>Diagnostics</value></data>
+  <data name="Diagnostics.Privacy" xml:space="preserve"><value>Local only. No telemetry, tracking, or automatic uploads. Logs contain technical codes, not credentials, server addresses, or media names.</value></data>
+  <data name="Diagnostics.Environment" xml:space="preserve"><value>Cindara {0} · .NET {1}
+{2} / {3} · Avalonia {4} · Renderer: {5}
+Controller backend: {8} ({6}, {7} connected)</value></data>
+  <data name="Diagnostics.Available" xml:space="preserve"><value>available</value></data>
+  <data name="Diagnostics.Unavailable" xml:space="preserve"><value>unavailable</value></data>
+  <data name="Diagnostics.PlaybackUnavailable" xml:space="preserve"><value>Playback backend: not implemented yet (roadmap #8).</value></data>
+  <data name="Diagnostics.StorageReady" xml:space="preserve"><value>Local log storage available. Up to 4 × 256 KiB, retained for 7 days.</value></data>
+  <data name="Diagnostics.StorageFailed" xml:space="preserve"><value>Local log storage failed. Recent errors remain in memory; check local disk space and permissions. Export may be incomplete or unavailable.</value></data>
+  <data name="Diagnostics.RecentErrors" xml:space="preserve"><value>Recent sanitized warnings and errors (this run)</value></data>
+  <data name="Diagnostics.NoErrors" xml:space="preserve"><value>No recent warnings or errors.</value></data>
+  <data name="Diagnostics.Preview" xml:space="preserve"><value>Preview support bundle</value></data>
+  <data name="Diagnostics.PreviewNotice" xml:space="preserve"><value>Nothing has been exported. Review the exact snapshot files below, then select Export to create a local ZIP. No files are uploaded.</value></data>
+  <data name="Diagnostics.Destination" xml:space="preserve"><value>Destination: {0}</value></data>
+  <data name="Diagnostics.File" xml:space="preserve"><value>Review {0} ({1:N0} bytes)</value></data>
+  <data name="Diagnostics.FilePage" xml:space="preserve"><value>{0} — page {1} of {2}</value></data>
+  <data name="Diagnostics.PreviousPage" xml:space="preserve"><value>Previous page</value></data>
+  <data name="Diagnostics.NextPage" xml:space="preserve"><value>Next page</value></data>
+  <data name="Diagnostics.Export" xml:space="preserve"><value>Export reviewed bundle</value></data>
+  <data name="Diagnostics.Exporting" xml:space="preserve"><value>Exporting local bundle...</value></data>
+  <data name="Diagnostics.Exported" xml:space="preserve"><value>Support bundle exported</value></data>
+  <data name="Diagnostics.ShareNotice" xml:space="preserve"><value>Share this ZIP manually only with someone you trust. Timestamps and technical details may still be sensitive. Delete it when no longer needed.</value></data>
+  <data name="Diagnostics.Failed" xml:space="preserve"><value>Support bundle could not be created</value></data>
+  <data name="Diagnostics.FailureHelp" xml:space="preserve"><value>Check local disk space, permissions, and log integrity. No upload occurred. An existing export is never overwritten. Failure details are recorded as sanitized codes.</value></data>
   <data name="Status.LoadingSessions" xml:space="preserve"><value>Loading saved Jellyfin sessions...</value></data>
   <data name="Status.InitializingController" xml:space="preserve"><value>Initializing controller input...</value></data>
   <data name="Status.CheckingServer" xml:space="preserve"><value>Checking server...</value></data>

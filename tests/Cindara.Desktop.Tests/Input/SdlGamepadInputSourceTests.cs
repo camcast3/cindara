@@ -1,3 +1,4 @@
+using Cindara.Core.Diagnostics;
 using Cindara.Desktop.Input;
 using SDL3;
 
@@ -5,6 +6,30 @@ namespace Cindara.Desktop.Tests.Input;
 
 public sealed class SdlGamepadInputSourceTests
 {
+    [Fact]
+    public void DiagnosticsCaptureNativeFailureWithoutExceptionTextOrDeviceNames()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"cindara-sdl-diagnostics-{Guid.NewGuid():N}");
+        try
+        {
+            var diagnostics = new LocalDiagnostics(directory);
+            var backend = new FakeSdlGamepadBackend
+            {
+                InitializationException = new DllNotFoundException(@"C:\Users\private-user\private-runtime.dll"),
+            };
+            using var input = new SdlGamepadInputSource(backend, new ManualInputTimeProvider(), diagnostics);
+            input.Initialize();
+            Assert.False(input.IsAvailable);
+            Assert.Contains(diagnostics.RecentErrors, entry => entry.Errors.Contains("MissingNativeLibrary"));
+            Assert.All(Directory.GetFiles(directory), file =>
+                Assert.DoesNotContain("private", File.ReadAllText(file), StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Fact]
     public void InitializeLoadsBundledNativeRuntime()
     {

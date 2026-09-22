@@ -81,6 +81,8 @@
                                         Command="{Binding ShowDesignGalleryCancelCommand}" />
                                 <Button x:Name="LanguageButton" Content="{loc:Tr Language.Selection}"
                                         IsVisible="{Binding !IsAuthenticatedVisible}" Click="OnLanguage" />
+                                <Button x:Name="DiagnosticsButton" Content="{loc:Tr Diagnostics.Title}"
+                                        Click="OnDiagnostics" />
                             </StackPanel>
                         </Grid>
                     </Grid>

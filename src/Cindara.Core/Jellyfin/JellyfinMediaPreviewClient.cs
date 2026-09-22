@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Cindara.Core.Authentication;
+using Cindara.Core.Diagnostics;
 
 namespace Cindara.Core.Jellyfin;
 
@@ -14,8 +15,9 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
     private readonly JellyfinClientIdentity _clientIdentity;
     private readonly TimeProvider _timeProvider;
 
-    public JellyfinMediaPreviewClient(JellyfinClientIdentity clientIdentity)
-        : this(CreateSecureTransport(), clientIdentity)
+    public JellyfinMediaPreviewClient(JellyfinClientIdentity clientIdentity, LocalDiagnostics? diagnostics = null)
+        : this(diagnostics is null ? CreateSecureTransport()
+            : new DiagnosticHttpHandler(diagnostics, CreateSecureTransport()), clientIdentity)
     {
     }
 

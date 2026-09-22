@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cindara.Core.Authentication;
+using Cindara.Core.Diagnostics;
 using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
 using Cindara.Desktop.Accessibility;
@@ -25,6 +26,97 @@ namespace Cindara.Desktop.Tests.Navigation;
 public sealed class MainWindowNavigationTests
 {
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads"];
+
+    [Theory]
+    [InlineData(false, "en", 1280)]
+    [InlineData(true, "en", 1280)]
+    [InlineData(false, "qps-plocm", 720)]
+    public Task DiagnosticsPreviewIsOptInFocusTrappedAndReachableWithoutChangingSettings(
+        bool signedIn, string cultureName, int width) => TestAppBuilder.Run(() =>
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"cindara-ui-diagnostics-{Guid.NewGuid():N}");
+        try
+        {
+            using var culture = new CultureScope(cultureName);
+            var diagnostics = new LocalDiagnostics(directory);
+            diagnostics.Record(DiagnosticArea.Controller, DiagnosticAction.InitializeController,
+                DiagnosticOutcome.Failed, DiagnosticLevel.Error, new DllNotFoundException("private-path"));
+            using var fixture = new ShellFixture(diagnostics: diagnostics);
+            fixture.Window.WindowState = WindowState.Normal;
+            fixture.Window.Width = width;
+            fixture.Window.Height = width * 9 / 16;
+            if (signedIn)
+            {
+                fixture.SignIn();
+                fixture.OpenSettings();
+                Assert.Equal(3, fixture.Shell.FindControl<StackPanel>("SettingsActions")!.Children.OfType<Button>().Count());
+                fixture.Input.Press(ControllerAction.NavigateDown);
+                fixture.Input.Press(ControllerAction.NavigateDown);
+                fixture.Input.Press(ControllerAction.NavigateDown);
+                Assert.Equal("DiagnosticsButton", Focused(fixture.Window).Name);
+            }
+
+            fixture.Click("DiagnosticsButton");
+            Assert.True(fixture.IsModalVisible);
+            Assert.False(fixture.Window.FindControl<Grid>("MainSurface")!.IsEnabled);
+            AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+            Assert.Contains(fixture.Modal.Children.OfType<TextBlock>(),
+                block => block.Text!.Contains("SDL3", StringComparison.Ordinal));
+            Assert.DoesNotContain(fixture.Modal.Children.OfType<TextBlock>(),
+                block => block.Text!.Contains("private-path", StringComparison.Ordinal));
+            fixture.ClickContent(Loc.Get("Diagnostics.RecentErrors"));
+            Assert.Contains(fixture.Modal.Children.OfType<TextBlock>(),
+                block => block.Text!.Contains("MissingNativeLibrary", StringComparison.Ordinal));
+            fixture.ClickContent(Loc.Get("Action.Back"));
+            fixture.ClickContent(Loc.Get("Diagnostics.Preview"));
+            Assert.Equal(5, fixture.Modal.Children.OfType<Button>().Count());
+            Assert.Contains(fixture.Modal.Children.OfType<TextBlock>(),
+                block => block.Text!.Contains("support-bundles", StringComparison.Ordinal));
+            var file = fixture.Modal.Children.OfType<Button>().First();
+            Assert.Contains("environment.json", (string)file.Content!, StringComparison.Ordinal);
+            fixture.Click(file);
+            Assert.Contains(fixture.Modal.Children.OfType<TextBlock>(),
+                block => block.Text!.Contains("RuntimeVersion", StringComparison.Ordinal));
+            fixture.Key(Key.Tab, RawInputModifiers.Shift);
+            Assert.Contains(Focused(fixture.Window), fixture.Modal.Children);
+            AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+            fixture.ClickContent(Loc.Get("Action.Back"));
+            fixture.ClickContent(Loc.Get("Action.Cancel"));
+            fixture.Input.Press(ControllerAction.Back);
+            Assert.False(fixture.IsModalVisible);
+            Assert.Equal("DiagnosticsButton", Focused(fixture.Window).Name);
+            Assert.DoesNotContain(diagnostics.Snapshot(), entry => entry.Action == DiagnosticAction.ExportBundle);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    });
+
+    [Fact]
+    public Task DiagnosticsKeepsFocusWhenUnderlyingHomeLoadingFinishes() => TestAppBuilder.Run(() =>
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"cindara-loading-diagnostics-{Guid.NewGuid():N}");
+        try
+        {
+            var diagnostics = new LocalDiagnostics(directory);
+            using var fixture = new ShellFixture(diagnostics: diagnostics);
+            fixture.Preview.Pause = true;
+            fixture.SignIn(waitForHome: false);
+            fixture.Click("DiagnosticsButton");
+            fixture.Model.ShowDesignGalleryCommand.Cancel();
+            fixture.Flush();
+            Assert.True(fixture.IsModalVisible);
+            Assert.Contains(Focused(fixture.Window), fixture.Modal.Children);
+            Assert.False(fixture.Window.FindControl<Grid>("MainSurface")!.IsEnabled);
+            fixture.Input.Press(ControllerAction.Back);
+            Assert.Equal("DiagnosticsButton", Focused(fixture.Window).Name);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    });
 
     [Fact]
     public Task LoginOffersOnlyEnglishLanguageAndTrapsKeyboardFocus() => TestAppBuilder.Run(() =>
@@ -517,10 +609,11 @@ public sealed class MainWindowNavigationTests
 
     private sealed class ShellFixture : IDisposable
     {
-        public ShellFixture(bool savedAccounts = true, PresentationPreferences? preferences = null)
+        public ShellFixture(bool savedAccounts = true, PresentationPreferences? preferences = null,
+            LocalDiagnostics? diagnostics = null)
         {
             Model = new MainViewModel(new ServerClient(), new AuthenticationService(savedAccounts), Preview);
-            Window = new TestMainWindow(Input, preferences) { DataContext = Model };
+            Window = new TestMainWindow(Input, preferences, diagnostics) { DataContext = Model };
             Window.Show();
             Window.Activate();
             Flush();
@@ -579,8 +672,9 @@ public sealed class MainWindowNavigationTests
         }
     }
 
-    private sealed class TestMainWindow(IControllerInputSource input, PresentationPreferences? preferences)
-        : MainWindow(input, preferences)
+    private sealed class TestMainWindow(IControllerInputSource input, PresentationPreferences? preferences,
+        LocalDiagnostics? diagnostics)
+        : MainWindow(input, preferences, diagnostics)
     {
         public void DeactivateForTest() => typeof(WindowBase)
             .GetMethod("HandleDeactivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
