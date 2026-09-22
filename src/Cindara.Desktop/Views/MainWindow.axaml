@@ -29,7 +29,9 @@
                                                      PlaceholderText="https://jellyfin.example.com"
                                                      Text="{Binding ServerAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                             <Button Classes="primary" Command="{Binding ConnectCommand}" Content="Connect" />
-                                            <Button Command="{Binding BackToSessionsCommand}" Content="Saved accounts" />
+                                            <Button x:Name="BackToSavedAccountsButton"
+                                                    IsVisible="{Binding !!SavedSessions.Count}"
+                                                    Command="{Binding BackToSessionsCommand}" Content="Saved accounts" />
                                         </StackPanel>
                                         <StackPanel x:Name="SignIn" IsVisible="{Binding IsSignInVisible}" Spacing="16">
                                             <TextBlock Classes="label" Text="Jellyfin sign in" />

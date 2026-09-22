@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Media;
 using Cindara.Desktop.ViewModels;
 
@@ -22,13 +23,17 @@ internal sealed class TestPreviewImageDecoder
 
         var resource = new TrackedImageResource();
         Resources.Add(resource);
-        return new PreviewImage(new DrawingImage(), resource);
+        return new PreviewImage(resource, resource);
     });
 }
 
-internal sealed class TrackedImageResource : IDisposable
+internal sealed class TrackedImageResource : IImage, IDisposable
 {
+    public Size Size => new(1, 1);
+
     public int DisposeCount { get; private set; }
+
+    public void Draw(DrawingContext context, Rect sourceRect, Rect destRect) { }
 
     public void Dispose() => DisposeCount++;
 }

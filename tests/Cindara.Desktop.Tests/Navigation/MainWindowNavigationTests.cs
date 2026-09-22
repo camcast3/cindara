@@ -21,6 +21,33 @@ public sealed class MainWindowNavigationTests
 {
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads", "Settings"];
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ServerEntryOffersSavedAccountsOnlyWhenTheyExist(bool savedAccounts) => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture(savedAccounts);
+        if (savedAccounts)
+        {
+            fixture.Model.AddServerCommand.Execute(null);
+            fixture.Flush();
+        }
+
+        var button = fixture.Window.FindControl<Button>("BackToSavedAccountsButton")!;
+        Assert.Equal(savedAccounts, button.IsEffectivelyVisible);
+        if (savedAccounts)
+        {
+            fixture.Click("BackToSavedAccountsButton");
+            Assert.True(fixture.Model.AreSavedSessionsVisible);
+            Assert.Equal("SavedAccountButton", Focused(fixture.Window).Name);
+        }
+        else
+        {
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            Assert.Equal("WindowOptionsButton", Focused(fixture.Window).Name);
+        }
+    });
+
     [Fact]
     public Task DestinationRevisitRestoresContentInsteadOfAnotherScreensRailButton() => TestAppBuilder.Run(() =>
     {
