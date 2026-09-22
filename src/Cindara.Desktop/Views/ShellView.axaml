@@ -8,16 +8,13 @@
         <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
         <Grid>
             <StackPanel x:Name="HomePage" Spacing="24">
-                <Button x:Name="HomeHeader" Classes="nav header-tab selected"
-                        Content="{loc:Tr Nav.Home}" HorizontalAlignment="Left" Click="OnHomeClicked" />
+                <TextBlock Classes="display" Text="{loc:Tr Nav.Home}" />
                 <Border Classes="hero">
                     <StackPanel Spacing="24">
-                        <TextBlock Classes="display" Text="{loc:Tr Home.Tagline}" />
-                        <TextBlock Classes="secondary" Text="{Binding AuthenticatedAccount}" />
                         <TextBlock Classes="secondary" TextWrapping="Wrap"
-                                   Text="{loc:Tr Home.Ready}" />
-                        <Button x:Name="PreviewButton" Classes="primary"
-                                Command="{Binding ShowDesignGalleryCommand}" Content="{loc:Tr Home.Preview}" />
+                                   Text="{Binding StatusMessage}" />
+                        <Button x:Name="RetryHomeButton" Classes="primary" IsVisible="{Binding !IsBusy}"
+                                Command="{Binding OpenHomeCommand}" Content="{loc:Tr Home.Retry}" />
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -26,7 +23,6 @@
                 <Border Classes="hero">
                     <StackPanel Spacing="24">
                         <TextBlock x:Name="DestinationMessage" Classes="secondary" TextWrapping="Wrap" />
-                        <Button x:Name="ReturnHomeButton" Content="{loc:Tr Nav.ReturnHome}" Click="OnHomeClicked" />
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -56,7 +52,7 @@
                         <TextBlock Classes="secondary" TextWrapping="Wrap"
                                    Text="{loc:Tr Settings.DisplayHelp}" />
                         <Button Content="{loc:Tr Settings.WindowOptions}" Click="OnWindowOptionsClicked" />
-                        <Button Content="{loc:Tr Accessibility.Title}" Click="OnAccessibilityClicked" />
+                        <Button Content="{loc:Tr Language.Selection}" Click="OnLanguageClicked" />
                     </StackPanel>
                     <StackPanel x:Name="ControlsSettings" Grid.Column="1" IsVisible="False" Spacing="24">
                         <TextBlock Classes="heading" Text="{loc:Tr Settings.ControlsHeading}" />

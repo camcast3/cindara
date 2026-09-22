@@ -8,9 +8,9 @@ namespace Cindara.Desktop.Tests.Input;
 public sealed class ControllerGlyphsTests
 {
     [Theory]
-    [InlineData("fr", "Croix", "Cercle")]
-    [InlineData("fr-CA", "Croix", "Cercle")]
-    public void TranslatesButtonNamesButNotPhysicalSymbols(string culture, string accept, string back)
+    [InlineData("fr", "Cross", "Circle")]
+    [InlineData("fr-CA", "Cross", "Circle")]
+    public void UnsupportedLanguagesKeepEnglishButtonNamesAndPhysicalSymbols(string culture, string accept, string back)
     {
         using var scope = new CultureScope(culture);
 

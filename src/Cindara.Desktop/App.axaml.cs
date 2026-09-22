@@ -4,7 +4,6 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Cindara.Core.Authentication;
 using Cindara.Core.Jellyfin;
-using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.Authentication;
 using Cindara.Desktop.Input;
 using Cindara.Desktop.Localization;
@@ -60,8 +59,7 @@ public partial class App : Application
                 httpClient.Dispose();
             };
 
-            desktop.MainWindow = new MainWindow(new SdlGamepadInputSource(),
-                new PresentationSettingsStore(Path.Combine(applicationData, "accessibility.json")))
+            desktop.MainWindow = new MainWindow(new SdlGamepadInputSource())
             {
                 DataContext = viewModel,
             };

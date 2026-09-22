@@ -15,20 +15,32 @@ account and return it to sign-in.
 
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
 Settings. Library/search/download content remains explicitly unavailable until
-its roadmap work lands; Home can open the authenticated design preview.
+its roadmap work lands. Signing in opens the current media Home directly, without
+a preview launcher, top tab bar, or Back to Home button. The Home sidebar's
+Settings action opens the in-app settings.
 Settings contains account switching, sign-out, display, and controller guidance.
 D-pad/left stick or arrows navigate, Accept/Enter selects, and Back/Escape
 dismisses dialogs or returns to the navigation rail. Start/Options/+ or F11
-toggles fullscreen; **Window / exit** provides explicit desktop and exit actions.
+toggles fullscreen; **Settings → Display → Window and exit options** provides
+explicit desktop and exit actions.
 Accept on a text field opens an on-screen keyboard. Saved accounts use the same
 focus-trapped choice dialog as the rest of the shell.
 
-Accessibility preferences are available before sign-in through **Window / exit**
-and from Settings: 100/125/150% text, high contrast, and reduced motion, with
-local persistence. `CINDARA_CULTURE` selects a startup locale; `qps-ploc` and
-`qps-plocm` exercise expanded and right-to-left pseudo-localization.
+The login screen and **Settings → Display** offer **Language: English**.
+English is the only supported UI language. Appearance controls are deferred;
+the text/contrast/motion foundation remains covered by developer tests but is
+not exposed or restored from saved appearance settings. `CINDARA_CULTURE`
+controls regional formatting; `qps-ploc` and `qps-plocm` are developer-only
+expanded and right-to-left pseudo-localization modes.
 See [accessibility and localization](docs/accessibility.md) for defaults,
 limitations, validation, and the keyboard/screen-reader release checklist.
+
+Home loading overlaps metadata and artwork with at most six requests in flight,
+deduplicates images within that load, and has a 30-second overall deadline.
+**Cancel loading** or Back/Escape cancels the request; failures retain sign-in and
+offer Retry (except a rejected session, which returns to sign-in). Returning
+from Settings reuses the current account's loaded Home instead of downloading
+it again. Account switching and sign-out clear that data.
 
 SDL3 handles controller hotplug, directional repeat, and active-device prompts
 without resetting focus. Input received while the window is inactive is

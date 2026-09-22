@@ -15,6 +15,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly IJellyfinMediaPreviewClient? _mediaPreviewClient;
     private readonly Func<MediaPreviewHome, DesignGalleryViewModel> _createGallery;
     private AuthenticatedSession? _currentSession;
+    private bool _disposed;
 
     public MainViewModel(
         IJellyfinServerClient serverClient,
@@ -52,6 +53,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(LogoutCommand))]
     [NotifyCanExecuteChangedFor(nameof(InitializeCommand))]
     [NotifyCanExecuteChangedFor(nameof(ShowDesignGalleryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenHomeCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -300,9 +302,22 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private bool CanNavigate() => !IsBusy;
 
     private bool CanShowDesignGallery() =>
-        !IsBusy && _currentSession is not null && _mediaPreviewClient is not null;
+        !_disposed && !IsBusy && _currentSession is not null && _mediaPreviewClient is not null;
 
     [RelayCommand(CanExecute = nameof(CanShowDesignGallery))]
+    private async Task OpenHomeAsync()
+    {
+        if (DesignGallery is not null)
+        {
+            IsDesignGalleryVisible = true;
+        }
+        else
+        {
+            await ShowDesignGalleryCommand.ExecuteAsync(null);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanShowDesignGallery), IncludeCancelCommand = true)]
     private async Task ShowDesignGalleryAsync(CancellationToken cancellationToken)
     {
         if (_currentSession is not { } session || _mediaPreviewClient is null)
@@ -315,11 +330,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         try
         {
             var home = await _mediaPreviewClient.GetHomeAsync(session, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_disposed)
+            {
+                return;
+            }
+
             var gallery = _createGallery(home);
             ClearDesignGallery();
             DesignGallery = gallery;
             IsDesignGalleryVisible = true;
             StatusMessage = Loc.Get("Status.PreviewLoaded");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            StatusMessage = Loc.Get("Status.PreviewCanceled");
         }
         catch (MediaPreviewException exception)
         {
@@ -370,6 +395,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         Password = string.Empty;
         ShowSignIn();
         ShowDesignGalleryCommand.NotifyCanExecuteChanged();
+        OpenHomeCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanNavigate))]
@@ -431,6 +457,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         StatusMessage = Loc.Format("Status.SignedIn", session.Server.DisplayName);
         SetVisibleState(authenticated: true);
         ShowDesignGalleryCommand.NotifyCanExecuteChanged();
+        OpenHomeCommand.NotifyCanExecuteChanged();
     }
 
     private void SetVisibleState(
@@ -449,6 +476,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             AuthenticatedAccount = string.Empty;
             ClearDesignGallery();
             ShowDesignGalleryCommand.NotifyCanExecuteChanged();
+            OpenHomeCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -462,6 +490,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
+        ShowDesignGalleryCommand.Cancel();
         ClearDesignGallery();
         GC.SuppressFinalize(this);
     }

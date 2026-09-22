@@ -27,14 +27,13 @@ public partial class ShellView : UserControl
 
     public event EventHandler? DestinationChanged;
     public event EventHandler? WindowOptionsRequested;
-    public event EventHandler? AccessibilityRequested;
+    public event EventHandler? LanguageRequested;
     public string Destination => _destination;
-    public Control PreviewAction => PreviewButton;
     public Control InitialFocus => _destination switch
     {
-        "Home" => HomeHeader,
+        "Home" => RetryHomeButton.IsEffectivelyVisible && RetryHomeButton.IsEffectivelyEnabled ? RetryHomeButton : HomeNavigation,
         "Settings" => _category,
-        _ => ReturnHomeButton,
+        _ => NavigationButtons.Children.OfType<Button>().Single(button => Equals(button.Tag, _destination)),
     };
     public Control ContentFocus =>
         _contentMemory.TryGetValue(_destination, out var control)
@@ -193,7 +192,6 @@ public partial class ShellView : UserControl
     }
 
     private void OnDestinationClicked(object? sender, RoutedEventArgs args) => Navigate((string)((Button)sender!).Tag!);
-    private void OnHomeClicked(object? sender, RoutedEventArgs args) => Navigate("Home");
     private void OnCategoryClicked(object? sender, RoutedEventArgs args)
     {
         SelectCategory((Button)sender!);
@@ -204,6 +202,6 @@ public partial class ShellView : UserControl
     private void OnWindowOptionsClicked(object? sender, RoutedEventArgs args) =>
         WindowOptionsRequested?.Invoke(this, EventArgs.Empty);
 
-    private void OnAccessibilityClicked(object? sender, RoutedEventArgs args) =>
-        AccessibilityRequested?.Invoke(this, EventArgs.Empty);
+    private void OnLanguageClicked(object? sender, RoutedEventArgs args) =>
+        LanguageRequested?.Invoke(this, EventArgs.Empty);
 }

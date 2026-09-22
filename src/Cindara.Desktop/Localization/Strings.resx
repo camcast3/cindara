@@ -12,8 +12,9 @@
   <data name="Status.CheckingSession" xml:space="preserve"><value>Checking saved session...</value></data>
   <data name="Status.RemovedAccount" xml:space="preserve"><value>Removed {0}.</value></data>
   <data name="Status.SignedOut" xml:space="preserve"><value>Signed out of {0}.</value></data>
-  <data name="Status.LoadingPreview" xml:space="preserve"><value>Loading your Jellyfin media preview...</value></data>
-  <data name="Status.PreviewLoaded" xml:space="preserve"><value>Authenticated media preview loaded.</value></data>
+  <data name="Status.LoadingPreview" xml:space="preserve"><value>Loading your Jellyfin Home...</value></data>
+  <data name="Status.PreviewLoaded" xml:space="preserve"><value>Your Jellyfin Home is ready.</value></data>
+  <data name="Status.PreviewCanceled" xml:space="preserve"><value>Loading canceled. Select Retry loading Home to try again.</value></data>
   <data name="Status.SignInAgain" xml:space="preserve"><value>{0} Sign in again to continue.</value></data>
   <data name="Status.Combined" xml:space="preserve"><value>{0} {1}</value></data>
   <data name="Status.EnterServer" xml:space="preserve"><value>Enter the address of the Jellyfin server you want to add.</value></data>

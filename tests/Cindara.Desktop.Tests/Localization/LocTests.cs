@@ -12,8 +12,8 @@ public sealed class LocTests
     [Theory]
     [InlineData("en", "Checking server...")]
     [InlineData("en-US", "Checking server...")]
-    [InlineData("fr", "Vérification du serveur...")]
-    [InlineData("fr-CA", "Vérification du serveur...")]
+    [InlineData("fr", "Checking server...")]
+    [InlineData("fr-CA", "Checking server...")]
     [InlineData("de-DE", "Checking server...")]
     public void ResourcesUseCultureParentsAndNeutralFallback(string culture, string expected)
     {
@@ -36,12 +36,12 @@ public sealed class LocTests
     }
 
     [Fact]
-    public void ViewResourcesUseTranslationsAndFallbackIndependentlyOfStatusResources()
+    public void UnsupportedUiLanguagesUseEnglishAcrossAllResourceCatalogs()
     {
         using var scope = new CultureScope("fr-CA");
-        Assert.Equal("Accueil", Loc.Get("Nav.Home"));
+        Assert.Equal("Home", Loc.Get("Nav.Home"));
         Assert.Equal("Your media. Your space.", Loc.Get("Home.Tagline"));
-        Assert.Equal("V\u00e9rification du serveur...", Loc.Get("Status.CheckingServer"));
+        Assert.Equal("Checking server...", Loc.Get("Status.CheckingServer"));
     }
 
     [Fact]
@@ -60,8 +60,8 @@ public sealed class LocTests
     [Theory]
     [InlineData("en-US", false)]
     [InlineData("fr-FR", false)]
-    [InlineData("ar-SA", true)]
-    [InlineData("he-IL", true)]
+    [InlineData("ar-SA", false)]
+    [InlineData("he-IL", false)]
     [InlineData("qps-ploc", false)]
     [InlineData("qps-plocm", true)]
     public void DirectionReflectsSelectedCulture(string culture, bool rightToLeft)

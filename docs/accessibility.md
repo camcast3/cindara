@@ -5,13 +5,17 @@ dialogs, and authenticated design preview—not a claim of WCAG conformance or
 screen-reader certification. Playback, production browsing, and further
 translations must retain these contracts as they are implemented.
 
-## Presentation preferences
+## Current settings surface
 
-Open **Window / exit → Accessibility** before signing in, or use
-**Settings → Display → Accessibility** after authentication. All choices are ordinary buttons:
-keyboard Enter/Space, controller Accept, and mouse activation use the same
-actions. Each button exposes its current value in visible text and its accessible
-name; selection is not communicated by color alone.
+The login screen and **Settings → Display** expose **Language: English**, with
+English as the only supported choice. The selected language is exposed in
+visible text and automation state. Account switching, sign-out, and window/exit
+options live in the signed-in Settings screen, reached from the media sidebar.
+There is no intermediate Home/preview launcher or top Home/Trending/Activity/Profile
+bar. Back/Escape in media Home moves focus to its single Home navigation action.
+
+The product owner deferred appearance controls from the UI. The underlying
+presentation primitives remain available for developer/headless coverage only:
 
 | Preference | Default | Supported overrides |
 | --- | --- | --- |
@@ -19,15 +23,10 @@ name; selection is not communicated by color alone.
 | High contrast | Off | Black surfaces, white text/boundaries, yellow actions/focus |
 | Reduced motion | Off | Immediate scrolling/state changes; no button press scaling or indeterminate busy animation |
 
-Changes apply immediately and are saved in `Cindara/accessibility.json` below
-`.NET Environment.SpecialFolder.LocalApplicationData`. This contains only the
-three presentation preferences, not credentials or account data. A missing file
-uses the defaults above. An unreadable, incomplete, malformed, or unsupported
-file is an explicit load failure, not a silent successful reset; the UI reports
-the problem and continues with defaults, but prevents preference changes until
-the storage problem is repaired and the app restarted. It does not overwrite the
-unreadable settings. Failed saves are reported and retain the previous preferences.
-Saving writes a new file beside the destination before replacing it.
+The normal app always starts with the defaults above. It neither reads nor writes
+the earlier `accessibility.json`, so hidden appearance overrides cannot remain
+active after their UI was removed. The persistence helper is retained and tested
+as foundation code, not wired into the current application.
 
 These are **application overrides**. The app does not currently detect OS
 high-contrast, reduced-motion, or text-size preferences. It does respect the
@@ -69,17 +68,17 @@ Controls must remain identifiable in grayscale.
 
 ## Locale and pseudo-locales
 
-`Loc.Get(key)` resolves localized resources with invariant-resource fallback;
+`Loc.Get(key)` currently resolves the English invariant catalog only;
 unknown keys remain visible as `[key]` for diagnosis. `Loc.Format(key, args)`
 preserves culture-aware composite formatting. Use `LocaleFormat` for metadata
 instead of concatenating translated fragments. Server-provided names and media
 titles are content, not resource keys.
 
 The startup `CINDARA_CULTURE` environment override accepts .NET culture names.
-Without an override, startup uses the current process/OS culture. English is
-the invariant fallback, and French resources demonstrate translation plumbing;
-this does not claim complete translated product coverage. Culture selection
-happens at startup; restart to change it.
+Without an override, formatting uses the current process/OS culture. UI language
+and flow remain English/LTR regardless of regional culture; only the explicit
+developer RTL pseudo-locale changes flow. Translation resources are not shipped
+until another language is supported. Culture selection happens at startup.
 
 ```powershell
 $env:CINDARA_CULTURE = 'fr-FR'
@@ -136,10 +135,10 @@ matrix is a **release checklist**, not a record of completed platform testing:
 | Linux desktop + Orca (supported Avalonia accessibility backend) | Repeat keyboard/announcement checks; record backend/version and any unsupported automation behavior rather than assuming Windows parity |
 | macOS keyboard + VoiceOver | Repeat names, roles, values, focus restoration, text entry, and status-announcement checks |
 | 1080p and 4K TV, including 200% OS DPI | Read at couch distance; no double DPI scaling; text at 100/125/150%; no clipped critical controls; scroll actions into view |
-| Keyboard only | Tab/Shift+Tab and arrows; Enter/Space; Escape/Back; F11; pre-login accessibility; saved-account and error recovery; physical Unicode input/paste |
-| Each presentation mode, then all together | Every page and dialog; focus visible on dark and accent fills; grayscale selection; immediate gallery scrolling; stationary busy indication; default restoration and restart persistence |
-| French, expanded pseudo, RTL pseudo at 150% | Long action names/metadata; wrapping and scrollability; mixed-direction URLs; logical reading order; no critical controls outside the focus scope |
-| Controller plus keyboard | Mode changes do not steal focus; Accept activates every preference; Back restores launcher; controller disconnect leaves keyboard usable |
+| Keyboard only | Tab/Shift+Tab and arrows; Enter/Space; Escape/Back; F11; English language selection; saved-account and load-cancel/retry recovery; physical Unicode input/paste |
+| Developer-injected presentation modes | Every page and dialog; focus visible on dark and accent fills; grayscale selection; immediate gallery scrolling; stationary busy indication |
+| Regional formatting, expanded pseudo, RTL pseudo at 150% | Long action names/metadata; wrapping and scrollability; mixed-direction URLs; logical reading order; no critical controls outside the focus scope |
+| Controller plus keyboard | Language choice preserves focus; Back restores launcher; controller disconnect leaves keyboard usable |
 
 Record the tested OS, assistive-technology version, Avalonia backend, locale,
 display scale, and preferences with any defect. Do not mark screen-reader

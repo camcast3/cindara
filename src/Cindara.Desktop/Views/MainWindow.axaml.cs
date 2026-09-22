@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
@@ -27,32 +26,21 @@ public partial class MainWindow : Window
     private TextBox? _keyboardDraft;
     private string? _screen;
     private bool _closed;
-    private readonly PresentationSettingsStore? _presentationStore;
-    private bool _presentationLoadFailed;
+    private bool _openHomeOnReady;
 
-    public PresentationPreferences Preferences { get; private set; } = new();
+    public PresentationPreferences Preferences { get; }
 
     public MainWindow() : this(new SdlGamepadInputSource())
     {
     }
 
-    public MainWindow(IControllerInputSource controllerInput, PresentationSettingsStore? presentationStore = null)
+    public MainWindow(IControllerInputSource controllerInput, PresentationPreferences? preferences = null)
     {
         _controllerInput = controllerInput;
         InitializeComponent();
         FlowDirection = Loc.IsRightToLeft
             ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight;
-        _presentationStore = presentationStore;
-        try
-        {
-            Preferences = presentationStore?.Load() ?? new();
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
-        {
-            _presentationLoadFailed = true;
-            ShowPresentationError("Accessibility.LoadError");
-        }
-
+        Preferences = preferences ?? new();
         ApplyPresentation();
         _navigation = new FocusNavigationService(this);
         _controllerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
@@ -72,11 +60,26 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnShellKeyDown, RoutingStrategies.Tunnel);
         Shell.DestinationChanged += (_, _) =>
         {
+            if (Shell.Destination != "Home" && _viewModel?.ShowDesignGalleryCommand.IsRunning is true)
+            {
+                _viewModel.ShowDesignGalleryCommand.Cancel();
+            }
+
+            if (Shell.Destination == "Home" && _viewModel?.OpenHomeCommand.CanExecute(null) is true)
+            {
+                _viewModel.OpenHomeCommand.Execute(null);
+            }
+
             _screen = null;
             Dispatcher.UIThread.Post(RefreshScreen, DispatcherPriority.Loaded);
         };
         Shell.WindowOptionsRequested += (_, _) => ShowWindowOptions();
-        Shell.AccessibilityRequested += (_, _) => ShowAccessibility();
+        Shell.LanguageRequested += (_, _) => ShowLanguage();
+        GalleryView.SettingsRequested += (_, _) =>
+        {
+            Shell.Navigate("Settings");
+            _viewModel?.HideDesignGalleryCommand.Execute(null);
+        };
     }
 
     private async void OnOpened(object? sender, EventArgs eventArgs)
@@ -135,6 +138,7 @@ public partial class MainWindow : Window
         ClearModal();
         if (_viewModel is not null)
         {
+            _viewModel.ShowDesignGalleryCommand.Cancel();
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _viewModel = null;
         }
@@ -144,6 +148,11 @@ public partial class MainWindow : Window
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
+        if (args.PropertyName == nameof(MainViewModel.IsAuthenticatedVisible))
+        {
+            _openHomeOnReady = _viewModel?.IsAuthenticatedVisible is true;
+        }
+
         if (args.PropertyName == nameof(MainViewModel.IsBusy))
         {
             BusyIndicator.IsIndeterminate = _viewModel?.IsBusy is true && !Preferences.ReducedMotion;
@@ -163,6 +172,12 @@ public partial class MainWindow : Window
         if (_closed || _viewModel is null)
         {
             return;
+        }
+
+        if (_openHomeOnReady && !_viewModel.IsBusy && _viewModel.OpenHomeCommand.CanExecute(null))
+        {
+            _openHomeOnReady = false;
+            _viewModel.OpenHomeCommand.Execute(null);
         }
 
         ShellViewport.IsVisible = !_viewModel.IsDesignGalleryVisible;
@@ -192,7 +207,6 @@ public partial class MainWindow : Window
             Shell.Reset();
         }
 
-        var returningFromGallery = _screen == "gallery" && Shell.IsVisible;
         _screen = screen;
         UpdateLayout();
         var initial = screen switch
@@ -200,19 +214,15 @@ public partial class MainWindow : Window
             "sign-in" => UsernameTextBox,
             "accounts" => SavedAccountButton,
             "server" => (Control)ServerAddressTextBox,
-            "gallery" => GalleryBackButton,
-            "loading" => WindowOptionsButton,
+            "gallery" => GalleryView.HomeNavigation,
+            "loading" => LanguageButton,
             _ => Shell.InitialFocus,
         };
         var contentFocus = Shell.ContentFocus;
         _navigation.SetScope(MainSurface, initial, screen);
         if (screen == "gallery")
         {
-            GalleryView.FocusTopNavigation();
-        }
-        else if (returningFromGallery)
-        {
-            _navigation.Focus(Shell.PreviewAction);
+            GalleryView.FocusHomeContent();
         }
         else if (Shell.IsVisible)
         {
@@ -363,9 +373,13 @@ public partial class MainWindow : Window
         {
             DismissModal();
         }
+        else if (_viewModel?.ShowDesignGalleryCommand.IsRunning is true)
+        {
+            _viewModel.ShowDesignGalleryCommand.Cancel();
+        }
         else if (_viewModel?.IsDesignGalleryVisible is true)
         {
-            _viewModel.HideDesignGalleryCommand.Execute(null);
+            GalleryView.HomeNavigation.Focus(NavigationMethod.Directional);
         }
         else if (_viewModel?.IsAuthenticatedVisible is true && !Shell.IsRailFocused)
         {
@@ -379,16 +393,20 @@ public partial class MainWindow : Window
                 _viewModel.BackToSessionsCommand.Execute(null);
             }
         }
+        else if (_viewModel?.IsAuthenticatedVisible is true)
+        {
+            Shell.Navigate("Home");
+        }
         else
         {
-            ShowWindowOptions();
+            LanguageButton.Focus(NavigationMethod.Directional);
         }
     }
 
     private void ToggleFullscreen() => WindowState =
         WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
 
-    private void OnWindowOptions(object? sender, RoutedEventArgs args) => ShowWindowOptions();
+    private void OnLanguage(object? sender, RoutedEventArgs args) => ShowLanguage();
 
     private void ShowWindowOptions()
     {
@@ -401,93 +419,30 @@ public partial class MainWindow : Window
         AddModalButton(Loc.Get("Window.Return"), DismissModal);
         AddModalButton(Loc.Get("Window.Desktop"), () => { WindowState = WindowState.Normal; DismissModal(); });
         AddModalButton(Loc.Get("Window.Fullscreen"), () => { WindowState = WindowState.FullScreen; DismissModal(); });
-        AddModalButton(Loc.Get("Accessibility.Title"), ShowAccessibility);
         AddModalButton(Loc.Get("Window.Exit"), Close);
         FocusModal();
     }
 
-    private void ShowAccessibility()
+    private void ShowLanguage()
     {
         if (ModalOverlay.IsVisible)
         {
-            // Replace window options while retaining the original non-modal focus owner.
             ModalActions.Children.Clear();
-            ModalTitle.Text = Loc.Get("Accessibility.Title");
+            ModalTitle.Text = Loc.Get("Language.Title");
             AutomationProperties.SetName(ModalOverlay, ModalTitle.Text);
             _navigation.Forget("modal");
         }
         else
         {
-            BeginModal(Loc.Get("Accessibility.Title"));
+            BeginModal(Loc.Get("Language.Title"));
         }
 
-        if (_presentationLoadFailed)
-        {
-            ModalActions.Children.Add(new TextBlock
-            {
-                Text = Loc.Get("Accessibility.LoadError"),
-                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-                Classes = { "secondary" },
-            });
-        }
-
-        var scale = AddPreference("Accessibility.TextScale", Loc.Format("Accessibility.TextScale", Preferences.TextScale),
-            "Accessibility.CycleText");
-        var contrast = AddPreference("Accessibility.HighContrast", StateLabel("Accessibility.HighContrast", Preferences.HighContrast),
-            "Accessibility.Toggle");
-        var motion = AddPreference("Accessibility.ReducedMotion", StateLabel("Accessibility.ReducedMotion", Preferences.ReducedMotion),
-            "Accessibility.Toggle");
-        scale.Click += (_, _) =>
-        {
-            UpdatePreferences(Preferences with { TextScale = Preferences.TextScale == 1 ? 1.25 : Preferences.TextScale == 1.25 ? 1.5 : 1 });
-            scale.Content = Loc.Format("Accessibility.TextScale", Preferences.TextScale);
-        };
-        contrast.Click += (_, _) =>
-        {
-            UpdatePreferences(Preferences with { HighContrast = !Preferences.HighContrast });
-            contrast.Content = StateLabel("Accessibility.HighContrast", Preferences.HighContrast);
-        };
-        motion.Click += (_, _) =>
-        {
-            UpdatePreferences(Preferences with { ReducedMotion = !Preferences.ReducedMotion });
-            motion.Content = StateLabel("Accessibility.ReducedMotion", Preferences.ReducedMotion);
-        };
-        var error = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "secondary" } };
-        error.Bind(TextBlock.TextProperty, PresentationStatus.GetObservable(TextBlock.TextProperty));
-        AutomationProperties.SetLiveSetting(error, AutomationLiveSetting.Assertive);
-        ModalActions.Children.Add(error);
+        var english = AddModalButton(Loc.Get("Language.English"), DismissModal);
+        english.Classes.Add("selected");
+        AutomationProperties.SetItemStatus(english, Loc.Get("State.Selected"));
+        AutomationProperties.SetHelpText(english, Loc.Get("Language.EnglishOnly"));
         AddModalButton(Loc.Get("Action.Back"), DismissModal);
         FocusModal();
-
-        Button AddPreference(string id, string label, string help)
-        {
-            var button = AddModalButton(label, () => { });
-            AutomationProperties.SetAutomationId(button, id);
-            AutomationProperties.SetHelpText(button, Loc.Get(help));
-            button.IsEnabled = !_presentationLoadFailed;
-            return button;
-        }
-    }
-
-    private static string StateLabel(string key, bool enabled) =>
-        Loc.Format(key, Loc.Get(enabled ? "State.On" : "State.Off"));
-
-    private void UpdatePreferences(PresentationPreferences preferences)
-    {
-        try
-        {
-            _presentationStore?.Save(preferences);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            ShowPresentationError("Accessibility.SaveError");
-            return;
-        }
-
-        Preferences = preferences;
-        PresentationStatus.Text = string.Empty;
-        PresentationStatus.IsVisible = false;
-        ApplyPresentation();
     }
 
     private void ApplyPresentation()
@@ -495,12 +450,6 @@ public partial class MainWindow : Window
         PresentationTheme.Apply(this, Preferences);
         GalleryView.ApplyPreferences(Preferences);
         BusyIndicator.IsIndeterminate = _viewModel?.IsBusy is true && !Preferences.ReducedMotion;
-    }
-
-    private void ShowPresentationError(string key)
-    {
-        PresentationStatus.Text = Loc.Get(key);
-        PresentationStatus.IsVisible = true;
     }
 
     private void OnChooseAccount(object? sender, RoutedEventArgs args)

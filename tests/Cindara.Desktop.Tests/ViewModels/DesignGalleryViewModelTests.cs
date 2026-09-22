@@ -10,8 +10,8 @@ public sealed class DesignGalleryViewModelTests
     [Theory]
     [InlineData("en", "Northstar · S2 E3", "S2 E3 · Homecoming", "2026  ·  1h 5m  ·  TV-14",
         "Recently Added in TV {1}")]
-    [InlineData("fr", "Northstar · S2 É3", "S2 É3 · Homecoming", "2026  ·  1 h 5 min  ·  TV-14",
-        "Ajouts récents dans TV {1}")]
+    [InlineData("fr", "Northstar · S2 E3", "S2 E3 · Homecoming", "2026  ·  1h 5m  ·  TV-14",
+        "Recently Added in TV {1}")]
     public void RawMetadataIsLocalizedForCardsHeroAndLibraryHeadings(
         string culture, string subtitle, string heroSubtitle, string details, string railTitle)
     {
@@ -46,7 +46,7 @@ public sealed class DesignGalleryViewModelTests
         };
         using var card = new MediaPreviewCardViewModel(item);
 
-        Assert.Equal("S2 É3 · Homecoming", card.Subtitle);
+        Assert.Equal("S2 E3 · Homecoming", card.Subtitle);
         Assert.Equal(card.Subtitle, card.HeroSubtitle);
         Assert.Empty(card.Details);
     }

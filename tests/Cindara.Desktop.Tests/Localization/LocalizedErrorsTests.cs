@@ -40,11 +40,11 @@ public sealed class LocalizedErrorsTests
     }
 
     [Fact]
-    public void ErrorsUseTheTranslatedCatalog()
+    public void ErrorsRemainEnglishForUnsupportedLanguages()
     {
         using var scope = new CultureScope("fr-FR");
 
-        Assert.Equal("Jellyfin a refusé l'accès à l'aperçu des médias.",
+        Assert.Equal("Jellyfin denied access to the media preview.",
             LocalizedErrors.Get(new MediaPreviewException(MediaPreviewError.AccessDenied, "raw")));
     }
 }

@@ -10,8 +10,36 @@ namespace Cindara.Desktop.Tests.ViewModels;
 [Collection(LocalizationTestGroup.Name)]
 public sealed class MainViewModelTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CanceledOrDisposedLoadNeverPublishesLateResults(bool dispose)
+    {
+        var preview = new PendingPreviewClient();
+        using var model = new MainViewModel(new StubServerClient(), new TestAuthenticationService(), preview);
+        await model.InitializeCommand.ExecuteAsync(null);
+        await model.UseSavedSessionCommand.ExecuteAsync(null);
+        var pending = model.ShowDesignGalleryCommand.ExecuteAsync(null);
+        Assert.True(model.IsBusy);
+        if (dispose)
+        {
+            model.Dispose();
+        }
+        else
+        {
+            model.ShowDesignGalleryCancelCommand.Execute(null);
+        }
+
+        preview.Completion.SetResult(new MediaPreviewHome(null, [], []));
+        await pending;
+        Assert.Null(model.DesignGallery);
+        Assert.False(model.IsDesignGalleryVisible);
+        Assert.False(model.IsBusy);
+        Assert.Equal(!dispose, model.OpenHomeCommand.CanExecute(null));
+    }
+
     [Fact]
-    public async Task FrenchStatusUsesResourcesAndLeavesServerNameUntouched()
+    public async Task UnsupportedLanguageUsesEnglishResourcesAndLeavesServerNameUntouched()
     {
         using var scope = new CultureScope("fr-CA");
         using var viewModel = new MainViewModel(new StubServerClient(), new TestAuthenticationService())
@@ -19,10 +47,10 @@ public sealed class MainViewModelTests
             ServerAddress = Server.BaseUri.ToString(),
         };
 
-        Assert.Equal("Chargement des sessions Jellyfin enregistrées...", viewModel.StatusMessage);
+        Assert.Equal("Loading saved Jellyfin sessions...", viewModel.StatusMessage);
         await viewModel.ConnectCommand.ExecuteAsync(null);
 
-        Assert.Equal("Connecté à Living Room. Connectez-vous avec votre compte Jellyfin.",
+        Assert.Equal("Connected to Living Room. Sign in with your Jellyfin account.",
             viewModel.StatusMessage);
         Assert.Equal(string.Empty, viewModel.Username);
     }
@@ -503,6 +531,14 @@ public sealed class MainViewModelTests
         var item = new MediaPreviewItem("movie", "Movie", "2026", "Movie",
             Artwork: [1], Backdrop: [2], Overview: "Overview", Details: "2026", PlaybackProgress: null);
         return new MediaPreviewHome(item, [], [new MediaPreviewRail("movies", "Movies", [item])]);
+    }
+
+    private sealed class PendingPreviewClient : IJellyfinMediaPreviewClient
+    {
+        public TaskCompletionSource<MediaPreviewHome> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<MediaPreviewHome> GetHomeAsync(AuthenticatedSession session, CancellationToken cancellationToken = default) =>
+            Completion.Task;
     }
 
     private static readonly ServerIdentity Server = new(

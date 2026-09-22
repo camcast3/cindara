@@ -70,32 +70,32 @@
                                              AutomationProperties.Name="{loc:Tr State.Busy}" />
                                 <TextBlock Classes="caption" Text="{loc:Tr State.Busy}" IsVisible="{Binding IsBusy}"
                                            automation:AutomationProperties.LiveSetting="Polite" />
-                                <TextBlock x:Name="PresentationStatus" Classes="caption" IsVisible="False"
-                                           automation:AutomationProperties.LiveSetting="Assertive" TextWrapping="Wrap" />
                                 <TextBlock Classes="secondary" automation:AutomationProperties.LiveSetting="Polite"
                                            Text="{Binding StatusMessage}" TextWrapping="Wrap" />
                                 <TextBlock x:Name="ControllerPrompts" Classes="secondary" TextWrapping="Wrap"
                                            Text="{Binding ControllerStatus}" />
                             </StackPanel>
-                            <Button Grid.Column="1" x:Name="WindowOptionsButton" Content="{loc:Tr Window.Options}"
-                                    MaxWidth="450"
-                                    VerticalAlignment="Center" Click="OnWindowOptions" />
+                            <StackPanel Grid.Column="1" Spacing="12" VerticalAlignment="Center" MaxWidth="450">
+                                <Button x:Name="CancelLoadingButton" Content="{loc:Tr Action.CancelLoading}"
+                                        IsVisible="{Binding ShowDesignGalleryCommand.IsRunning}"
+                                        Command="{Binding ShowDesignGalleryCancelCommand}" />
+                                <Button x:Name="LanguageButton" Content="{loc:Tr Language.Selection}"
+                                        IsVisible="{Binding !IsAuthenticatedVisible}" Click="OnLanguage" />
+                            </StackPanel>
                         </Grid>
                     </Grid>
                 </Grid>
             </Viewbox>
             <Grid x:Name="GallerySurface" IsVisible="{Binding IsDesignGalleryVisible}">
                 <views:DesignGalleryView x:Name="GalleryView" DataContext="{Binding DesignGallery}" />
-                <Button x:Name="GalleryBackButton" Margin="0,24,24,0"
-                        HorizontalAlignment="Right" VerticalAlignment="Top"
-                        MaxWidth="450" Command="{Binding HideDesignGalleryCommand}" Content="{loc:Tr Nav.BackHome}" />
-                <Border VerticalAlignment="Bottom" Background="{DynamicResource Cindara.Brush.Background}"
-                        Padding="24,8" IsHitTestVisible="False">
-                    <StackPanel>
-                        <TextBlock Classes="caption" Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />
-                        <TextBlock Classes="caption" Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
+                <Grid VerticalAlignment="Bottom" ColumnDefinitions="74,*" IsHitTestVisible="False">
+                    <Border Grid.Column="1" Background="{DynamicResource Cindara.Brush.Background}" Padding="24,8">
+                        <StackPanel>
+                            <TextBlock Classes="caption" Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />
+                            <TextBlock Classes="caption" Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Grid>
         </Grid>
         <Border x:Name="ModalOverlay" IsVisible="False" Background="#B3080B12"

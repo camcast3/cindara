@@ -92,4 +92,10 @@
   <data name="Gallery.PreviewOnly" xml:space="preserve"><value>Design preview only. This action is not yet available.</value></data>
   <data name="Gallery.Progress" xml:space="preserve"><value>Playback progress</value></data>
   <data name="Gallery.ReadHelp" xml:space="preserve"><value>Page Up / Page Down: scroll the media description.</value></data>
+  <data name="Language.Title" xml:space="preserve"><value>Language</value></data>
+  <data name="Language.Selection" xml:space="preserve"><value>Language: English</value></data>
+  <data name="Language.English" xml:space="preserve"><value>English</value></data>
+  <data name="Language.EnglishOnly" xml:space="preserve"><value>English is the only supported language for now.</value></data>
+  <data name="Home.Retry" xml:space="preserve"><value>Retry loading Home</value></data>
+  <data name="Action.CancelLoading" xml:space="preserve"><value>Cancel loading</value></data>
 </root>

@@ -6,27 +6,18 @@ public sealed class GalleryNavigationMarkupTests
 {
     private static readonly XNamespace Xaml = "https://github.com/avaloniaui";
     private static readonly XNamespace Names = "http://schemas.microsoft.com/winfx/2006/xaml";
-    private static readonly string[] HeaderLabels = ["{loc:Tr Nav.Home}", "{loc:Tr Gallery.Trending}", "{loc:Tr Gallery.Activity}", "{loc:Tr Gallery.Profile}"];
-    private static readonly string[] HeaderNames = ["{loc:Tr Gallery.HomeTab}", "{loc:Tr Gallery.TrendingTab}", "{loc:Tr Gallery.ActivityTab}", "{loc:Tr Gallery.ProfileTab}"];
     private static readonly string[] LibraryLabels = ["{loc:Tr Gallery.Shows}", "{loc:Tr Gallery.Movies}", "{loc:Tr Gallery.Anime}"];
 
     [Fact]
-    public void HeaderUsesFocusableButtonsWithDistinctAccessibleNames()
+    public void HomeHasOneNavigationActionAndNoSpeculativeTopTabs()
     {
         var gallery = LoadGallery();
-        var header = Assert.Single(gallery.Descendants(Xaml + "WrapPanel"),
-            panel => (string?)panel.Attribute(Names + "Name") == "TopNavigationPanel");
-        var tabs = header.Elements(Xaml + "Button").ToArray();
-
-        Assert.Equal(HeaderLabels,
-            tabs.Select(tab => (string?)tab.Attribute("Content")));
-        Assert.Equal(HeaderNames,
-            tabs.Select(tab => (string?)tab.Attribute("AutomationProperties.Name")));
-        Assert.All(tabs, tab =>
-        {
-            Assert.Contains("header-tab", (string?)tab.Attribute("Classes"));
-            Assert.NotEqual("False", (string?)tab.Attribute("Focusable"));
-        });
+        Assert.DoesNotContain(gallery.Descendants(),
+            element => (string?)element.Attribute(Names + "Name") == "TopNavigationPanel");
+        var home = Assert.Single(gallery.Descendants(Xaml + "Button"),
+            button => (string?)button.Attribute("AutomationProperties.Name") == "{loc:Tr Nav.Home}");
+        Assert.Equal("SidebarHomeButton", (string?)home.Attribute(Names + "Name"));
+        Assert.Equal("OnHomeClicked", (string?)home.Attribute("Click"));
     }
 
     [Fact]

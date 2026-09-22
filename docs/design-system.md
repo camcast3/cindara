@@ -16,17 +16,19 @@ Details are entered from content rather than added to the rail. Playback is a
 temporary full-screen layer.
 
 The approved authenticated preview uses a compact icon rail with Search, Home,
-Saved, TV, Movies, Anime, and More, plus Home/Trending/Activity/Profile header
-buttons. These are non-production preview controls, not destination screens.
+Saved, TV, Movies, Anime, and Settings. The product owner removed the speculative
+Home/Trending/Activity/Profile top bar. Home focuses the media content and Settings
+opens the signed-in settings; other preview icons remain placeholders.
 The production shell implements the five destinations above; library content,
 details, and playback flows remain assigned to #3, #5, and #4.
 
 ## Implemented shell navigation
 
-`ShellView` owns the production frame, not browsing data. Home initially focuses
-its header; its preview action opens the approved gallery and Back restores the
-launcher. Libraries, Search, and Downloads show honest unavailable-content states
-with Return to Home actions. Settings initially focuses Account; right enters
+`ShellView` owns the production frame, not browsing data. Sign-in opens media
+Home automatically, initially focusing a card (or the sidebar Home if empty).
+There is no intermediate preview launcher or Back to Home button. Libraries,
+Search, and Downloads show honest unavailable-content states and retain rail
+focus. Settings initially focuses Account; right enters
 the selected category's settings, left returns, and up/down stays within the
 category column. Account switching and sign-out use the existing session commands.
 
@@ -34,9 +36,9 @@ The rail expands on focus or hover and collapses to original vector icons when
 content is focused. Up/down follows Home, Libraries, Search, Downloads, Settings
 without wrapping. Accept opens the focused destination. Right returns to remembered
 content in the current destination; left or Back from content enters its selected
-rail item. Back from the rail opens window/exit choices, rather than exiting
-fullscreen unexpectedly. The persistent Window / exit action is also accessible
-by directional navigation, Tab, and mouse. The preview remains a separate layer.
+rail item. Back from the settings rail returns to media Home without reloading it.
+Window/exit choices and account controls are available inside signed-in Settings.
+The login screen offers only the English language selector alongside authentication.
 
 `FocusNavigationService` scopes navigation to the active screen or dialog.
 Explicit rail/category links take priority; other controls use transformed bounds,
@@ -98,9 +100,11 @@ zero, Fluent button press transforms are disabled, gallery scrolling is
 immediate, and indeterminate busy animation is replaced by static status text.
 Focus outlines remain instantaneous in every mode.
 
-Presentation preferences apply at window scope: text roles scale to 125% or
+Developer-injected presentation preferences apply at window scope: text roles scale to 125% or
 150%, high contrast replaces Cindara and Fluent control palettes, and default
-restoration reverses every override. There is no OS preference auto-detection.
+restoration reverses every override. These appearance controls are deferred from
+the user-facing UI; the app uses defaults and does not restore earlier appearance
+settings. There is no OS preference auto-detection.
 See [the accessibility contract and manual test matrix](accessibility.md) for
 persistence, localization, pseudo-locales, contrast coverage, and limits.
 
@@ -137,8 +141,8 @@ inside the safe area. Hero artwork carries a dark Cindara gradient so text
 remains readable. Dialogs dim, but do not blur, the context. Toasts do not take
 focus. Skeletons preserve final geometry and respect reduced motion.
 
-`DesignGalleryView.axaml` is a non-production authenticated showcase for the
-navigation rail, header, hero, landscape cards, and poster rails. The reusable
+`DesignGalleryView.axaml` supplies the current authenticated Home preview with a
+navigation rail, hero, landscape cards, and poster rails. The reusable
 styles also define dialog, toast, empty-state actions, and loading skeleton
 treatments; the wireframes below specify the remaining screens.
 
@@ -148,25 +152,24 @@ Directional links below describe the target production shell. **A/Enter/Space** 
 **B/Escape** returns or dismisses, and **Start/F11** toggles fullscreen. Mouse
 click maps to activation, pointer hover maps to hover (not keyboard focus), and
 wheel/trackpad scroll maps to rail or grid scrolling.
-The current preview implements header/rail directional navigation. Back/Escape
-closes the gallery without leaving fullscreen and restores its Home launcher.
+The current Home implements sidebar/rail directional navigation. Back/Escape
+returns focus to its sidebar Home without leaving the signed-in experience.
 Start/Options/+ and F11 toggle fullscreen. Modals consume controller Menu so it
 cannot change the background; F11 remains the explicit keyboard escape path.
-Reduced-motion settings are available before and after authentication.
+Appearance overrides are developer-tested foundation code, not current UI options.
 
 ### Home
 
 ```text
-[Rail]  [Home] [Trending] [Activity] [Profile]
-        [Hero title / episode / facts / overview]
+[Rail]  [Hero title / episode / facts / overview]
         [Continue watching  > > >]
         [Recently added     > > >]
 ```
 
-Initial focus: Home in the header. Left/right traverses the header; down enters
-the first card of the active media row. Within a rail, left/right moves cards;
+Initial focus: first media card, or the sidebar Home action if there is no media.
+Right from sidebar Home returns to the focused card. Within a rail, left/right moves cards;
 up/down enters the first card of the adjacent rail. Up from the first row
-returns to the header. The hero is informational, with no Play or More Info
+returns to sidebar Home. The hero is informational, with no Play or More Info
 buttons. Returning from production details will restore the originating card.
 
 The authenticated preview uses one right-aligned hero image. Its width is 60%
@@ -177,10 +180,10 @@ opacity masks relative to the artwork's visible bounds, not the entire window,
 with fully transparent left and bottom edges over an opaque background. This
 prevents seams and keeps scrolled cards from bleeding through the hero.
 
-Preview hero text starts at the upper left immediately below the Home/Trending
-header. Title, subtitle, metadata, description, and their spacing scale together
-from 1080p to 4K; long titles and descriptions truncate within the hero rather
-than overlapping the rails. Poster and landscape cards have no border at rest.
+Preview hero text starts at the upper left without a top tab bar.
+Title, subtitle, metadata, description, and their spacing scale together
+from 1080p to 4K; long text wraps inside a scrollable hero rather than overlapping
+the rails. Page Up/Page Down scroll the description. Poster and landscape cards have no border at rest.
 The focused card retains one rounded accent outline for controller and keyboard
 use; the framework's rectangular focus adorner is suppressed on media cards so
 directional navigation does not add a second outline.
@@ -201,11 +204,10 @@ in content coordinates so partially completed movement cannot shift the final
 heading position. Automatic vertical bring-into-view is suppressed to avoid a
 snap before the transition; horizontal card visibility remains automatic.
 
-The preview opens with focus on Home in the top bar. Left/right traverses
-Home, Trending, Activity, and Profile; up from the first media row returns to
-the last focused header button, and down returns to the first card of the
-active row. Left from Home enters the sidebar; right from the sidebar's Home
-icon returns to the header. Header destinations remain design placeholders.
+The preview has a single Home navigation action in the sidebar. Settings opens
+the account/display/controller settings frame; returning Home preserves the
+loaded media and focused card. The top tab bar has been removed pending a
+product decision about its purpose.
 TV uses a screen-and-stand glyph; Anime has its own torii gate glyph, accessible
 name, and tooltip rather than sharing the TV icon.
 Both the sidebar's library icons and recently-added rows use TV, Movies, Anime
@@ -223,9 +225,12 @@ layout for display migration; its DPI-change behavior has headless coverage.
 Startup uses the OS-selected display rather than persisting a display preference.
 
 This gallery intentionally caps rows at 20 items and preloads a bounded subset
-of recently-added backdrops, falling back to card artwork elsewhere. Header and
-sidebar destinations, playback, mutations, paging, and production image caching
-are not implemented here. Session tokens are sent only in authenticated headers;
+of recently-added backdrops, falling back to card artwork elsewhere. Full
+library destinations, playback, mutations, paging, and production image caching
+are not implemented here. Metadata and artwork overlap under a six-request cap,
+images are deduplicated within the request, and a 30-second deadline prevents
+unbounded loading. Cancel loading/Back stops the request and enables Retry.
+Session tokens are sent only in authenticated headers;
 the preview transport requires HTTPS (or HTTP loopback) before sending any
 request and rejects redirects rather than forwarding those headers.
 Rejected preview sessions clear the active gallery, invalidate only the rejected

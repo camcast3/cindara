@@ -27,8 +27,8 @@ public sealed class LocaleFormatTests
     [InlineData("en", 42, "42m")]
     [InlineData("en", 60, "1h 0m")]
     [InlineData("en", 1505, "25h 5m")]
-    [InlineData("fr", 42, "42 min")]
-    [InlineData("fr", 65, "1 h 5 min")]
+    [InlineData("fr", 42, "42m")]
+    [InlineData("fr", 65, "1h 5m")]
     public void DurationsUseLocalizedUnitTemplates(string culture, int minutes, string expected)
     {
         using var scope = new CultureScope(culture);
@@ -41,9 +41,9 @@ public sealed class LocaleFormatTests
     {
         using var scope = new CultureScope("fr");
 
-        Assert.Equal("S2 É3", LocaleFormat.EpisodeNumber(2, 3));
-        Assert.Equal("Épisode", LocaleFormat.EpisodeNumber(null, 3));
-        Assert.Equal("2026  ·  1 h 5 min  ·  TV-14",
+        Assert.Equal("S2 E3", LocaleFormat.EpisodeNumber(2, 3));
+        Assert.Equal("Episode", LocaleFormat.EpisodeNumber(null, 3));
+        Assert.Equal("2026  ·  1h 5m  ·  TV-14",
             LocaleFormat.Details(2026, TimeSpan.FromMinutes(65).Ticks, "TV-14"));
         Assert.Equal(string.Empty, LocaleFormat.Details(null, null, null));
         Assert.Equal("PG", LocaleFormat.Details(null, -10, "PG"));
@@ -54,9 +54,9 @@ public sealed class LocaleFormatTests
     {
         using var scope = new CultureScope("fr");
 
-        Assert.Equal("Northstar · S2 É3",
+        Assert.Equal("Northstar · S2 E3",
             LocaleFormat.Subtitle("Homecoming", "Episode", "Northstar", 2, 3, 2026, false));
-        Assert.Equal("S2 É3 · Homecoming",
+        Assert.Equal("S2 E3 · Homecoming",
             LocaleFormat.Subtitle("Homecoming", "Episode", "Northstar", 2, 3, 2026, true));
         Assert.Equal("Season Two",
             LocaleFormat.Subtitle("Season Two", "Season", "Northstar", 2, null, 2026, true));

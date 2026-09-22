@@ -19,7 +19,7 @@ public static class Loc
 
     public static bool IsPseudoLocalized => _pseudo;
 
-    public static bool IsRightToLeft => _pseudoRightToLeft || Culture.TextInfo.IsRightToLeft;
+    public static bool IsRightToLeft => _pseudoRightToLeft;
 
     /// <summary>Selects the startup culture; existing views are not retranslated.</summary>
     public static void Configure(string? cultureName)
@@ -47,7 +47,8 @@ public static class Loc
     public static string Get(string key)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        var culture = _pseudo ? CultureInfo.InvariantCulture : Culture;
+        // Only English is a supported UI language; regional culture still controls formatting.
+        var culture = CultureInfo.InvariantCulture;
         var value = Strings.GetString(key, culture) ?? Views.GetString(key, culture);
         if (value is null)
         {

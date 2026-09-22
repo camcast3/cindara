@@ -14,7 +14,6 @@ public partial class DesignGalleryView : UserControl
 {
     private double _heroHeight = 420;
     private Button? _focusedCard;
-    private Button? _lastHeaderTab;
     private bool _pinAfterLayout;
     private PresentationPreferences _preferences = new();
 
@@ -28,7 +27,11 @@ public partial class DesignGalleryView : UserControl
         }
 
         SizeChanged += OnSizeChanged;
-        DataContextChanged += (_, _) => HeroTextScroll.Offset = default;
+        DataContextChanged += (_, _) =>
+        {
+            HeroTextScroll.Offset = default;
+            _focusedCard = null;
+        };
         HeroPanel.SizeChanged += (_, _) =>
         {
             UpdateHeroArtwork();
@@ -141,16 +144,24 @@ public partial class DesignGalleryView : UserControl
         }
     }
 
-    private void OnHeaderFocused(object? sender, RoutedEventArgs eventArgs)
+    public event EventHandler? SettingsRequested;
+
+    public Control HomeNavigation => SidebarHomeButton;
+
+    public bool FocusHomeContent()
     {
-        if (eventArgs.Source is Button tab && tab.Classes.Contains("header-tab"))
+        if (_focusedCard is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true })
         {
-            _lastHeaderTab = tab;
+            return _focusedCard.Focus(NavigationMethod.Directional);
         }
+
+        var rows = GetMediaRows().ToArray();
+        return rows.Length > 0 ? FocusMediaRow(rows[0]) : SidebarHomeButton.Focus(NavigationMethod.Directional);
     }
 
-    public bool FocusTopNavigation() =>
-        (_lastHeaderTab ?? HomeTabButton).Focus(NavigationMethod.Directional);
+    private void OnHomeClicked(object? sender, RoutedEventArgs args) => FocusHomeContent();
+
+    private void OnSettingsClicked(object? sender, RoutedEventArgs args) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
     public void ScrollDescription(bool forward)
     {
@@ -172,38 +183,9 @@ public partial class DesignGalleryView : UserControl
         }
 
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
-        var tabs = TopNavigationPanel.Children.OfType<Button>().ToArray();
-        var tabIndex = Array.FindIndex(tabs, tab => ReferenceEquals(tab, focused));
-        if (tabIndex >= 0)
-        {
-            switch (direction)
-            {
-                case NavigationDirection.Left:
-                    return tabIndex == 0
-                        ? SidebarHomeButton.Focus(NavigationMethod.Directional)
-                        : tabs[tabIndex - 1].Focus(NavigationMethod.Directional);
-                case NavigationDirection.Right:
-                    return tabIndex == tabs.Length - 1
-                        || tabs[tabIndex + 1].Focus(NavigationMethod.Directional);
-                case NavigationDirection.Up:
-                    return true;
-                case NavigationDirection.Down:
-                    var rows = GetMediaRows().ToArray();
-                    if (rows.Length == 0)
-                    {
-                        return true;
-                    }
-
-                    var previousRow = _focusedCard?.GetVisualAncestors().OfType<ItemsControl>()
-                        .FirstOrDefault(control => control.Classes.Contains("media-row"));
-                    var rowIndex = Array.FindIndex(rows, row => ReferenceEquals(row.Control, previousRow));
-                    return FocusMediaRow(rows[Math.Max(0, rowIndex)]);
-            }
-        }
-
         if (ReferenceEquals(focused, SidebarHomeButton) && direction == NavigationDirection.Right)
         {
-            return FocusTopNavigation();
+            return FocusHomeContent();
         }
 
         return TryMoveMediaRowFocus(direction);
@@ -253,7 +235,7 @@ public partial class DesignGalleryView : UserControl
         var targetIndex = rowIndex + (direction == NavigationDirection.Down ? 1 : -1);
         if (targetIndex < 0)
         {
-            return FocusTopNavigation();
+            return SidebarHomeButton.Focus(NavigationMethod.Directional);
         }
 
         if (targetIndex >= rows.Length)
