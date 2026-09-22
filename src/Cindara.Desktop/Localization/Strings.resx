@@ -63,13 +63,13 @@ Controller backend: {8} ({6}, {7} connected)</value></data>
   <data name="Error.Server.AccessDenied" xml:space="preserve"><value>The Jellyfin server denied access. Check the server address and permissions.</value></data>
   <data name="Error.Server.UnexpectedStatus" xml:space="preserve"><value>The Jellyfin server could not complete the connection request. Please try again.</value></data>
   <data name="Error.Server.InvalidResponse" xml:space="preserve"><value>The server returned an unexpected response. Check that this is a Jellyfin server.</value></data>
-  <data name="Error.Preview.AccessDenied" xml:space="preserve"><value>Jellyfin denied access to the media preview.</value></data>
-  <data name="Error.Preview.Network" xml:space="preserve"><value>Jellyfin could not be reached while loading the preview. Check the network connection.</value></data>
-  <data name="Error.Preview.TimedOut" xml:space="preserve"><value>Jellyfin did not respond before the media preview request timed out.</value></data>
-  <data name="Error.Preview.InvalidResponse" xml:space="preserve"><value>Jellyfin returned media data or artwork that could not be decoded. Try refreshing the preview.</value></data>
-  <data name="Error.Preview.UnexpectedStatus" xml:space="preserve"><value>Jellyfin could not load the media preview. Please try again.</value></data>
-  <data name="Error.Preview.InsecureConnection" xml:space="preserve"><value>The media preview requires HTTPS or local HTTP loopback to protect your access token.</value></data>
-  <data name="Error.Preview.Artwork" xml:space="preserve"><value>Jellyfin returned artwork that could not be decoded. Try refreshing the preview.</value></data>
+  <data name="Error.Preview.AccessDenied" xml:space="preserve"><value>Jellyfin denied access to this media.</value></data>
+  <data name="Error.Preview.Network" xml:space="preserve"><value>Jellyfin could not be reached while loading media. Check the network connection.</value></data>
+  <data name="Error.Preview.TimedOut" xml:space="preserve"><value>Jellyfin did not respond before the media request timed out.</value></data>
+  <data name="Error.Preview.InvalidResponse" xml:space="preserve"><value>Jellyfin returned media data or artwork that could not be decoded. Try loading again.</value></data>
+  <data name="Error.Preview.UnexpectedStatus" xml:space="preserve"><value>Jellyfin could not load this media. Please try again.</value></data>
+  <data name="Error.Preview.InsecureConnection" xml:space="preserve"><value>Media browsing requires HTTPS or local HTTP loopback to protect your access token.</value></data>
+  <data name="Error.Preview.Artwork" xml:space="preserve"><value>Jellyfin returned artwork that could not be decoded. Try loading again.</value></data>
   <data name="View.NotFound" xml:space="preserve"><value>Not Found: {0}</value></data>
   <data name="Controller.Cross" xml:space="preserve"><value>Cross</value></data>
   <data name="Controller.Circle" xml:space="preserve"><value>Circle</value></data>

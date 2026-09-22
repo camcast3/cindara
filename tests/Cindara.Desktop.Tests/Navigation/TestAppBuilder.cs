@@ -14,4 +14,7 @@ public static class TestAppBuilder
 
     public static Task Run(Action test) => HeadlessUnitTestSession.GetOrStartForAssembly(typeof(TestAppBuilder).Assembly)
         .Dispatch(test, CancellationToken.None);
+
+    public static Task Run(Func<Task> test) => HeadlessUnitTestSession.GetOrStartForAssembly(typeof(TestAppBuilder).Assembly)
+        .Dispatch(test, CancellationToken.None);
 }

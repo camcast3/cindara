@@ -66,6 +66,11 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnShellKeyDown, RoutingStrategies.Tunnel);
         Shell.DestinationChanged += (_, _) =>
         {
+            if (Shell.Destination != "Libraries")
+            {
+                _viewModel?.LibraryBrowser?.CancelLoading();
+            }
+
             if (Shell.Destination != "Home" && _viewModel?.ShowDesignGalleryCommand.IsRunning is true)
             {
                 _viewModel.ShowDesignGalleryCommand.Cancel();
@@ -83,9 +88,54 @@ public partial class MainWindow : Window
         Shell.LanguageRequested += (_, _) => ShowLanguage();
         GalleryView.SettingsRequested += (_, _) =>
         {
+            GalleryView.SuspendFocusMemory();
             Shell.Navigate("Settings");
             _viewModel?.HideDesignGalleryCommand.Execute(null);
         };
+        GalleryView.LibrariesRequested += (_, _) => OpenLibraries();
+        GalleryView.SearchRequested += (_, _) =>
+        {
+            GalleryView.SuspendFocusMemory();
+            Shell.Navigate("Search");
+            _viewModel?.HideDesignGalleryCommand.Execute(null);
+        };
+        GalleryView.LibraryRequested += async (_, library) =>
+        {
+            OpenLibraries();
+            if (_viewModel?.LibraryBrowser is { } browser && browser.OpenLibraryCommand.CanExecute(library))
+            {
+                await browser.OpenLibraryCommand.ExecuteAsync(library);
+            }
+        };
+        GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
+    }
+
+    private void OpenLibraries()
+    {
+        GalleryView.SuspendFocusMemory();
+        Shell.Navigate("Libraries");
+        _viewModel?.HideDesignGalleryCommand.Execute(null);
+    }
+
+    private void ShowMediaSummary(MediaPreviewCardViewModel item)
+    {
+        if (ModalOverlay.IsVisible)
+        {
+            return;
+        }
+
+        BeginModal(item.Name);
+        foreach (var text in new[] { item.Subtitle, item.Details, item.Overview })
+        {
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                ModalActions.Children.Add(new TextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+            }
+        }
+
+        AddModalButton(Loc.Get("Action.Back"), DismissModal);
+        FocusModal();
     }
 
     private async void OnOpened(object? sender, EventArgs eventArgs)
@@ -146,6 +196,7 @@ public partial class MainWindow : Window
         if (_viewModel is not null)
         {
             _viewModel.ShowDesignGalleryCommand.Cancel();
+            _viewModel.LibraryBrowser?.CancelLoading();
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _viewModel.ShowDesignGalleryCommand.PropertyChanged -= OnHomeLoadPropertyChanged;
             _viewModel = null;
@@ -263,6 +314,10 @@ public partial class MainWindow : Window
         else if (Shell.IsVisible)
         {
             _navigation.Focus(contentFocus);
+            if (Shell.Destination == "Libraries")
+            {
+                Shell.LibraryView.ResumeFocusMemory();
+            }
         }
     }
 
@@ -370,6 +425,12 @@ public partial class MainWindow : Window
         _navigation.EnsureFocus();
         if (!ModalOverlay.IsVisible)
         {
+            if (Shell.LibraryView.IsEffectivelyVisible && Shell.LibraryView.IsKeyboardFocusWithin
+                && Shell.LibraryView.TryMove(direction))
+            {
+                return;
+            }
+
             if (_viewModel?.IsDesignGalleryVisible is true && GalleryView.TryMoveGalleryFocus(direction))
             {
                 return;
@@ -417,6 +478,10 @@ public partial class MainWindow : Window
         else if (_viewModel?.ShowDesignGalleryCommand.IsRunning is true)
         {
             _viewModel.ShowDesignGalleryCommand.Cancel();
+        }
+        else if (_viewModel?.LibraryBrowser?.IsLoading is true)
+        {
+            _viewModel.LibraryBrowser.CancelLoading();
         }
         else if (_viewModel?.IsDesignGalleryVisible is true)
         {

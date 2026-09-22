@@ -44,7 +44,7 @@ public sealed class LocalizedErrorsTests
     {
         using var scope = new CultureScope("fr-FR");
 
-        Assert.Equal("Jellyfin denied access to the media preview.",
+        Assert.Equal("Jellyfin denied access to this media.",
             LocalizedErrors.Get(new MediaPreviewException(MediaPreviewError.AccessDenied, "raw")));
     }
 }

@@ -15,25 +15,26 @@ offline media ships so later work does not destabilize navigation order.
 Details are entered from content rather than added to the rail. Playback is a
 temporary full-screen layer.
 
-The approved authenticated preview uses a compact icon rail with Search, Home,
-Saved, TV, Movies, Anime, and Settings. The product owner removed the speculative
+The authenticated Home uses a compact icon rail with Search, Home,
+Libraries, and Settings. The product owner removed the speculative
 Home/Trending/Activity/Profile top bar. Home focuses the media content and Settings
-opens the signed-in settings; other preview icons remain placeholders.
-The production shell implements the five destinations above; library content,
-details, and playback flows remain assigned to #3, #5, and #4.
+opens the signed-in settings. Libraries use the account's actual server-provided
+entries rather than hard-coded TV/Movie/Anime shortcuts. Search leads to its
+explicit unavailable state. Full details and playback remain assigned to #5 and #4.
 
 ## Implemented shell navigation
 
 `ShellView` owns the production frame, not browsing data. Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
-There is no intermediate preview launcher or redundant Home-screen back button. Libraries,
-Search, and Downloads show honest unavailable-content states and retain rail
-focus. Settings exposes exactly Language: English, Exit, and Back to Home;
+There is no intermediate preview launcher or redundant Home-screen back button.
+Libraries opens paged browsing; Search and Downloads show honest unavailable-content
+states and retain rail focus. Settings exposes exactly Language: English, Exit, and Back to Home;
 initial focus is Language. Up/down traverses the three actions, and left
 returns to the rail. Button labels are centered with consistent padding.
 Entering Settings from another screen resets focus to Language; moving between
 its actions, language dialog, and rail preserves focus within the same visit.
-Expanded settings are deferred to [#27](https://github.com/camcast3/cindara/issues/27).
+Minimal account/window controls are tracked separately in [#27](https://github.com/camcast3/cindara/issues/27);
+expanded settings remain deferred.
 
 The rail expands on focus or hover and collapses to original vector icons when
 content is focused. Up/down follows Home, Libraries, Search, Downloads, Settings
@@ -211,10 +212,8 @@ The preview has a single Home navigation action in the sidebar. Settings opens
 the three-action settings panel; returning Home preserves the
 loaded media and focused card. The top tab bar has been removed pending a
 product decision about its purpose.
-TV uses a screen-and-stand glyph; Anime has its own torii gate glyph, accessible
-name, and tooltip rather than sharing the TV icon.
-Both the sidebar's library icons and recently-added rows use TV, Movies, Anime
-order; Continue Watching stays first. Anime libraries are distinguished by
+Continue Watching stays first, followed by Next Up and library entry points.
+Recently-added rows use TV, Movies, Anime order. Anime libraries are distinguished by
 their name because Jellyfin normally reports them as `tvshows`. Separate
 libraries within each group retain the server's order and are never merged.
 
@@ -228,9 +227,9 @@ layout for display migration; its DPI-change behavior has headless coverage.
 Startup uses the OS-selected display rather than persisting a display preference.
 
 This gallery intentionally caps rows at 20 items and preloads a bounded subset
-of recently-added backdrops, falling back to card artwork elsewhere. Full
-library destinations, playback, mutations, paging, and production image caching
-are not implemented here. Metadata and artwork overlap under a six-request cap,
+of recently-added backdrops, falling back to card artwork elsewhere. Library
+destinations load at most 40 items per page without preloading backdrops.
+Playback and mutations are not implemented here. Metadata and artwork overlap under a six-request cap,
 images are deduplicated within the request, and a 30-second deadline prevents
 unbounded loading. Cancel loading/Back stops the request and enables Retry.
 Loading Home initially focuses Cancel loading, and moving right from the Home
@@ -247,19 +246,28 @@ partially decoded images. Gallery replacement is transactional: a failed load
 does not dispose the previous gallery before the replacement is ready. Ending
 authentication, switching accounts/servers, or exiting the app disposes and
 clears the old gallery; merely returning from the preview to the same account
-retains it until replacement or authentication ends.
+retains it until replacement or authentication ends. The session-scoped in-memory
+image LRU is capped at 128 entries / 32 MiB with a five-minute lifetime and is
+discarded on authentication boundaries. HTTP responses are capped at 8 MiB.
 
 ### Library
 
 ```text
-[Rail]  [Library title] [Filter] [Sort]
-        [Poster] [Poster] [Poster] [Poster]
-        [Poster] [Poster] [Poster] [Poster]
+[Rail]  Libraries
+        [Library choices]
+        [Selected library / loading or error state]
+        [Poster] [Poster] [Poster] [Poster] [Poster]
+        [Previous page] [Item range / total] [Next page]
 ```
 
-Initial focus: first poster, or Filter when the grid is empty. The grid moves
-spatially; up from row one reaches Filter, then Sort to its right. Left from
-column one enters Libraries in the rail. Paging preserves the nearest column.
+Initial focus: first poster, library choice if empty, Cancel while loading, or
+Retry after a failed/canceled request. Left/right stays within a grid row; up/down
+moves five cards. Up from row one reaches the library choices; left from column
+one enters Libraries in the rail (mirrored for RTL). Paging focuses the first
+card of the new page. The grid keeps only the current page's decoded artwork.
+Selecting a card opens a read-only metadata summary; Back restores the exact
+card and scroll position. Returning from Home or Settings reuses the page.
+Sorting is alphabetical; configurable filters/sorting are not exposed.
 
 ### Details
 

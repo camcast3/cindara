@@ -9,6 +9,7 @@ public sealed class ViewResourceTests
     [InlineData("MainWindow")]
     [InlineData("ShellView")]
     [InlineData("DesignGallery")]
+    [InlineData("LibraryBrowserView")]
     public void VisibleStringsAndAccessibleLabelsUseResolvableResources(string view)
     {
         using var stream = typeof(ViewResourceTests).Assembly.GetManifestResourceStream($"Cindara.Tests.{view}.axaml");

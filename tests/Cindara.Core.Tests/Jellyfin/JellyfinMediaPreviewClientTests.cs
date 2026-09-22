@@ -161,6 +161,11 @@ public sealed class JellyfinMediaPreviewClientTests
         using var handler = new AsyncPreviewHandler(async (request, token) =>
         {
             var path = request.Uri.AbsolutePath;
+            if (path.EndsWith("/Shows/NextUp", StringComparison.Ordinal))
+            {
+                return JsonResponse("""{"Items":[]}""");
+            }
+
             if (path.EndsWith("/Views", StringComparison.Ordinal))
             {
                 return JsonResponse(
@@ -243,7 +248,7 @@ public sealed class JellyfinMediaPreviewClientTests
     }
 
     [Fact]
-    public async Task GetHomeAsyncSharesSeriesImagesOnlyWithinTheCurrentLoad()
+    public async Task GetHomeAsyncSharesSeriesImagesWithoutCrossingAccountBoundaries()
     {
         const string episodes =
             """
@@ -349,7 +354,7 @@ public sealed class JellyfinMediaPreviewClientTests
         var loading = client.GetHomeAsync(Session);
         await handler.WaitForAsync(requests => duringArtwork
             ? requests.Count(IsImage) == 6
-            : requests.Length == 2);
+            : requests.Length == 3);
         Assert.Equal(TimeSpan.FromSeconds(30), clock.DueTime);
         Assert.False(loading.IsCompleted);
 
@@ -375,7 +380,7 @@ public sealed class JellyfinMediaPreviewClientTests
         var loading = client.GetHomeAsync(Session, cancellation.Token);
         await handler.WaitForAsync(requests => duringArtwork
             ? requests.Count(IsImage) == 6
-            : requests.Length == 2);
+            : requests.Length == 3);
 
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => loading.WaitAsync(TestTimeout));
@@ -468,7 +473,7 @@ public sealed class JellyfinMediaPreviewClientTests
         });
         using var client = CreateClient(handler);
         var loading = client.GetHomeAsync(Session);
-        await handler.WaitForAsync(requests => requests.Length == 2);
+        await handler.WaitForAsync(requests => requests.Length == 3);
 
         failure.SetResult();
         var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => loading.WaitAsync(TestTimeout));
@@ -478,6 +483,35 @@ public sealed class JellyfinMediaPreviewClientTests
     }
 
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(5);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LibraryPageDeadlineDrainsRequests(bool duringArtwork)
+    {
+        using var clock = new ManualDeadlineTimeProvider();
+        var started = NewSignal();
+        using var handler = new AsyncPreviewHandler(async (request, token) =>
+        {
+            if (duringArtwork && !IsImage(request))
+            {
+                return JsonResponse("""{"Items":[{"Id":"movie","Name":"Movie","ImageTags":{"Primary":"tag"}}],"TotalRecordCount":1}""");
+            }
+
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+            throw new InvalidOperationException("The request should be canceled.");
+        });
+        using var client = CreateClient(handler, clock);
+        var loading = client.GetLibraryPageAsync(Session, new MediaLibrary("movies", "Movies", "movies"), 0);
+        await started.Task.WaitAsync(TestTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(30), clock.DueTime);
+        clock.Expire();
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => loading.WaitAsync(TestTimeout));
+        Assert.Equal(MediaPreviewError.TimedOut, exception.Error);
+        Assert.Equal(0, handler.ActiveRequests);
+        Assert.True(clock.IsDisposed);
+    }
 
     private static readonly AuthenticatedSession Session = new(
         new ServerIdentity(
@@ -523,6 +557,11 @@ public sealed class JellyfinMediaPreviewClientTests
     private static HttpResponseMessage MetadataResponse(CapturedRequest request, string resume, string latest)
     {
         var path = request.Uri.AbsolutePath;
+        if (path.EndsWith("/Shows/NextUp", StringComparison.Ordinal))
+        {
+            return JsonResponse("""{"Items":[]}""");
+        }
+
         if (path.EndsWith("/Items/Resume", StringComparison.Ordinal))
         {
             return JsonResponse(resume);
@@ -680,6 +719,11 @@ public sealed class JellyfinMediaPreviewClientTests
                 request.Headers.GetValues("X-Emby-Token").Single()));
 
             var path = request.RequestUri.AbsolutePath;
+            if (path.EndsWith("/Shows/NextUp", StringComparison.Ordinal))
+            {
+                return Json("""{"Items":[]}""");
+            }
+
             if (path.EndsWith("/Items/Resume", StringComparison.Ordinal))
             {
                 return Json(

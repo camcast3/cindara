@@ -6,7 +6,6 @@ public sealed class GalleryNavigationMarkupTests
 {
     private static readonly XNamespace Xaml = "https://github.com/avaloniaui";
     private static readonly XNamespace Names = "http://schemas.microsoft.com/winfx/2006/xaml";
-    private static readonly string[] LibraryLabels = ["{loc:Tr Gallery.Shows}", "{loc:Tr Gallery.Movies}", "{loc:Tr Gallery.Anime}"];
 
     [Fact]
     public void HomeHasOneNavigationActionAndNoSpeculativeTopTabs()
@@ -21,13 +20,13 @@ public sealed class GalleryNavigationMarkupTests
     }
 
     [Fact]
-    public void BothMediaCardTemplatesExposeTitleAndSubtitleToAssistiveTechnology()
+    public void AllMediaCardTemplatesExposeTitleAndSubtitleToAssistiveTechnology()
     {
         var cards = LoadGallery().Descendants(Xaml + "Button")
-            .Where(button => ((string?)button.Attribute("Classes"))?.Split(' ').Contains("card") is true)
+            .Where(button => (string?)button.Attribute("Click") == "OnCardClicked")
             .ToArray();
 
-        Assert.Equal(2, cards.Length);
+        Assert.Equal(3, cards.Length);
         Assert.All(cards, card =>
         {
             Assert.Equal("{Binding Name}", (string?)card.Attribute("AutomationProperties.Name"));
@@ -36,31 +35,16 @@ public sealed class GalleryNavigationMarkupTests
     }
 
     [Fact]
-    public void SidebarLibraryOrderIsTvMoviesThenAnime()
+    public void LibrariesUseRealServerEntriesInsteadOfSpeculativeCategoryShortcuts()
     {
-        var labels = LoadGallery().Descendants(Xaml + "Button")
-            .Select(button => (string?)button.Attribute("AutomationProperties.Name"))
-            .Where(name => LibraryLabels.Contains(name));
-
-        Assert.Equal(LibraryLabels, labels);
-    }
-
-    [Fact]
-    public void AnimeAndTvHaveSeparateVectorIconsAndLabels()
-    {
-        var buttons = LoadGallery().Descendants(Xaml + "Button").ToArray();
-        var anime = Assert.Single(buttons,
-            button => (string?)button.Attribute("AutomationProperties.Name") == "{loc:Tr Gallery.Anime}");
-        var tv = Assert.Single(buttons,
-            button => (string?)button.Attribute("AutomationProperties.Name") == "{loc:Tr Gallery.Shows}");
-        var animePath = Assert.Single(anime.Elements(Xaml + "PathIcon")).Attribute("Data")?.Value;
-        var tvPath = Assert.Single(tv.Elements(Xaml + "PathIcon")).Attribute("Data")?.Value;
-
-        Assert.False(string.IsNullOrWhiteSpace(animePath));
-        Assert.False(string.IsNullOrWhiteSpace(tvPath));
-        Assert.NotEqual(animePath, tvPath);
-        Assert.Equal("{loc:Tr Gallery.Anime}", (string?)anime.Attribute("ToolTip.Tip"));
-        Assert.Equal("{loc:Tr Gallery.Shows}", (string?)tv.Attribute("ToolTip.Tip"));
+        var gallery = LoadGallery();
+        var libraries = Assert.Single(gallery.Descendants(Xaml + "ItemsControl"),
+            element => (string?)element.Attribute("ItemsSource") == "{Binding Libraries}");
+        Assert.Equal("OnLibraryClicked", (string?)Assert.Single(libraries.Descendants(Xaml + "Button")).Attribute("Click"));
+        Assert.Contains(gallery.Descendants(Xaml + "Button"),
+            element => (string?)element.Attribute("Click") == "OnLibrariesClicked");
+        Assert.DoesNotContain(gallery.Descendants(Xaml + "Button"),
+            element => (string?)element.Attribute("AutomationProperties.HelpText") == "{loc:Tr Gallery.PreviewOnly}");
     }
 
     private static XDocument LoadGallery()

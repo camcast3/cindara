@@ -14,13 +14,18 @@ Windows, or Keychain on macOS; rejected tokens remove only the affected
 account and return it to sign-in.
 
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
-Settings. Library/search/download content remains explicitly unavailable until
-its roadmap work lands. Signing in opens the current media Home directly, without
+Settings. Home includes Continue Watching, Next Up, latest additions, and the
+account's visible libraries. Libraries open alphabetically sorted, 40-item
+poster pages with explicit Previous/Next controls rather than loading the
+entire collection. Selecting a card opens a read-only summary; Back restores
+the card and scroll position. Full details, episode navigation, search, and
+downloads remain deferred to their roadmap work. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
 Settings contains exactly **Language: English**, **Exit**, and **Back to Home**.
-Expanded account, display, input, and appearance settings are deferred to
-[the settings feature request](https://github.com/camcast3/cindara/issues/27).
+Minimal account switching, logout, and fullscreen/windowed controls are tracked
+separately in [the settings feature request](https://github.com/camcast3/cindara/issues/27);
+expanded settings categories, input, and appearance preferences remain deferred.
 The separate login/shell footer **Diagnostics** action shows local technical
 details and sanitized errors, with an explicit support-bundle preview and export.
 It makes no diagnostic network requests or uploads. Logs are capped at 1 MiB
@@ -40,10 +45,17 @@ expanded and right-to-left pseudo-localization modes.
 See [accessibility and localization](docs/accessibility.md) for defaults,
 limitations, validation, and the keyboard/screen-reader release checklist.
 
-Home loading overlaps metadata and artwork with at most six requests in flight,
-deduplicates images within that load, and has a 30-second overall deadline.
+Home and library-page loading overlap metadata and artwork with at most six
+requests in flight per load, deduplicate images within that load, and have a
+30-second overall deadline. Library pages do not eagerly fetch hero backdrops.
+An in-memory LRU artwork cache holds at most 128 entries / 32 MiB, expires after
+five minutes, and is isolated to the exact authenticated session (including its
+token). Account changes, sign-out, and shutdown clear it; no artwork is cached
+on disk. Each HTTP response is limited to 8 MiB.
 **Cancel loading** or Back/Escape cancels the request; failures retain sign-in and
-offer Retry (except a rejected session, which returns to sign-in). Returning
+offer Retry (except a rejected session, which returns to sign-in). An unsuccessful
+page change keeps the previous page and retries the failed offset. Empty libraries
+and missing artwork have visible states. Returning
 from Settings reuses the current account's loaded Home instead of downloading
 it again. Account switching and sign-out clear that data.
 

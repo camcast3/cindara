@@ -14,6 +14,10 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
     private readonly HttpClient _httpClient;
     private readonly JellyfinClientIdentity _clientIdentity;
     private readonly TimeProvider _timeProvider;
+    private readonly Lock _cacheGate = new();
+    private AuthenticatedSession? _cacheSession;
+    private MediaImageCache _imageCache = new();
+    private const string ItemFields = "PrimaryImageAspectRatio,SeriesName,SeriesId,SeriesPrimaryImageTag,ParentBackdropItemId,ParentIndexNumber,IndexNumber,ProductionYear,UserData,Overview,RunTimeTicks,OfficialRating,BackdropImageTags";
 
     public JellyfinMediaPreviewClient(JellyfinClientIdentity clientIdentity, LocalDiagnostics? diagnostics = null)
         : this(diagnostics is null ? CreateSecureTransport()
@@ -31,6 +35,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         _httpClient = new HttpClient(httpHandler)
         {
             Timeout = TimeSpan.FromSeconds(15),
+            MaxResponseContentBufferSize = 8 * 1024 * 1024,
         };
         _clientIdentity = clientIdentity;
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -41,35 +46,58 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         AllowAutoRedirect = false,
     };
 
-    public void Dispose() => _httpClient.Dispose();
+    public void Dispose()
+    {
+        ClearImageCache();
+        _httpClient.Dispose();
+    }
+
+    public void ClearImageCache()
+    {
+        lock (_cacheGate)
+        {
+            _cacheSession = null;
+            _imageCache = new(_timeProvider);
+        }
+    }
+
+    private MediaImageCache GetImageCache(AuthenticatedSession session)
+    {
+        lock (_cacheGate)
+        {
+            if (_cacheSession != session)
+            {
+                _cacheSession = session;
+                _imageCache = new(_timeProvider);
+            }
+
+            return _imageCache;
+        }
+    }
 
     public async Task<MediaPreviewHome> GetHomeAsync(
         AuthenticatedSession session,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(session);
-        if (!CredentialTransportPolicy.IsAllowed(session.Server.BaseUri))
-        {
-            throw new MediaPreviewException(
-                MediaPreviewError.InsecureConnection,
-                "The media preview requires HTTPS or local HTTP loopback to protect your access token.");
-        }
+        ValidateSession(session);
 
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, deadline.Token);
-        using var load = new PreviewLoad(session, cancellation);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
         try
         {
             var resumeTask = GetResumeAsync(load);
+            var nextUpTask = GetNextUpAsync(load);
             var librariesTask = GetLibraryRailsAsync(load);
-            await Task.WhenAll(resumeTask, librariesTask).ConfigureAwait(false);
+            await Task.WhenAll(resumeTask, nextUpTask, librariesTask).ConfigureAwait(false);
 
             var (resumeItems, resume) = await resumeTask.ConfigureAwait(false);
-            var libraries = await librariesTask.ConfigureAwait(false);
+            var (views, libraries) = await librariesTask.ConfigureAwait(false);
+            var nextUp = await nextUpTask.ConfigureAwait(false);
             var featured = resume.Count > 0
                 ? resume[0]
-                : libraries.SelectMany(rail => rail.Items).FirstOrDefault();
+                : nextUp.Count > 0 ? nextUp[0] : libraries.SelectMany(rail => rail.Items).FirstOrDefault();
             if (featured is not null)
             {
                 var featuredSource = resumeItems.FirstOrDefault(item => item.Id == featured.Id);
@@ -97,7 +125,11 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             return new MediaPreviewHome(
                 Featured: featured,
                 ContinueWatching: resume,
-                RecentlyAddedLibraries: libraries);
+                RecentlyAddedLibraries: libraries)
+            {
+                NextUp = nextUp,
+                Libraries = views,
+            };
         }
         catch (OperationCanceledException) when (
             deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -108,19 +140,80 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         }
     }
 
+    public async Task<MediaLibraryPage> GetLibraryPageAsync(
+        AuthenticatedSession session,
+        MediaLibrary library,
+        int startIndex,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSession(session);
+        ArgumentNullException.ThrowIfNull(library);
+        ArgumentException.ThrowIfNullOrWhiteSpace(library.Id);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
+        try
+        {
+            var result = await GetAsync<ItemResult>(load,
+                $"Users/{Uri.EscapeDataString(session.UserId)}/Items"
+                + $"?ParentId={Uri.EscapeDataString(library.Id)}&StartIndex={startIndex}&Limit={MediaLibraryPage.PageSize}"
+                + $"&Recursive=true&SortBy=SortName&SortOrder=Ascending&EnableTotalRecordCount=true&Fields={ItemFields}"
+                + (library.CollectionType == "movies" ? "&IncludeItemTypes=Movie"
+                    : library.CollectionType == "tvshows" ? "&IncludeItemTypes=Series" : string.Empty),
+                "library media").ConfigureAwait(false);
+            if (result?.Items is not { } sources || result.TotalRecordCount is not { } total
+                || total < 0 || sources.Length > MediaLibraryPage.PageSize
+                || (sources.Length == 0 && startIndex < total)
+                || (sources.Length > 0 && (long)startIndex + sources.Length > total)
+                || sources.Any(item => item is null || string.IsNullOrWhiteSpace(item.Id) || string.IsNullOrWhiteSpace(item.Name)))
+            {
+                throw InvalidResponse(new JsonException("Invalid library page."));
+            }
+
+            var items = await PopulateArtworkAsync(load, sources, landscape: false, loadBackdrops: false)
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            deadline.Token.ThrowIfCancellationRequested();
+            return new MediaLibraryPage(items, startIndex, total);
+        }
+        catch (OperationCanceledException) when (
+            deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new MediaPreviewException(MediaPreviewError.TimedOut, "Loading the library timed out.");
+        }
+    }
+
+    private static void ValidateSession(AuthenticatedSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (!CredentialTransportPolicy.IsAllowed(session.Server.BaseUri))
+        {
+            throw new MediaPreviewException(MediaPreviewError.InsecureConnection,
+                "Media browsing requires HTTPS or local HTTP loopback to protect your access token.");
+        }
+    }
+
+    private async Task<IReadOnlyList<MediaPreviewItem>> GetNextUpAsync(PreviewLoad load)
+    {
+        var items = await GetWrappedItemsAsync(load,
+            $"Shows/NextUp?UserId={Uri.EscapeDataString(load.Session.UserId)}&Limit={ItemLimit}&Fields={ItemFields}",
+            "next-up media").ConfigureAwait(false);
+        return await PopulateArtworkAsync(load, items.Take(ItemLimit).ToArray(), landscape: true).ConfigureAwait(false);
+    }
     private async Task<(IReadOnlyList<JellyfinItem> Sources, IReadOnlyList<MediaPreviewItem> Items)>
         GetResumeAsync(PreviewLoad load)
     {
         var items = await GetWrappedItemsAsync(
             load,
             $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Items/Resume"
-            + $"?Limit={ItemLimit}&Recursive=true&Fields=PrimaryImageAspectRatio,SeriesName,SeriesId,SeriesPrimaryImageTag,ParentBackdropItemId,ParentIndexNumber,IndexNumber,ProductionYear,UserData,Overview,RunTimeTicks,OfficialRating,BackdropImageTags",
+            + $"?Limit={ItemLimit}&Recursive=true&Fields={ItemFields}",
             "continue-watching media").ConfigureAwait(false);
-        var previews = await PopulateArtworkAsync(load, items, landscape: true).ConfigureAwait(false);
+        var previews = await PopulateArtworkAsync(load, items.Take(ItemLimit).ToArray(), landscape: true).ConfigureAwait(false);
         return (items, previews);
     }
 
-    private async Task<IReadOnlyList<MediaPreviewRail>> GetLibraryRailsAsync(PreviewLoad load)
+    private async Task<(IReadOnlyList<MediaLibrary> Libraries, IReadOnlyList<MediaPreviewRail> Rails)> GetLibraryRailsAsync(PreviewLoad load)
     {
         var views = await GetWrappedItemsAsync(
             load,
@@ -128,8 +221,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             "media libraries").ConfigureAwait(false);
         var mediaViews = views
             .Where(view => !string.IsNullOrWhiteSpace(view.Id)
-                && !string.IsNullOrWhiteSpace(view.Name)
-                && view.CollectionType is "movies" or "tvshows")
+                && !string.IsNullOrWhiteSpace(view.Name))
             .OrderBy(view => view.Name!.Contains("anime", StringComparison.OrdinalIgnoreCase)
                 ? 2
                 : view.CollectionType == "tvshows" ? 0 : 1)
@@ -140,14 +232,14 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 load,
                 $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Items/Latest"
                 + $"?ParentId={Uri.EscapeDataString(view.Id!)}&Limit={ItemLimit}"
-                + "&Fields=PrimaryImageAspectRatio,SeriesName,SeriesId,SeriesPrimaryImageTag,ParentBackdropItemId,ParentIndexNumber,IndexNumber,ProductionYear,UserData,Overview,RunTimeTicks,OfficialRating,BackdropImageTags"
+                + $"&Fields={ItemFields}"
                 + (view.CollectionType == "movies"
                     ? "&IncludeItemTypes=Movie"
-                    : "&IncludeItemTypes=Series,Season,Episode"),
+                    : view.CollectionType == "tvshows" ? "&IncludeItemTypes=Series,Season,Episode" : string.Empty),
                 $"recently added media in {view.Name}").ConfigureAwait(false);
             var items = await PopulateArtworkAsync(
                 load,
-                latest,
+                latest.Take(ItemLimit).ToArray(),
                 landscape: false).ConfigureAwait(false);
             return new MediaPreviewRail(
                 view.Id!,
@@ -156,7 +248,8 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 LibraryName: view.Name);
         });
 
-        return await Task.WhenAll(tasks).ConfigureAwait(false);
+        var rails = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return (mediaViews.Select(view => new MediaLibrary(view.Id!, view.Name!, view.CollectionType)).ToArray(), rails);
     }
 
     private async Task<IReadOnlyList<JellyfinItem>> GetWrappedItemsAsync(
@@ -169,7 +262,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             relativeUri,
             operation)
             .ConfigureAwait(false);
-        return result?.Items ?? [];
+        return result?.Items ?? throw InvalidResponse(new JsonException("Missing media items."));
     }
 
     private async Task<IReadOnlyList<JellyfinItem>> GetItemsAsync(
@@ -180,7 +273,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             load,
             relativeUri,
             operation)
-            .ConfigureAwait(false) ?? [];
+            .ConfigureAwait(false) ?? throw InvalidResponse(new JsonException("Missing latest media."));
 
     private Task<T?> GetAsync<T>(
         PreviewLoad load,
@@ -213,7 +306,8 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
     private async Task<IReadOnlyList<MediaPreviewItem>> PopulateArtworkAsync(
         PreviewLoad load,
         IReadOnlyList<JellyfinItem> items,
-        bool landscape)
+        bool landscape,
+        bool loadBackdrops = true)
     {
         var tasks = items
             .Where(item => !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.Name))
@@ -235,7 +329,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 : Task.FromResult<byte[]?>(null);
             var hasBackdrop = item.BackdropImageTags is { Length: > 0 }
                 || !string.IsNullOrWhiteSpace(item.ParentBackdropItemId);
-            var shouldLoadBackdrop = landscape || index < 8 && hasBackdrop;
+            var shouldLoadBackdrop = loadBackdrops && (landscape || index < 8 && hasBackdrop);
             var backdropTask = shouldLoadBackdrop
                 ? GetBackdropAsync(load, GetBackdropItemId(item))
                 : Task.FromResult<byte[]?>(null);
@@ -289,6 +383,11 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             relativeUri,
             _ => new Lazy<Task<byte[]?>>(() => load.RunRequestAsync<byte[]?>(async cancellationToken =>
             {
+                if (load.Cache.Get(relativeUri) is { } cached)
+                {
+                    return cached;
+                }
+
                 using var request = CreateAuthenticatedRequest(
                     load.Session, new Uri(load.Session.Server.BaseUri, relativeUri));
                 using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -298,7 +397,9 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 }
 
                 EnsureSuccess(response, operation);
-                return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+                var image = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+                load.Cache.Add(relativeUri, image);
+                return image;
             }))).Value;
 
     private HttpRequestMessage CreateAuthenticatedRequest(
@@ -393,12 +494,14 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
 
     private sealed class PreviewLoad(
         AuthenticatedSession session,
-        CancellationTokenSource cancellation) : IDisposable
+        CancellationTokenSource cancellation,
+        MediaImageCache cache) : IDisposable
     {
         // Metadata shares the limit so servers with many libraries cannot fan out unbounded requests.
         private readonly SemaphoreSlim _requests = new(6, 6);
 
         public AuthenticatedSession Session { get; } = session;
+        public MediaImageCache Cache { get; } = cache;
 
         public ConcurrentDictionary<string, Lazy<Task<byte[]?>>> Images { get; } = new(StringComparer.Ordinal);
 
@@ -408,6 +511,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             var completed = false;
             try
             {
+                cancellation.Token.ThrowIfCancellationRequested();
                 var result = await operation(cancellation.Token).ConfigureAwait(false);
                 completed = true;
                 return result;
@@ -427,7 +531,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         public void Dispose() => _requests.Dispose();
     }
 
-    private sealed record ItemResult(JellyfinItem[]? Items);
+    private sealed record ItemResult(JellyfinItem[]? Items, int? TotalRecordCount);
 
     private sealed record JellyfinItem(
         string? Id,

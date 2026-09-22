@@ -105,6 +105,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private DesignGalleryViewModel? _designGallery;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLibraryBrowser))]
+    private LibraryBrowserViewModel? _libraryBrowser;
+
+    public bool HasLibraryBrowser => LibraryBrowser is not null;
+
     public void SetControllerStatus(string status)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(status);
@@ -289,6 +295,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        LibraryBrowser?.CancelLoading();
         IsBusy = true;
         var profile = _currentSession.Profile;
         using var operation = _diagnostics?.Begin(DiagnosticArea.Authentication, DiagnosticAction.SignOut);
@@ -365,6 +372,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             var gallery = _createGallery(home);
             ClearDesignGallery();
             DesignGallery = gallery;
+            LibraryBrowser = new LibraryBrowserViewModel(_mediaPreviewClient, session, home.Libraries,
+                exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
             IsDesignGalleryVisible = true;
             StatusMessage = Loc.Get("Status.PreviewLoaded");
             operation?.Complete();
@@ -380,29 +389,48 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             StatusMessage = LocalizedErrors.Get(exception);
             if (exception.Error == MediaPreviewError.AccessDenied)
             {
-                PrepareForReauthentication(session.Profile);
-                StatusMessage = Loc.Format("Status.SignInAgain", LocalizedErrors.Get(exception));
-                try
-                {
-                    await _authenticationService.InvalidateAsync(session);
-                }
-                catch (AuthenticationException invalidationException)
-                {
-                    operation?.Fail(invalidationException);
-                    StatusMessage = Loc.Format("Status.Combined", StatusMessage,
-                        Loc.Format("Error.SessionInvalidation", LocalizedErrors.Get(invalidationException)));
-                }
+                await HandleRejectedMediaSessionAsync(session, exception);
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
-                try
-                {
-                    await RefreshSavedSessionsAsync(CancellationToken.None);
-                }
-                catch (AuthenticationException refreshException)
-                {
-                    operation?.Fail(refreshException);
-                    StatusMessage = Loc.Format("Status.Combined", StatusMessage,
-                        Loc.Format("Error.SessionRefresh", LocalizedErrors.Get(refreshException)));
-                }
+    private async Task HandleRejectedMediaSessionAsync(AuthenticatedSession session, MediaPreviewException exception)
+    {
+        if (_disposed || _currentSession != session)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Authentication, DiagnosticAction.RestoreSession);
+        try
+        {
+            PrepareForReauthentication(session.Profile);
+            StatusMessage = Loc.Format("Status.SignInAgain", LocalizedErrors.Get(exception));
+            try
+            {
+                await _authenticationService.InvalidateAsync(session);
+            }
+            catch (AuthenticationException invalidationException)
+            {
+                operation?.Fail(invalidationException);
+                StatusMessage = Loc.Format("Status.Combined", StatusMessage,
+                    Loc.Format("Error.SessionInvalidation", LocalizedErrors.Get(invalidationException)));
+            }
+
+            try
+            {
+                await RefreshSavedSessionsAsync(CancellationToken.None);
+            }
+            catch (AuthenticationException refreshException)
+            {
+                operation?.Fail(refreshException);
+                StatusMessage = Loc.Format("Status.Combined", StatusMessage,
+                    Loc.Format("Error.SessionRefresh", LocalizedErrors.Get(refreshException)));
             }
         }
         finally
@@ -483,6 +511,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void ShowAuthenticated(AuthenticatedSession session)
     {
+        _mediaPreviewClient?.ClearImageCache();
         ClearDesignGallery();
         AuthenticatedAccount = LocaleFormat.SessionDisplayName(session.Profile);
         StatusMessage = Loc.Format("Status.SignedIn", session.Server.DisplayName);
@@ -503,6 +532,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IsAuthenticatedVisible = authenticated;
         if (!authenticated)
         {
+            _mediaPreviewClient?.ClearImageCache();
             _currentSession = null;
             AuthenticatedAccount = string.Empty;
             ClearDesignGallery();
@@ -517,6 +547,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var gallery = DesignGallery;
         DesignGallery = null;
         gallery?.Dispose();
+        var browser = LibraryBrowser;
+        LibraryBrowser = null;
+        browser?.Dispose();
     }
 
     public void Dispose()
@@ -524,6 +557,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _disposed = true;
         ShowDesignGalleryCommand.Cancel();
         ClearDesignGallery();
+        _mediaPreviewClient?.ClearImageCache();
         GC.SuppressFinalize(this);
     }
 }

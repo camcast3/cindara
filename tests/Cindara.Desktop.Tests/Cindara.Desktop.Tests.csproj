@@ -28,5 +28,7 @@
                       LogicalName="Cindara.Tests.MainWindow.axaml" />
     <EmbeddedResource Include="..\..\src\Cindara.Desktop\Views\ShellView.axaml"
                       LogicalName="Cindara.Tests.ShellView.axaml" />
+    <EmbeddedResource Include="..\..\src\Cindara.Desktop\Views\LibraryBrowserView.axaml"
+                      LogicalName="Cindara.Tests.LibraryBrowserView.axaml" />
   </ItemGroup>
 </Project>

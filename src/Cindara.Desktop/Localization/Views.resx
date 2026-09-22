@@ -99,4 +99,15 @@
   <data name="Home.Retry" xml:space="preserve"><value>Retry loading Home</value></data>
   <data name="Action.CancelLoading" xml:space="preserve"><value>Cancel loading</value></data>
   <data name="Action.Exit" xml:space="preserve"><value>Exit</value></data>
+  <data name="Home.NextUp" xml:space="preserve"><value>Next Up</value></data>
+  <data name="Home.Empty" xml:space="preserve"><value>No media in your Home rows yet. Choose a library to browse.</value></data>
+  <data name="Library.NoLibraries" xml:space="preserve"><value>No libraries are visible to this account. Check library access with your server administrator.</value></data>
+  <data name="Library.Loading" xml:space="preserve"><value>Loading library...</value></data>
+  <data name="Library.Canceled" xml:space="preserve"><value>Loading canceled. Retry to load this page.</value></data>
+  <data name="Library.Empty" xml:space="preserve"><value>This library is empty.</value></data>
+  <data name="Library.Retry" xml:space="preserve"><value>Retry loading page</value></data>
+  <data name="Library.Previous" xml:space="preserve"><value>Previous page</value></data>
+  <data name="Library.Next" xml:space="preserve"><value>Next page</value></data>
+  <data name="Library.Page" xml:space="preserve"><value>{0:N0}-{1:N0} of {2:N0}</value></data>
+  <data name="Library.ArtworkUnavailable" xml:space="preserve"><value>Artwork unavailable</value></data>
 </root>

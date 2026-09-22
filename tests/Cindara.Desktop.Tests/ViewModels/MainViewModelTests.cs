@@ -12,6 +12,40 @@ namespace Cindara.Desktop.Tests.ViewModels;
 public sealed class MainViewModelTests
 {
     [Fact]
+    public async Task RejectedLibraryPageClearsMediaAndCacheAndInvalidatesOnlyTheCurrentAccount()
+    {
+        var other = new SessionProfile(Server, "other", "Other viewer");
+        var authentication = new TestAuthenticationService
+        {
+            SavedProfiles = [new SessionProfile(Server, "user-1", "viewer"), other],
+        };
+        var library = new MediaLibrary("movies", "Movies", "movies");
+        var preview = new TestMediaPreviewClient
+        {
+            Home = new MediaPreviewHome(null, [], []) { Libraries = [library] },
+            LibraryError = MediaPreviewError.AccessDenied,
+        };
+        using var model = new MainViewModel(new StubServerClient(), authentication, preview);
+        await model.InitializeCommand.ExecuteAsync(null);
+        await model.UseSavedSessionCommand.ExecuteAsync(null);
+        await model.OpenHomeCommand.ExecuteAsync(null);
+        var browser = Assert.IsType<LibraryBrowserViewModel>(model.LibraryBrowser);
+        var previousClears = preview.CacheClears;
+
+        await browser.OpenLibraryCommand.ExecuteAsync(library);
+
+        Assert.True(model.IsSignInVisible);
+        Assert.False(model.IsAuthenticatedVisible);
+        Assert.False(model.IsBusy);
+        Assert.Null(model.LibraryBrowser);
+        Assert.Null(model.DesignGallery);
+        Assert.Equal("user-1", authentication.InvalidatedSession?.UserId);
+        Assert.Equal(other, Assert.Single(model.SavedSessions));
+        Assert.True(preview.CacheClears > previousClears);
+        Assert.False(browser.OpenLibraryCommand.CanExecute(library));
+    }
+
+    [Fact]
     public async Task DiagnosticsCaptureAuthenticationStorageFailureWithNoAccountMetadata()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"cindara-auth-diagnostics-{Guid.NewGuid():N}");
@@ -564,6 +598,10 @@ public sealed class MainViewModelTests
 
     private sealed class PendingPreviewClient : IJellyfinMediaPreviewClient
     {
+        public void ClearImageCache() { }
+        public Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,
+            int startIndex, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public TaskCompletionSource<MediaPreviewHome> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task<MediaPreviewHome> GetHomeAsync(AuthenticatedSession session, CancellationToken cancellationToken = default) =>
@@ -690,6 +728,14 @@ public sealed class MainViewModelTests
 
     private sealed class TestMediaPreviewClient : IJellyfinMediaPreviewClient
     {
+        public int CacheClears { get; private set; }
+        public MediaPreviewError? LibraryError { get; set; }
+        public void ClearImageCache() => CacheClears++;
+        public Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,
+            int startIndex, CancellationToken cancellationToken = default) =>
+            LibraryError is { } error ? throw new MediaPreviewException(error, "Library failed.")
+                : Task.FromResult(new MediaLibraryPage([], startIndex, 0));
+
         public int RequestCount { get; private set; }
 
         public MediaPreviewError? Error { get; set; }

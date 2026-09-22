@@ -1,11 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Cindara.Desktop.ViewModels"
+             xmlns:views="using:Cindara.Desktop.Views"
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.ShellView"
              x:DataType="vm:MainViewModel">
     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="40">
-        <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer x:Name="PageScroll" Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
         <Grid>
             <StackPanel x:Name="HomePage" Spacing="24">
                 <TextBlock Classes="display" Text="{loc:Tr Nav.Home}" />
@@ -45,6 +46,16 @@
             </StackPanel>
         </Grid>
         </ScrollViewer>
+        <Grid x:Name="LibrariesPage" Grid.Column="1" IsVisible="False">
+            <Grid IsVisible="{Binding HasLibraryBrowser}">
+                <views:LibraryBrowserView x:Name="LibraryView" DataContext="{Binding LibraryBrowser}" />
+            </Grid>
+            <StackPanel x:Name="LibrariesUnavailable" Spacing="24" IsVisible="{Binding !HasLibraryBrowser}">
+                <TextBlock Classes="display" Text="{loc:Tr Nav.Libraries}" />
+                <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+                <Button Content="{loc:Tr Home.Retry}" Command="{Binding OpenHomeCommand}" />
+            </StackPanel>
+        </Grid>
         <Border x:Name="NavigationRail" Width="88" HorizontalAlignment="Left"
                 VerticalAlignment="Top" Background="{DynamicResource Cindara.Brush.Surface}"
                 CornerRadius="{DynamicResource Cindara.Radius.Medium}">

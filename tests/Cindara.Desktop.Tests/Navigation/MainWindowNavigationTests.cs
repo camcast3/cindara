@@ -28,6 +28,116 @@ public sealed class MainWindowNavigationTests
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads"];
 
     [Theory]
+    [InlineData("en", 1920)]
+    [InlineData("en", 3840)]
+    [InlineData("qps-plocm", 1920)]
+    public Task LibrariesPageThroughMediaAndRestoreFocusAndScrollFromSummaryAndHome(string cultureName, int width) =>
+        TestAppBuilder.Run(async () =>
+        {
+            using var culture = new CultureScope(cultureName);
+            using var fixture = new ShellFixture(preferences: new PresentationPreferences(ReducedMotion: true));
+            fixture.Window.WindowState = WindowState.Normal;
+            fixture.Window.Width = width;
+            fixture.Window.Height = width * 9 / 16;
+            fixture.Preview.WithLibraries = true;
+            fixture.SignIn();
+            var homeLibrary = fixture.Gallery.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.DataContext is MediaLibrary { Id: "movies" });
+            fixture.Click(homeLibrary);
+            var browser = fixture.Shell.LibraryView;
+            await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+            fixture.Flush();
+            Assert.Equal("Libraries", fixture.Shell.Destination);
+            Assert.False(fixture.Shell.FindControl<StackPanel>("LibrariesUnavailable")!.IsEffectivelyVisible);
+            Assert.Equal(40, fixture.Model.LibraryBrowser!.Items.Count);
+            Assert.Equal("movie-0", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            var firstPageOffset = browser.FindControl<ScrollViewer>("LibraryScroll")!.Offset;
+            fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+            Assert.Equal("movie-1", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            fixture.Flush();
+            var card = Focused(fixture.Window);
+            Assert.Equal("movie-11", Assert.IsType<MediaPreviewCardViewModel>(card.DataContext).Id);
+            AssertInsideWindow(fixture.Window, card);
+            var scroll = browser.FindControl<ScrollViewer>("LibraryScroll")!;
+            var offset = scroll.Offset;
+            Assert.True(offset.Y > 0);
+            fixture.Input.Press(ControllerAction.Accept);
+            fixture.Flush();
+            Assert.True(fixture.IsModalVisible);
+            Assert.Equal(Loc.Get("Action.Back"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
+            fixture.Input.Press(ControllerAction.Back);
+            fixture.Flush();
+            Assert.Same(card, Focused(fixture.Window));
+            Assert.Equal(offset, scroll.Offset);
+            Capture(fixture.Window, $"library-{cultureName}-{width}");
+
+            fixture.Click(fixture.Shell.FindControl<Button>("HomeNavigation")!);
+            Assert.True(fixture.Model.IsDesignGalleryVisible);
+            Assert.Same(homeLibrary, Focused(fixture.Window));
+            fixture.Click(homeLibrary);
+            Assert.Equal("movie-11", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.Same(card, Focused(fixture.Window));
+            Assert.Equal(offset, scroll.Offset);
+            Assert.Equal(1, fixture.Preview.LibraryCalls);
+
+            fixture.Click(browser.FindControl<Button>("NextLibraryPage")!);
+            await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
+            fixture.Flush();
+            Assert.Equal(7, fixture.Model.LibraryBrowser.Items.Count);
+            Assert.Equal("movie-40", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.False(browser.FindControl<Button>("NextLibraryPage")!.IsEffectivelyEnabled);
+            fixture.Click(browser.FindControl<Button>("PreviousLibraryPage")!);
+            await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
+            fixture.Flush();
+            Assert.Equal("movie-0", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.Equal(firstPageOffset, scroll.Offset);
+        });
+
+    [Fact]
+    public Task LibraryCancellationRetryAndAccountBoundaryAreExplicit() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.PauseLibrary = true;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
+        Assert.Equal("CancelLibraryLoading", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.Back);
+        await fixture.Model.LibraryBrowser!.LoadPageCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.Equal("RetryLibraryLoading", Focused(fixture.Window).Name);
+        Assert.True(fixture.Model.IsAuthenticatedVisible);
+        fixture.Preview.PauseLibrary = false;
+        fixture.Input.Press(ControllerAction.Accept);
+        await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.Equal(40, fixture.Model.LibraryBrowser!.Items.Count);
+        var oldBrowser = fixture.Model.LibraryBrowser;
+        fixture.Model.BackToSessionsCommand.Execute(null);
+        fixture.Flush();
+        Assert.Null(fixture.Model.LibraryBrowser);
+        Assert.Empty(oldBrowser.Items);
+        Assert.Equal("SavedAccountButton", Focused(fixture.Window).Name);
+    });
+
+    [Fact]
+    public Task NextUpCardsHaveWorkingSummaryAndRestoreTheirHomeFocus() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        var nextUp = fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaPreviewCardViewModel { Id: "next-up" });
+        fixture.Click(nextUp);
+        Assert.True(fixture.IsModalVisible);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(nextUp, Focused(fixture.Window));
+    });
+
+    [Theory]
     [InlineData(false, "en", 1280)]
     [InlineData(true, "en", 1280)]
     [InlineData(false, "qps-plocm", 720)]
@@ -725,6 +835,24 @@ public sealed class MainWindowNavigationTests
 
     private sealed class PreviewClient : IJellyfinMediaPreviewClient
     {
+        public void ClearImageCache() { }
+        public int LibraryCalls { get; private set; }
+        public bool WithLibraries { get; set; }
+        public bool PauseLibrary { get; set; }
+        public async Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,
+            int startIndex, CancellationToken cancellationToken = default)
+        {
+            LibraryCalls++;
+            if (PauseLibrary)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+
+            return new MediaLibraryPage(Enumerable.Range(startIndex, Math.Min(40, 47 - startIndex))
+                .Select(index => new MediaPreviewItem($"movie-{index}", $"Movie {index}", "2026", "Movie",
+                    null, null, "A media description.", "1h 5m", null)).ToArray(), startIndex, 47);
+        }
+
         public int Calls { get; private set; }
         public bool Pause { get; set; }
         public bool Empty { get; set; }
@@ -754,7 +882,11 @@ public sealed class MainWindowNavigationTests
             var overview = LongDescription
                 ? string.Concat(Enumerable.Repeat("A long readable media description. ", 100)) : "Your media description.";
             var item = new MediaPreviewItem("movie", "First movie", "2026", "Movie", null, null, overview, "1h 5m", 40);
-            return new MediaPreviewHome(item, [item], [new MediaPreviewRail("movies", "Movies", [item])]);
+            return new MediaPreviewHome(item, [item], [new MediaPreviewRail("movies", "Movies", [item])])
+            {
+                Libraries = WithLibraries ? [new MediaLibrary("movies", "Movies", "movies")] : [],
+                NextUp = WithLibraries ? [item with { Id = "next-up", Name = "Next episode", MediaType = "Episode" }] : [],
+            };
         }
     }
 

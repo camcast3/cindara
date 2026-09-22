@@ -14,12 +14,16 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
     private DesignGalleryViewModel(
         MediaPreviewCardViewModel? featured,
         IReadOnlyList<MediaPreviewCardViewModel> continueWatching,
-        IReadOnlyList<MediaPreviewRailViewModel> recentlyAddedLibraries)
+        IReadOnlyList<MediaPreviewRailViewModel> recentlyAddedLibraries,
+        IReadOnlyList<MediaPreviewCardViewModel> nextUp,
+        IReadOnlyList<MediaLibrary> libraries)
     {
         _initialFeatured = featured;
         _featured = featured;
         ContinueWatching = continueWatching;
         RecentlyAddedLibraries = recentlyAddedLibraries;
+        NextUp = nextUp;
+        Libraries = libraries;
     }
 
     public MediaPreviewCardViewModel? Featured
@@ -33,6 +37,10 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
     public IReadOnlyList<MediaPreviewRailViewModel> RecentlyAddedLibraries { get; }
 
     public bool HasContinueWatching => ContinueWatching.Count > 0;
+    public IReadOnlyList<MediaPreviewCardViewModel> NextUp { get; }
+    public IReadOnlyList<MediaLibrary> Libraries { get; }
+    public bool HasNextUp => NextUp.Count > 0;
+    public bool IsEmpty => !HasContinueWatching && !HasNextUp && RecentlyAddedLibraries.All(rail => rail.Items.Count == 0);
 
     public void SelectFeatured(MediaPreviewCardViewModel item)
     {
@@ -64,7 +72,9 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
                     rail.LibraryName is { } libraryName
                         ? Loc.Format("Format.RecentlyAdded", libraryName)
                         : rail.Title,
-                    rail.Items.Select(CreateCard).ToArray())).ToArray());
+                    rail.Items.Select(CreateCard).ToArray())).ToArray(),
+                home.NextUp.Select(CreateCard).ToArray(),
+                home.Libraries);
             completed = true;
             return gallery;
         }
@@ -90,6 +100,11 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
         _disposed = true;
         _initialFeatured?.Dispose();
         foreach (var item in ContinueWatching)
+        {
+            item.Dispose();
+        }
+
+        foreach (var item in NextUp)
         {
             item.Dispose();
         }
@@ -134,6 +149,7 @@ public sealed class MediaPreviewCardViewModel : IDisposable
 
     internal MediaPreviewCardViewModel(MediaPreviewItem item, Func<byte[], PreviewImage> decode)
     {
+        Id = item.Id;
         Name = item.Name;
         HeroName = item.HeroName ?? item.Name;
         Overview = item.Overview ?? string.Empty;
@@ -173,6 +189,7 @@ public sealed class MediaPreviewCardViewModel : IDisposable
     }
 
     public string Name { get; }
+    public string Id { get; }
 
     public string Subtitle { get; }
 
@@ -189,6 +206,7 @@ public sealed class MediaPreviewCardViewModel : IDisposable
     public bool HasPlaybackProgress => PlaybackProgress > 0;
 
     public IImage? Artwork => _artwork?.Source;
+    public bool HasArtwork => Artwork is not null;
 
     public IImage? Backdrop => _backdrop?.Source;
 

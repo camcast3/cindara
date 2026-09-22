@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Core.Jellyfin;
 using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.ViewModels;
@@ -16,6 +17,9 @@ public partial class DesignGalleryView : UserControl
     private Button? _focusedCard;
     private bool _pinAfterLayout;
     private PresentationPreferences _preferences = new();
+    private bool _rememberFocus;
+
+    public void SuspendFocusMemory() => _rememberFocus = false;
 
     public DesignGalleryView()
     {
@@ -31,6 +35,7 @@ public partial class DesignGalleryView : UserControl
         {
             HeroTextScroll.Offset = default;
             _focusedCard = null;
+            _rememberFocus = false;
         };
         HeroPanel.SizeChanged += (_, _) =>
         {
@@ -111,7 +116,7 @@ public partial class DesignGalleryView : UserControl
 
     private void OnMediaCardFocused(object? sender, RoutedEventArgs eventArgs)
     {
-        if (sender is Button { DataContext: MediaPreviewCardViewModel item }
+        if (_rememberFocus && sender is Button { DataContext: MediaPreviewCardViewModel item }
             && DataContext is DesignGalleryViewModel gallery)
         {
             if (!ReferenceEquals(gallery.Featured, item))
@@ -145,23 +150,65 @@ public partial class DesignGalleryView : UserControl
     }
 
     public event EventHandler? SettingsRequested;
+    public event EventHandler? LibrariesRequested;
+    public event EventHandler? SearchRequested;
+    public event EventHandler<MediaLibrary>? LibraryRequested;
+    public event EventHandler<MediaPreviewCardViewModel>? ItemRequested;
 
     public Control HomeNavigation => SidebarHomeButton;
 
     public bool FocusHomeContent()
     {
+        bool focused;
         if (_focusedCard is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true })
         {
-            return _focusedCard.Focus(NavigationMethod.Directional);
+            focused = _focusedCard.Focus(NavigationMethod.Directional);
+        }
+        else
+        {
+            var rows = GetMediaRows().ToArray();
+            focused = rows.Length > 0 ? FocusMediaRow(rows[0]) : SidebarHomeButton.Focus(NavigationMethod.Directional);
         }
 
-        var rows = GetMediaRows().ToArray();
-        return rows.Length > 0 ? FocusMediaRow(rows[0]) : SidebarHomeButton.Focus(NavigationMethod.Directional);
+        _rememberFocus = true;
+        return focused;
     }
 
     private void OnHomeClicked(object? sender, RoutedEventArgs args) => FocusHomeContent();
 
     private void OnSettingsClicked(object? sender, RoutedEventArgs args) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+    private void OnLibrariesClicked(object? sender, RoutedEventArgs args) => LibrariesRequested?.Invoke(this, EventArgs.Empty);
+    private void OnSearchClicked(object? sender, RoutedEventArgs args) => SearchRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnLibraryClicked(object? sender, RoutedEventArgs args)
+    {
+        if (sender is Button { DataContext: MediaLibrary library })
+        {
+            LibraryRequested?.Invoke(this, library);
+        }
+    }
+
+    private void OnLibraryFocused(object? sender, RoutedEventArgs args)
+    {
+        if (!_rememberFocus)
+        {
+            return;
+        }
+
+        _focusedCard = sender as Button;
+        if (_focusedCard is { } card)
+        {
+            Dispatcher.UIThread.Post(() => PinFocusedRow(card), DispatcherPriority.Loaded);
+        }
+    }
+
+    private void OnCardClicked(object? sender, RoutedEventArgs args)
+    {
+        if (sender is Button { DataContext: MediaPreviewCardViewModel item })
+        {
+            ItemRequested?.Invoke(this, item);
+        }
+    }
 
     public void ScrollDescription(bool forward)
     {
