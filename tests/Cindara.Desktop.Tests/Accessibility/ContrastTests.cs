@@ -16,6 +16,55 @@ public sealed class ContrastTests
     private static readonly string[] SurfaceRoles = ["Background", "Surface", "SurfaceRaised"];
 
     [Theory]
+    [InlineData("")]
+    [InlineData("primary")]
+    [InlineData("nav")]
+    [InlineData("card")]
+    [InlineData("card loading")]
+    public Task HighContrastDisabledButtonsRemainDistinctAndReadable(string classes) => TestAppBuilder.Run(() =>
+    {
+        var button = new Button { Content = "Unavailable action", IsEnabled = false };
+        foreach (var name in classes.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            button.Classes.Add(name);
+        }
+
+        var window = new Window { Content = button, Width = 400, Height = 250 };
+        try
+        {
+            PresentationTheme.Apply(window, new PresentationPreferences(HighContrast: true));
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var disabledOpacity = button.Opacity;
+            Assert.InRange(disabledOpacity, 0.5, 0.75);
+            Assert.False(button.Focus(NavigationMethod.Directional));
+
+            var presenter = button.GetVisualDescendants().OfType<ContentPresenter>().First();
+            var surface = BrushColor(window.Background);
+            var background = BrushColor(presenter.Background);
+            var foreground = BrushColor(presenter.Foreground);
+            var effectiveBackground = Composite(background, surface, disabledOpacity);
+            var effectiveText = Composite(foreground, surface, disabledOpacity);
+            RequireContrast(effectiveText, effectiveBackground, 4.5);
+
+            button.IsEnabled = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, button.Opacity);
+            Assert.NotEqual(disabledOpacity, button.Opacity);
+        }
+        finally
+        {
+            window.Close();
+        }
+    });
+
+    private static Color Composite(Color foreground, Color background, double opacity) =>
+        Color.FromRgb(
+            (byte)Math.Round(foreground.R * opacity + background.R * (1 - opacity)),
+            (byte)Math.Round(foreground.G * opacity + background.G * (1 - opacity)),
+            (byte)Math.Round(foreground.B * opacity + background.B * (1 - opacity)));
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public Task AllTextRolesMeetNormalTextContrastOnEverySurface(bool highContrast) => TestAppBuilder.Run(() =>

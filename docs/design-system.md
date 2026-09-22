@@ -31,6 +31,8 @@ Search, and Downloads show honest unavailable-content states and retain rail
 focus. Settings exposes exactly Language: English, Exit, and Back to Home;
 initial focus is Language. Up/down traverses the three actions, and left
 returns to the rail. Button labels are centered with consistent padding.
+Entering Settings from another screen resets focus to Language; moving between
+its actions, language dialog, and rail preserves focus within the same visit.
 Expanded settings are deferred to [#27](https://github.com/camcast3/cindara/issues/27).
 
 The rail expands on focus or hover and collapses to original vector icons when
@@ -231,6 +233,9 @@ library destinations, playback, mutations, paging, and production image caching
 are not implemented here. Metadata and artwork overlap under a six-request cap,
 images are deduplicated within the request, and a 30-second deadline prevents
 unbounded loading. Cancel loading/Back stops the request and enables Retry.
+Loading Home initially focuses Cancel loading, and moving right from the Home
+rail reaches it (left in the developer RTL layout). The loading focus state is
+separate from ready/error Home so retrying restores the cancel action.
 Session tokens are sent only in authenticated headers;
 the preview transport requires HTTPS (or HTTP loopback) before sending any
 request and rejects redirects rather than forwarding those headers.

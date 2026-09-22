@@ -38,6 +38,7 @@ public partial class MainWindow : Window
     {
         _controllerInput = controllerInput;
         InitializeComponent();
+        Shell.HomeLoadingAction = CancelLoadingButton;
         FlowDirection = Loc.IsRightToLeft
             ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight;
         Preferences = preferences ?? new();
@@ -88,6 +89,7 @@ public partial class MainWindow : Window
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _viewModel.ShowDesignGalleryCommand.PropertyChanged += OnHomeLoadPropertyChanged;
         }
 
         _controllerInput.ActionPressed += OnControllerActionPressed;
@@ -140,11 +142,20 @@ public partial class MainWindow : Window
         {
             _viewModel.ShowDesignGalleryCommand.Cancel();
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.ShowDesignGalleryCommand.PropertyChanged -= OnHomeLoadPropertyChanged;
             _viewModel = null;
         }
     }
 
     private void OnControllerTimerTick(object? sender, EventArgs eventArgs) => _controllerInput.Poll();
+
+    private void OnHomeLoadPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(MainViewModel.ShowDesignGalleryCommand.IsRunning))
+        {
+            Dispatcher.UIThread.Post(RefreshScreen, DispatcherPriority.Loaded);
+        }
+    }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
@@ -184,6 +195,8 @@ public partial class MainWindow : Window
         Shell.IsVisible = _viewModel.IsAuthenticatedVisible;
         AuthenticationSurface.IsVisible = !Shell.IsVisible;
         var screen = _viewModel.IsDesignGalleryVisible ? "gallery"
+            : _viewModel.IsAuthenticatedVisible && Shell.Destination == "Home"
+                && _viewModel.ShowDesignGalleryCommand.IsRunning ? "shell:Home:loading"
             : _viewModel.IsAuthenticatedVisible ? $"shell:{Shell.Destination}"
             : _viewModel.IsSignInVisible ? "sign-in"
             : _viewModel.AreSavedSessionsVisible ? "accounts"

@@ -26,14 +26,18 @@ public partial class ShellView : UserControl
     public event EventHandler? ExitRequested;
     public event EventHandler? LanguageRequested;
     public string Destination => _destination;
+    public Control? HomeLoadingAction { get; set; }
+    private bool IsHomeLoading => _destination == "Home"
+        && HomeLoadingAction is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true };
     public Control InitialFocus => _destination switch
     {
+        "Home" when IsHomeLoading => HomeLoadingAction!,
         "Home" => RetryHomeButton.IsEffectivelyVisible && RetryHomeButton.IsEffectivelyEnabled ? RetryHomeButton : HomeNavigation,
         "Settings" => SettingsLanguageButton,
         _ => NavigationButtons.Children.OfType<Button>().Single(button => Equals(button.Tag, _destination)),
     };
-    public Control ContentFocus =>
-        _contentMemory.TryGetValue(_destination, out var control)
+    public Control ContentFocus => IsHomeLoading ? InitialFocus
+        : _contentMemory.TryGetValue(_destination, out var control)
         && control.IsEffectivelyVisible && control.IsEffectivelyEnabled ? control : InitialFocus;
 
     public void Reset()
@@ -47,6 +51,11 @@ public partial class ShellView : UserControl
         if (destination is not ("Home" or "Libraries" or "Search" or "Downloads" or "Settings"))
         {
             throw new ArgumentOutOfRangeException(nameof(destination));
+        }
+
+        if (destination == "Settings" && _destination != "Settings")
+        {
+            _contentMemory.Remove("Settings");
         }
 
         _destination = destination;

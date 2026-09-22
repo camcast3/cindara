@@ -67,6 +67,9 @@ Navigation selection has a bottom border, and cards retain their selected
 outline. Errors must include explanatory text; loading must include a textual
 status. Automation states and names supplement these visual indicators.
 Controls must remain identifiable in grayscale.
+High-contrast disabled buttons use 65% opacity rather than looking identical to
+enabled actions. The composited text remains above 4.5:1 against the black
+surfaces; re-enabling restores full opacity.
 
 ## Locale and pseudo-locales
 
@@ -169,8 +172,14 @@ These are future acceptance requirements, not implemented subtitle features:
 - Preserve semantic sound descriptions and speaker identification in captions.
   UI reduced motion must not suppress captions or alter their timing.
 
-Track this against **#19 (scoped audio/subtitle preference rules)**,
-**#20 (pre-play quality/audio/subtitle selector)**, **#4 (couch playback controls
-and Jellyfin session reporting)**, and the playback implementation in **#6/#8**.
-Issue numbers #17 and #18 refer to Seerr authentication and request UI, not
-subtitle work; do not infer playback scope from roadmap list numbering.
+Track this against [#19: scoped audio/subtitle preference rules](https://github.com/camcast3/cindara/issues/19),
+[#20: pre-play quality/audio/subtitle selector](https://github.com/camcast3/cindara/issues/20),
+[#4: couch playback controls and Jellyfin session reporting](https://github.com/camcast3/cindara/issues/4),
+and the playback implementation in #6/#8.
+
+These links follow the actual issue titles. Roadmap #16 currently labels #17/#18
+as playback work and #19/#20 as Seerr work, but the linked issues themselves are
+[#17: Seerr authentication](https://github.com/camcast3/cindara/issues/17) and
+[#18: Seerr requests](https://github.com/camcast3/cindara/issues/18). Resolve that
+roadmap numbering mismatch before scheduling those milestones; do not redirect
+subtitle accessibility work to the Seerr issues.

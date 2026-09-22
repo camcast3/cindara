@@ -202,11 +202,11 @@
     <Style Selector="Window.high-contrast Button.card">
         <Setter Property="BorderThickness" Value="1" />
     </Style>
-    <Style Selector="Window.high-contrast Button:disabled">
-        <Setter Property="Opacity" Value="1" />
-    </Style>
     <Style Selector="Window.high-contrast Button.card.loading">
         <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Window.high-contrast Button:disabled, Window.high-contrast Button.card.loading:disabled">
+        <Setter Property="Opacity" Value="0.65" />
     </Style>
     <Style Selector="Window.reduced-motion Button">
         <Setter Property="Transitions" Value="{x:Null}" />

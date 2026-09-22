@@ -95,6 +95,72 @@ public sealed class MainWindowNavigationTests
         Assert.Same(homeFocus, Focused(fixture.Window));
     });
 
+    [Theory]
+    [InlineData("Home")]
+    [InlineData("Libraries")]
+    public Task ReenteringSettingsStartsOnLanguageWithoutDiscardingInPageFocus(string destination) => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.SignIn();
+        fixture.OpenSettings();
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("ExitButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateLeft);
+        Assert.Equal("SettingsNavigation", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Equal("ExitButton", Focused(fixture.Window).Name);
+
+        if (destination == "Home")
+        {
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            fixture.Input.Press(ControllerAction.Accept);
+            fixture.Flush();
+            fixture.OpenSettings();
+        }
+        else
+        {
+            fixture.Click(fixture.Shell.FindControl<Button>("LibrariesNavigation")!);
+            fixture.Click(fixture.Shell.FindControl<Button>("SettingsNavigation")!);
+        }
+
+        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task LoadingCancelIsInitiallyFocusedAndReachableFromRailUsingOnlyController(bool rtl) => TestAppBuilder.Run(() =>
+    {
+        using var culture = new CultureScope(rtl ? "qps-plocm" : "en");
+        using var fixture = new ShellFixture();
+        fixture.Preview.Pause = true;
+        fixture.SignIn(waitForHome: false);
+        Assert.Equal("CancelLoadingButton", Focused(fixture.Window).Name);
+
+        fixture.Input.Press(rtl ? ControllerAction.NavigateRight : ControllerAction.NavigateLeft);
+        for (var index = 0; index < 4; index++)
+        {
+            fixture.Input.Press(ControllerAction.NavigateUp);
+        }
+
+        Assert.Equal("HomeNavigation", Focused(fixture.Window).Name);
+        fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Equal("CancelLoadingButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        Assert.False(fixture.Model.IsBusy);
+        Assert.Equal(Loc.Get("Status.PreviewCanceled"), fixture.Model.StatusMessage);
+        fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Equal("RetryHomeButton", Focused(fixture.Window).Name);
+
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        Assert.Equal("CancelLoadingButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        Assert.False(fixture.Model.IsBusy);
+    });
+
     [Fact]
     public Task LoadingCanBeCanceledAndRetriedWithoutAutomaticRetryLoop() => TestAppBuilder.Run(() =>
     {
