@@ -74,6 +74,9 @@ This is not a per-image minimum lifetime. Per-image expiry is deferred to
 [the caching follow-up](https://github.com/camcast3/cindara/issues/10).
 The cache is isolated to the exact authenticated session (including its token).
 Account changes, sign-out, and shutdown clear it; no artwork is cached on disk.
+An artwork decode failure also clears the reusable image cache so Retry can fetch
+fresh bytes rather than repeatedly decoding the same corrupt response. Existing
+displayed cards/images are retained, and ordinary network failures do not clear it.
 Each HTTP response is limited to 8 MiB.
 Continue Watching combines Jellyfin resume and next-up results into at most 20
 cards, with only one episode per series. The most recently played resume episode

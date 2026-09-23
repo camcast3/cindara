@@ -269,7 +269,19 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
                     cancellationToken.ThrowIfCancellationRequested();
                     if (bytes is not null)
                     {
-                        decoded = await Task.Run(() => _decodeArtwork(bytes), cancellationToken);
+                        try
+                        {
+                            decoded = await Task.Run(() => _decodeArtwork(bytes), cancellationToken);
+                        }
+                        catch (MediaPreviewException exception) when (exception.Error == MediaPreviewError.InvalidResponse)
+                        {
+                            if (!_disposed && !cancellationToken.IsCancellationRequested)
+                            {
+                                _client.ClearImageCache();
+                            }
+
+                            throw;
+                        }
                         cancellationToken.ThrowIfCancellationRequested();
                     }
                     else

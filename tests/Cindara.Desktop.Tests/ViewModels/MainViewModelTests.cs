@@ -567,12 +567,14 @@ public sealed class MainViewModelTests
         await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
         var previous = Assert.IsType<DesignGalleryViewModel>(viewModel.DesignGallery);
         var initialCount = decoder.Resources.Count;
+        var cacheClears = preview.CacheClears;
         viewModel.HideDesignGalleryCommand.Execute(null);
         decoder.FailOnCall = initialCount + 2;
 
         await viewModel.ShowDesignGalleryCommand.ExecuteAsync(null);
 
         Assert.Same(previous, viewModel.DesignGallery);
+        Assert.Equal(cacheClears + 1, preview.CacheClears);
         Assert.False(viewModel.IsBusy);
         Assert.False(viewModel.IsDesignGalleryVisible);
         Assert.True(viewModel.IsAuthenticatedVisible);

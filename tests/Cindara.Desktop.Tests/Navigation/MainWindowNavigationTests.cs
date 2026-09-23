@@ -28,6 +28,96 @@ public sealed class MainWindowNavigationTests
 {
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads"];
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CorruptCachedArtworkRetryFetchesFreshBytesInHomeAndLibrary(bool library) =>
+        TestAppBuilder.Run(async () =>
+        {
+            using var handler = new RepairableArtworkHandler(CreateReviewArtwork()) { Corrupt = !library };
+            using var client = new JellyfinMediaPreviewClient(handler,
+                new JellyfinClientIdentity("Cindara", "UI tests", "device", "1.0"));
+            using var fixture = new ShellFixture(mediaClient: client);
+            fixture.SignIn(waitForHome: false);
+            await fixture.Model.OpenHomeCommand.ExecutionTask!;
+            fixture.Flush();
+            if (!library)
+            {
+                Assert.False(fixture.Model.IsDesignGalleryVisible);
+                Assert.Equal(Loc.Get("Error.Preview.InvalidResponse"), fixture.Model.StatusMessage);
+                var firstRequests = handler.ImageRequests.Values.Sum();
+                handler.Corrupt = false;
+                fixture.Click(fixture.Shell.FindControl<Button>("RetryHomeButton")!);
+                await fixture.Model.OpenHomeCommand.ExecutionTask!;
+                fixture.Flush();
+                Assert.True(fixture.Model.IsDesignGalleryVisible, fixture.Model.StatusMessage);
+                Assert.True(handler.ImageRequests.Values.Sum() > firstRequests);
+                Assert.True(fixture.Model.DesignGallery!.ContinueWatching[0].HasArtwork);
+            }
+            else
+            {
+                Assert.True(fixture.Model.IsDesignGalleryVisible);
+                handler.Corrupt = true;
+                fixture.Click(fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
+                    .GetVisualDescendants().OfType<Button>().Single());
+                var browser = fixture.Model.LibraryBrowser!;
+                await browser.OpenLibraryCommand.ExecutionTask!;
+                await browser.LoadArtworkCommand.ExecutionTask!;
+                fixture.Flush();
+                var card = Assert.Single(browser.Items);
+                Assert.False(card.HasArtwork);
+                Assert.True(browser.CanRetryArtwork);
+                var cardControl = fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>()
+                    .Single(button => button.DataContext == card);
+                handler.Corrupt = false;
+                fixture.Click(fixture.Shell.LibraryView.FindControl<Button>("RetryLibraryArtwork")!);
+                await browser.LoadArtworkCommand.ExecutionTask!;
+                fixture.Flush();
+                Assert.Same(card, Assert.Single(browser.Items));
+                Assert.True(card.HasArtwork);
+                Assert.False(browser.CanRetryArtwork);
+                Assert.Equal(2, handler.ImageRequests["/Items/library-item/Images/Primary"]);
+                Assert.Contains(cardControl, fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>());
+                fixture.Click(cardControl);
+                Assert.True(fixture.IsModalVisible);
+                fixture.Input.Press(ControllerAction.Back);
+                Assert.Same(cardControl, Focused(fixture.Window));
+            }
+        });
+
+    private sealed class RepairableArtworkHandler(byte[] validArtwork) : HttpMessageHandler
+    {
+        public bool Corrupt { get; set; }
+        public System.Collections.Concurrent.ConcurrentDictionary<string, int> ImageRequests { get; } = new(StringComparer.Ordinal);
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.Contains("/Images/", StringComparison.Ordinal))
+            {
+                ImageRequests.AddOrUpdate(path, 1, (_, count) => count + 1);
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(Corrupt ? [0, 1, 2, 3] : validArtwork),
+                });
+            }
+
+            var json = path switch
+            {
+                "/Users/first/Items/Resume" => """{"Items":[{"Id":"resume","Name":"Resumable movie","Type":"Movie","ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":50}}]}""",
+                "/Shows/NextUp" => """{"Items":[]}""",
+                "/Users/first/Views" => """{"Items":[{"Id":"tv","Name":"TV","CollectionType":"tvshows"}]}""",
+                "/Users/first/Items/Latest" => "[]",
+                "/Users/first/Items" => """{"Items":[{"Id":"library-item","Name":"Library item","Type":"Series","ImageTags":{"Primary":"tag"}}],"TotalRecordCount":1}""",
+                _ => throw new InvalidOperationException($"Unexpected test request: {path}"),
+            };
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
     [Fact]
     public Task LibraryLayoutSaveFailureStaysInTheEditorAndDoesNotChangeHome() => TestAppBuilder.Run(() =>
     {

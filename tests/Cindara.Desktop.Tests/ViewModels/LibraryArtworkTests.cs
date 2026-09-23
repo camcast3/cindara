@@ -47,6 +47,7 @@ public sealed class LibraryArtworkTests
         });
         Assert.Equal(6, client.Maximum);
         Assert.False(model.CanRetryArtwork);
+        Assert.Equal(0, client.CacheClears);
         Assert.Empty(model.ArtworkMessage);
         Assert.Equal(0, client.Active);
         model.Dispose();
@@ -77,6 +78,7 @@ public sealed class LibraryArtworkTests
         Assert.Contains("Some artwork could not be loaded", model.ArtworkMessage, StringComparison.Ordinal);
         Assert.False(model.CanRetry);
         Assert.True(model.HasNextPage);
+        Assert.Equal(0, client.CacheClears);
 
         fail = false;
         await model.LoadArtworkCommand.ExecuteAsync(null);
@@ -101,6 +103,7 @@ public sealed class LibraryArtworkTests
         Assert.True(model.CanRetryArtwork);
         Assert.False(model.CanRetry);
         Assert.All(model.Items, card => Assert.False(card.IsArtworkLoading));
+        Assert.Equal(1, client.CacheClears);
     }
 
     [Fact]
@@ -155,6 +158,35 @@ public sealed class LibraryArtworkTests
         Assert.Equal(6, client.Calls.Count);
         Assert.Equal(!dispose, model.CanRetryArtwork);
         Assert.Empty(decoder.Resources);
+    }
+
+    [Fact]
+    public async Task DecodeFailureAfterCancellationDoesNotClearAnotherLoadCache()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        var client = new Client((_, _) => Task.FromResult<byte[]?>([1]));
+        using var model = new LibraryBrowserViewModel(client, Session, [Library], _ => Task.CompletedTask,
+            decodeArtwork: _ =>
+            {
+                started.TrySetResult();
+                Assert.True(release.Wait(TestTimeout));
+                throw new MediaPreviewException(MediaPreviewError.InvalidResponse, "Corrupt artwork.");
+            });
+        try
+        {
+            await model.OpenLibraryCommand.ExecuteAsync(Library);
+            await started.Task.WaitAsync(TestTimeout);
+            model.CancelLoading();
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        await model.LoadArtworkCommand.ExecutionTask!.WaitAsync(TestTimeout);
+        Assert.Equal(0, client.CacheClears);
+        Assert.All(model.Items, card => Assert.False(card.HasArtwork));
     }
 
     [Fact]
@@ -242,7 +274,9 @@ public sealed class LibraryArtworkTests
         public int Maximum { get; private set; }
         public int Canceled { get; private set; }
         public bool SharedArtwork { get; init; }
-        public void ClearImageCache() { }
+        private int _cacheClears;
+        public int CacheClears => Volatile.Read(ref _cacheClears);
+        public void ClearImageCache() => Interlocked.Increment(ref _cacheClears);
         public Task<MediaPreviewHome> GetHomeAsync(AuthenticatedSession session, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

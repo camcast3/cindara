@@ -382,7 +382,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            var gallery = _createGallery(home);
+            DesignGalleryViewModel gallery;
+            try
+            {
+                gallery = _createGallery(home);
+            }
+            catch (MediaPreviewException exception) when (exception.Error == MediaPreviewError.InvalidResponse)
+            {
+                _mediaPreviewClient.ClearImageCache();
+                throw;
+            }
+
             ClearDesignGallery();
             DesignGallery = gallery;
             LibraryBrowser = new LibraryBrowserViewModel(_mediaPreviewClient, session, home.Libraries,
