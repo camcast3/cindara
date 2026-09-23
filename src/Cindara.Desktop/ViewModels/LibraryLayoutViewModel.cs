@@ -35,8 +35,8 @@ public sealed class LibraryLayoutViewModel : ObservableObject
         _profile = profile;
         _store = store;
         _diagnostics = diagnostics;
-        _libraries = libraries.DistinctBy(library => library.Id).ToArray();
-        var defaults = _libraries.Where(library => library.CollectionType is "movies" or "tvshows")
+        _libraries = libraries.Where(library => library.IsSupportedVideoLibrary).DistinctBy(library => library.Id).ToArray();
+        var defaults = _libraries
             .OrderBy(library => library.Name.Contains("anime", StringComparison.OrdinalIgnoreCase)
                 ? 2 : library.CollectionType == "tvshows" ? 0 : 1)
             .Select(library => library.Id).ToArray();
@@ -59,6 +59,7 @@ public sealed class LibraryLayoutViewModel : ObservableObject
     public IReadOnlyList<string> SidebarIds => _preferences.SidebarLibraryIds;
     public IReadOnlyList<string> HomeIds => _preferences.HomeLibraryIds;
     public IReadOnlyList<MediaLibrary> SidebarLibraries => Resolve(SidebarIds);
+    public IReadOnlyList<MediaLibrary> HomeLibraries => Resolve(HomeIds);
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
     public bool HasLoadError { get => _hasLoadError; private set => SetProperty(ref _hasLoadError, value); }
     public string HomeWarning => HasLoadError ? Loc.Get("LibraryLayout.LoadFailed") : string.Empty;
@@ -106,6 +107,7 @@ public sealed class LibraryLayoutViewModel : ObservableObject
             OnPropertyChanged(nameof(HomeIds));
             OnPropertyChanged(nameof(HomeWarning));
             OnPropertyChanged(nameof(SidebarLibraries));
+            OnPropertyChanged(nameof(HomeLibraries));
             Applied?.Invoke(this, EventArgs.Empty);
             operation?.Complete();
             return true;

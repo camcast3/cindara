@@ -30,7 +30,7 @@ public sealed class LibraryLayoutTests : IDisposable
         Assert.Equal(["tv", "movies", "anime"], model.SidebarIds);
         Assert.Equal(["tv", "movies", "anime"], model.HomeIds);
         var draft = model.CreateDraft(LibraryLayoutSurface.Sidebar);
-        Assert.Equal(["tv", "movies", "anime", "people", "collections"], draft.Select(choice => choice.Library.Id));
+        Assert.Equal(["tv", "movies", "anime"], draft.Select(choice => choice.Library.Id));
         draft[0].Included = false;
         draft.Reverse();
         Assert.Equal(["tv", "movies", "anime"], model.SidebarIds);
@@ -143,6 +143,20 @@ public sealed class LibraryLayoutTests : IDisposable
         Assert.Equal(["movies"], model.SidebarLibraries.Select(library => library.Id));
         Assert.False(model.CreateDraft(LibraryLayoutSurface.Sidebar).Single(choice => choice.Library.Id == "new").Included);
         Assert.Equal(["temporarily-hidden", "movies"], store.Load(Profile)!.SidebarLibraryIds);
+    }
+
+    [Fact]
+    public void UnsupportedViewsCannotBeReenabledByPreviouslySavedLayouts()
+    {
+        var store = new LibraryLayoutSettingsStore(_directory);
+        store.Save(Profile, new LibraryLayoutPreferences(["people", "tv"], ["collections", "anime"]));
+        var model = Model();
+        Assert.Equal(["tv"], model.SidebarLibraries.Select(library => library.Id));
+        Assert.Equal(["anime"], model.HomeLibraries.Select(library => library.Id));
+        Assert.All(model.CreateDraft(LibraryLayoutSurface.Sidebar), choice => Assert.True(choice.Library.IsSupportedVideoLibrary));
+        Assert.All(model.CreateDraft(LibraryLayoutSurface.Home), choice => Assert.True(choice.Library.IsSupportedVideoLibrary));
+        Assert.Throws<ArgumentException>(() => model.Save(LibraryLayoutSurface.Home,
+            [new LibraryLayoutChoice(Libraries.Single(library => library.Id == "collections"), true)]));
     }
 
     [Fact]

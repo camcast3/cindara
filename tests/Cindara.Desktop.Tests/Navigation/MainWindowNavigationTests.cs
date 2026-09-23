@@ -80,6 +80,10 @@ public sealed class MainWindowNavigationTests
                     fixture.OpenSettings();
                     fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
                     fixture.ClickAutomationId("ConfigureSidebarLibraries");
+                    Assert.Equal(3, fixture.Modal.GetVisualDescendants().OfType<Button>()
+                        .Count(button => AutomationProperties.GetAutomationId(button)?.EndsWith("-toggle", StringComparison.Ordinal) is true));
+                    Assert.DoesNotContain(fixture.Modal.GetVisualDescendants().OfType<TextBlock>(),
+                        text => text.Text is "Collections" or "People");
                     Assert.Equal(Loc.Format("LibraryLayout.HideFor", "TV"), AutomationProperties.GetName(Focused(fixture.Window)));
                     fixture.ClickAutomationId("library-Sidebar-movies-toggle");
                     Assert.Equal("library-Sidebar-movies-toggle", AutomationProperties.GetAutomationId(Focused(fixture.Window)));
@@ -100,6 +104,8 @@ public sealed class MainWindowNavigationTests
                     fixture.OpenSettings();
                     fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
                     fixture.ClickAutomationId("ConfigureHomeLibraries");
+                    Assert.DoesNotContain(fixture.Modal.GetVisualDescendants().OfType<TextBlock>(),
+                        text => text.Text is "Collections" or "People");
                     fixture.ClickAutomationId("library-Home-anime-up");
                     fixture.ClickAutomationId("library-Home-anime-up");
                     Assert.Equal("library-Home-anime-toggle", AutomationProperties.GetAutomationId(Focused(fixture.Window)));

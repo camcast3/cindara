@@ -10,6 +10,17 @@ namespace Cindara.Desktop.Tests.ViewModels;
 [Collection(LocalizationTestGroup.Name)]
 public sealed class LibraryBrowserViewModelTests
 {
+    [Fact]
+    public async Task UnsupportedViewsAreAbsentFromTheChooserAndCannotBeOpened()
+    {
+        var client = new Client();
+        var unsupported = new MediaLibrary("people", "People", "people");
+        using var model = new LibraryBrowserViewModel(client, Session, [Library, unsupported], _ => Task.CompletedTask);
+        Assert.Equal(Library, Assert.Single(model.Libraries));
+        await Assert.ThrowsAsync<ArgumentException>(() => model.OpenLibraryCommand.ExecuteAsync(unsupported));
+        Assert.Empty(client.StartIndexes);
+    }
+
     private static readonly MediaLibrary Library = new("movies", "Movies", "movies");
     private static readonly AuthenticatedSession Session = new(
         new ServerIdentity("server", new Uri("https://media.example/"), "Media", "10.11", "Linux"),

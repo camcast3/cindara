@@ -15,14 +15,24 @@ public sealed class LibraryBrowsingTests
     private static readonly MediaLibrary Library = new("movies&other=1", "Movies", "movies");
 
     [Fact]
-    public async Task HomeIncludesNextUpAndAllVisibleLibraries()
+    public async Task HomeRequestsOnlySupportedVideoLibraries()
     {
         using var handler = new Handler((request, _) =>
         {
             var path = request.RequestUri!.AbsolutePath;
             return Task.FromResult(Json(path switch
             {
-                "/jellyfin/Users/user/Views" => """{"Items":[{"Id":"music","Name":"Music","CollectionType":"music"},{"Id":"movies","Name":"Movies","CollectionType":"movies"}]}""",
+                "/jellyfin/Users/user/Views" => """
+                    {"Items":[
+                      {"Id":"music","Name":"Music","CollectionType":"music"},
+                      {"Id":"collections","Name":"Collections","CollectionType":"boxsets"},
+                      {"Id":"people","Name":"People","CollectionType":"people"},
+                      {"Id":"unknown","Name":"Unknown"},
+                      {"Id":"anime","Name":"Anime","CollectionType":"tvshows"},
+                      {"Id":"movies","Name":"Movies","CollectionType":"movies"},
+                      {"Id":"tv","Name":"TV","CollectionType":"tvshows"}
+                    ]}
+                    """,
                 "/jellyfin/Shows/NextUp" => """{"Items":[{"Id":"episode","Name":"Next episode","Type":"Episode","SeriesName":"A show"}]}""",
                 "/jellyfin/Users/user/Items/Resume" => """{"Items":[]}""",
                 "/jellyfin/Users/user/Items" => """{"Items":[]}""",
@@ -36,15 +46,20 @@ public sealed class LibraryBrowsingTests
 
         Assert.Equal("episode", Assert.Single(home.ContinueWatching).Id);
         Assert.Equal("episode", home.Featured?.Id);
-        Assert.Equal(2, home.Libraries.Count);
-        Assert.Contains(home.Libraries, library => library.CollectionType == "music");
+        Assert.Equal(["tv", "movies", "anime"], home.Libraries.Select(library => library.Id));
+        Assert.Equal(["tv", "movies", "anime"], home.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
+        var latest = handler.Requests.Where(uri => uri.AbsolutePath.EndsWith("/Latest", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(3, latest.Length);
+        Assert.All(latest, uri => Assert.True(
+            uri.Query.Contains("ParentId=tv&", StringComparison.Ordinal)
+            || uri.Query.Contains("ParentId=movies&", StringComparison.Ordinal)
+            || uri.Query.Contains("ParentId=anime&", StringComparison.Ordinal)));
         Assert.Contains(handler.Requests, uri => uri.Query.Contains("UserId=user", StringComparison.Ordinal));
     }
 
     [Theory]
     [InlineData("movies", "IncludeItemTypes=Movie")]
     [InlineData("tvshows", "IncludeItemTypes=Series")]
-    [InlineData("music", "Recursive=true")]
     public async Task PagesUseAuthenticatedStableBoundedQueries(string collectionType, string typeQuery)
     {
         using var handler = new Handler((_, _) => Task.FromResult(Json(PageJson(40, 7, 47))));
@@ -63,6 +78,32 @@ public sealed class LibraryBrowsingTests
         Assert.Contains("Limit=40", uri.Query, StringComparison.Ordinal);
         Assert.Contains("SortBy=SortName&", uri.Query, StringComparison.Ordinal);
         Assert.Contains(typeQuery, uri.Query, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("boxsets")]
+    [InlineData("people")]
+    [InlineData("music")]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task UnsupportedTypesCannotIssueLibraryPageRequests(string? collectionType)
+    {
+        using var handler = new Handler((_, _) => throw new InvalidOperationException("No request expected."));
+        using var client = Client(handler);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.GetLibraryPageAsync(Session, Library with { CollectionType = collectionType }, 0));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData("Collections", "movies", true)]
+    [InlineData("People", "tvshows", true)]
+    [InlineData("TV", "boxsets", false)]
+    [InlineData("Movies", "people", false)]
+    [InlineData("Custom Anime", "tvshows", true)]
+    public void SupportIsBasedOnLibraryTypeNotDisplayName(string name, string type, bool supported)
+    {
+        Assert.Equal(supported, new MediaLibrary("library", name, type).IsSupportedVideoLibrary);
     }
 
     [Theory]

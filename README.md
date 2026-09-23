@@ -30,6 +30,10 @@ saved separately for each account/server address on this device under
 `library-layouts` in Cindara's local application data. They do not change Jellyfin
 permissions or other devices. Save failures preserve the active layout; unreadable
 settings show a warning before the user chooses to replace them.
+Only Jellyfin movie and TV-show library types are offered for browsing or layout
+selection (including Anime libraries using the TV-show type). Unsupported views
+such as Collections and People are omitted, and no latest-media requests are made
+for them. Previously saved selections cannot bring unsupported views back.
 Minimal account switching, logout, and fullscreen/windowed controls are tracked
 separately in [the settings feature request](https://github.com/camcast3/cindara/issues/27);
 expanded settings categories, input, and appearance preferences remain deferred.

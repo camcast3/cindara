@@ -146,6 +146,11 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         ValidateSession(session);
         ArgumentNullException.ThrowIfNull(library);
         ArgumentException.ThrowIfNullOrWhiteSpace(library.Id);
+        if (!library.IsSupportedVideoLibrary)
+        {
+            throw new ArgumentException("Only movie and TV libraries support video browsing.", nameof(library));
+        }
+
         ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
@@ -325,7 +330,9 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         var mediaViews = views
             .Where(view => !string.IsNullOrWhiteSpace(view.Id)
                 && !string.IsNullOrWhiteSpace(view.Name))
-            .OrderBy(view => view.Name!.Contains("anime", StringComparison.OrdinalIgnoreCase)
+            .Select(view => new MediaLibrary(view.Id!, view.Name!, view.CollectionType))
+            .Where(library => library.IsSupportedVideoLibrary)
+            .OrderBy(view => view.Name.Contains("anime", StringComparison.OrdinalIgnoreCase)
                 ? 2
                 : view.CollectionType == "tvshows" ? 0 : 1)
             .ToArray();
@@ -334,25 +341,25 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             var latest = await GetItemsAsync(
                 load,
                 $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Items/Latest"
-                + $"?ParentId={Uri.EscapeDataString(view.Id!)}&Limit={ItemLimit}"
+                + $"?ParentId={Uri.EscapeDataString(view.Id)}&Limit={ItemLimit}"
                 + $"&Fields={ItemFields}"
                 + (view.CollectionType == "movies"
                     ? "&IncludeItemTypes=Movie"
-                    : view.CollectionType == "tvshows" ? "&IncludeItemTypes=Series,Season,Episode" : string.Empty),
+                    : "&IncludeItemTypes=Series,Season,Episode"),
                 $"recently added media in {view.Name}").ConfigureAwait(false);
             var items = await PopulateArtworkAsync(
                 load,
                 latest.Take(ItemLimit).ToArray(),
                 landscape: false).ConfigureAwait(false);
             return new MediaPreviewRail(
-                view.Id!,
-                view.Name!,
+                view.Id,
+                view.Name,
                 items,
                 LibraryName: view.Name);
         });
 
         var rails = await Task.WhenAll(tasks).ConfigureAwait(false);
-        return (mediaViews.Select(view => new MediaLibrary(view.Id!, view.Name!, view.CollectionType)).ToArray(), rails);
+        return (mediaViews, rails);
     }
 
     private async Task<IReadOnlyList<JellyfinItem>> GetWrappedItemsAsync(

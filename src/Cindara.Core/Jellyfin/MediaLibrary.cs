@@ -1,6 +1,9 @@
 namespace Cindara.Core.Jellyfin;
 
-public sealed record MediaLibrary(string Id, string Name, string? CollectionType);
+public sealed record MediaLibrary(string Id, string Name, string? CollectionType)
+{
+    public bool IsSupportedVideoLibrary => CollectionType is "movies" or "tvshows";
+}
 
 public sealed record MediaLibraryPage(
     IReadOnlyList<MediaPreviewItem> Items,

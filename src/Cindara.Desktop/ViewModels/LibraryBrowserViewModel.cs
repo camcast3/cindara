@@ -30,7 +30,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     {
         _client = client;
         _session = session;
-        Libraries = libraries;
+        Libraries = libraries.Where(library => library.IsSupportedVideoLibrary).ToArray();
         _onAccessDenied = onAccessDenied;
         _diagnostics = diagnostics;
         _createCard = createCard ?? (item => new MediaPreviewCardViewModel(item));

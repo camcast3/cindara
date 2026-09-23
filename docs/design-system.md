@@ -338,6 +338,10 @@ discovered libraries stay hidden until selected. Changing a sidebar list does
 not change Home, and vice versa. Cancel never applies the draft.
 
 Both the Home and browsing sidebars expose the configured library shortcuts.
+Only supported movie/TV library types are offered; Collections, People, and other
+unsupported views are excluded from the chooser and both layout editors, even
+when an older saved layout includes their IDs. Filtering uses Jellyfin's type,
+not the displayed library name.
 They scroll when needed. Home filters and orders its existing loaded rows without
 re-fetching media; resources for hidden rows remain owned until the gallery is
 disposed. Layout changes recover focus if the previously focused row was hidden.

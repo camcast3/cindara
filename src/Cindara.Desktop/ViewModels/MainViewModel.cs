@@ -467,7 +467,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         if (LibraryLayout is { } layout)
         {
-            DesignGallery?.ApplyLibraryLayout(layout.SidebarIds, layout.HomeIds, layout.HomeWarning);
+            DesignGallery?.ApplyLibraryLayout(
+                layout.SidebarLibraries.Select(library => library.Id).ToArray(),
+                layout.HomeLibraries.Select(library => library.Id).ToArray(), layout.HomeWarning);
             OnPropertyChanged(nameof(SidebarLibraries));
         }
     }
