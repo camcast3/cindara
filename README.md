@@ -14,8 +14,9 @@ Windows, or Keychain on macOS; rejected tokens remove only the affected
 account and return it to sign-in.
 
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
-Settings. Home includes a single Continue Watching row, latest additions, and the
-account's visible libraries. Libraries open alphabetically sorted, 40-item
+Settings. Home includes a single Continue Watching row and recently added media
+from the selected libraries, with no generic Libraries shortcut row. Open libraries
+from the sidebar or library chooser. Libraries open alphabetically sorted, 40-item
 poster pages with explicit Previous/Next controls rather than loading the
 entire collection. Selecting a card opens a read-only summary; Back restores
 the card and scroll position. Full details, episode navigation, search, and

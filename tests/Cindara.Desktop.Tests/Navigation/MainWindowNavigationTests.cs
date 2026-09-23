@@ -298,7 +298,10 @@ public sealed class MainWindowNavigationTests
             fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
             Assert.Same(cards[^1], Focused(fixture.Window));
             fixture.Input.Press(ControllerAction.NavigateDown);
-            Assert.IsType<MediaLibrary>(Focused(fixture.Window).DataContext);
+            Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext);
+            Assert.Contains("media-card", Focused(fixture.Window).Classes);
+            Assert.DoesNotContain(gallery.FindControl<StackPanel>("MediaRowsPanel")!.GetVisualDescendants().OfType<Button>(),
+                button => button.DataContext is MediaLibrary);
         });
 
     private static byte[] CreateReviewArtwork()

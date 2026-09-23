@@ -47,12 +47,16 @@ public sealed class GalleryNavigationMarkupTests
     }
 
     [Fact]
-    public void LibrariesUseRealServerEntriesInsteadOfSpeculativeCategoryShortcuts()
+    public void LibrariesAreSidebarShortcutsAndNeverAHomeRow()
     {
         var gallery = LoadGallery();
         var libraries = Assert.Single(gallery.Descendants(Xaml + "ItemsControl"),
-            element => (string?)element.Attribute("ItemsSource") == "{Binding Libraries}");
+            element => (string?)element.Attribute("ItemsSource") == "{Binding SidebarLibraries}");
         Assert.Equal("OnLibraryClicked", (string?)Assert.Single(libraries.Descendants(Xaml + "Button")).Attribute("Click"));
+        Assert.DoesNotContain(gallery.Descendants(Xaml + "ItemsControl"),
+            element => (string?)element.Attribute("ItemsSource") == "{Binding Libraries}");
+        Assert.DoesNotContain(gallery.Descendants(Xaml + "TextBlock"),
+            element => (string?)element.Attribute("Text") == "{loc:Tr Nav.Libraries}");
         Assert.Contains(gallery.Descendants(Xaml + "Button"),
             element => (string?)element.Attribute("Click") == "OnLibrariesClicked");
         Assert.DoesNotContain(gallery.Descendants(Xaml + "Button"),

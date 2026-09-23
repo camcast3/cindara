@@ -15,6 +15,7 @@ public partial class DesignGalleryView : UserControl
 {
     private double _heroHeight = 420;
     private Button? _focusedCard;
+    private Button? _libraryReturnFocus;
     private bool _pinAfterLayout;
     private PresentationPreferences _preferences = new();
     private bool _rememberFocus;
@@ -47,6 +48,7 @@ public partial class DesignGalleryView : UserControl
 
             HeroTextScroll.Offset = default;
             _focusedCard = null;
+            _libraryReturnFocus = null;
             _rememberFocus = false;
         };
         HeroPanel.SizeChanged += (_, _) =>
@@ -181,6 +183,22 @@ public partial class DesignGalleryView : UserControl
 
     public Control HomeNavigation => SidebarHomeButton;
 
+    public bool RestoreHomeFocus()
+    {
+        var shortcut = _libraryReturnFocus;
+        _libraryReturnFocus = null;
+        if (shortcut is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true }
+            && shortcut.GetVisualAncestors().Contains(this)
+            && shortcut.Focus(NavigationMethod.Directional))
+        {
+            _rememberFocus = true;
+            shortcut.BringIntoView();
+            return true;
+        }
+
+        return FocusHomeContent();
+    }
+
     public bool FocusHomeContent()
     {
         bool focused;
@@ -208,21 +226,8 @@ public partial class DesignGalleryView : UserControl
     {
         if (sender is Button { DataContext: MediaLibrary library })
         {
+            _libraryReturnFocus = (Button)sender;
             LibraryRequested?.Invoke(this, library);
-        }
-    }
-
-    private void OnLibraryFocused(object? sender, RoutedEventArgs args)
-    {
-        if (!_rememberFocus)
-        {
-            return;
-        }
-
-        _focusedCard = sender as Button;
-        if (_focusedCard is { } card)
-        {
-            Dispatcher.UIThread.Post(() => PinFocusedRow(card), DispatcherPriority.Loaded);
         }
     }
 

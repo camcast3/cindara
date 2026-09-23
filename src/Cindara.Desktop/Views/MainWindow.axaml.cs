@@ -313,7 +313,7 @@ public partial class MainWindow : Window
         _navigation.SetScope(MainSurface, initial, screen);
         if (screen == "gallery")
         {
-            GalleryView.FocusHomeContent();
+            GalleryView.RestoreHomeFocus();
         }
         else if (Shell.IsVisible)
         {

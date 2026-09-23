@@ -275,25 +275,6 @@
                         </ScrollViewer>
                     </StackPanel>
 
-                    <StackPanel Classes="media-rail" Spacing="10" IsVisible="{Binding HasLibraries}">
-                        <TextBlock Classes="heading" Text="{loc:Tr Nav.Libraries}" />
-                        <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
-                            <ItemsControl Classes="media-row" ItemsSource="{Binding Libraries}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Gallery.ItemSpacing}" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="core:MediaLibrary">
-                                        <Button Classes="card" Width="260" MinHeight="96" Content="{Binding Name}"
-                                                AutomationProperties.Name="{Binding Name}"
-                                                Click="OnLibraryClicked" GotFocus="OnLibraryFocused" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </StackPanel>
                     <TextBlock Classes="secondary" Text="{loc:Tr Home.Empty}" IsVisible="{Binding IsEmpty}" TextWrapping="Wrap" />
                     <ItemsControl ItemsSource="{Binding RecentlyAddedLibraries}">
                         <ItemsControl.ItemsPanel>

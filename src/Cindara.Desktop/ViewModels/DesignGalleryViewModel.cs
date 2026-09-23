@@ -30,6 +30,7 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
         _recentlyAddedLibraries = recentlyAddedLibraries;
         _allLibraries = libraries;
         _libraries = libraries;
+        _sidebarLibraries = libraries.Where(library => library.IsSupportedVideoLibrary).ToArray();
     }
 
     public MediaPreviewCardViewModel? Featured

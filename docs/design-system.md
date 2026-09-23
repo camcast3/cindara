@@ -221,7 +221,9 @@ the compact settings panel; returning Home preserves the
 loaded media and focused card. The top tab bar has been removed pending a
 product decision about its purpose.
 Continue Watching stays first and combines resume and next-up episodes into one
-row, followed by library entry points. Each series appears at most once: the most
+row, followed directly by the configured recently-added media rows. Library
+entry points live only in the sidebar/chooser, never in a generic Home row.
+Each series appears at most once: the most
 recent resume episode below 90% watched wins, otherwise the next unplayed episode
 in Jellyfin's order is shown. Movies at or above 90% watched are omitted.
 This client-side display rule does not change server playback progress.
