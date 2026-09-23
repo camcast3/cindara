@@ -145,6 +145,14 @@ inside the safe area. Hero artwork carries a dark Cindara gradient so text
 remains readable. Dialogs dim, but do not blur, the context. Toasts do not take
 focus. Skeletons preserve final geometry and respect reduced motion.
 
+Media cards are 20% wider and taller than the initial browsing slice. Before
+viewport scaling, Home landscape cards are 348 x 195.6 and Home posters are
+187.2 x 280.8 logical pixels. Library-grid posters are 247.2 x 372 logical
+pixels in the existing shell coordinate system. Text sizes, spacing, and viewport
+scaling remain unchanged. Short windows reduce the hero's height to leave room
+for a full poster, its labels, and input hints; 1080p/ultrawide/4K hero geometry
+is unchanged.
+
 `DesignGalleryView.axaml` supplies the current authenticated Home preview with a
 navigation rail, hero, landscape cards, and poster rails. The reusable
 styles also define dialog, toast, empty-state actions, and loading skeleton

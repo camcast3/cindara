@@ -88,10 +88,10 @@ public partial class DesignGalleryView : UserControl
         Resources["Gallery.HeroBodyLineHeight"] = 30 * heroScale * textScale;
         Resources["Gallery.HeroTextMargin"] = new Thickness(0, 28 * heroScale, 0, 0);
         Resources["Gallery.HeroTextSpacing"] = new Thickness(0, 0, 0, 12 * heroScale);
-        Resources["Gallery.ContinueWidth"] = 290 * scale;
-        Resources["Gallery.ContinueHeight"] = 163 * scale;
-        Resources["Gallery.PosterWidth"] = 156 * scale;
-        Resources["Gallery.PosterHeight"] = 234 * scale;
+        Resources["Gallery.ContinueWidth"] = 348 * scale;
+        Resources["Gallery.ContinueHeight"] = 195.6 * scale;
+        Resources["Gallery.PosterWidth"] = 187.2 * scale;
+        Resources["Gallery.PosterHeight"] = 280.8 * scale;
         Resources["Gallery.CardTitleSize"] = 14 * scale * textScale;
         Resources["Gallery.CardCaptionSize"] = 12 * scale * textScale;
         Resources["Gallery.ItemSpacing"] = 16 * scale;

@@ -43,8 +43,8 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
-                        <StackPanel Margin="12" Spacing="8" Width="206" HorizontalAlignment="Center">
-                            <Button Classes="card" Height="310" HorizontalAlignment="Stretch"
+                        <StackPanel Margin="12" Spacing="8" Width="247.2" HorizontalAlignment="Center">
+                            <Button Classes="card" Height="372" HorizontalAlignment="Stretch"
                                     AutomationProperties.Name="{Binding Name}"
                                     AutomationProperties.HelpText="{Binding Subtitle}"
                                     GotFocus="OnCardFocused" Click="OnCardClicked">

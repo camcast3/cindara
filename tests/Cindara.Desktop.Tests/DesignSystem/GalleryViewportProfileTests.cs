@@ -5,11 +5,11 @@ namespace Cindara.Desktop.Tests.DesignSystem;
 public sealed class GalleryViewportProfileTests
 {
     [Theory]
-    [InlineData(1280, 720, 1, 1, 420)]
+    [InlineData(1280, 720, 1, 1, 299.2)]
     [InlineData(1920, 1080, 1.2, 1, 518.4)]
     [InlineData(3440, 1440, 1.55, 1.3333333333333333, 691.2)]
     [InlineData(3840, 2160, 1.55, 2, 1036.8)]
-    public void PreservesApprovedPreviewDensity(
+    public void PreservesDensityAndReservesSpaceForEnlargedPosters(
         double width, double height, double cards, double hero, double heroHeight)
     {
         var profile = GalleryViewportProfile.Create(width, height);

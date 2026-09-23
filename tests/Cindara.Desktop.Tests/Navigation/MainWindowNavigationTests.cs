@@ -28,6 +28,46 @@ public sealed class MainWindowNavigationTests
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads"];
 
     [Theory]
+    [InlineData(1280, 720, 299.2)]
+    [InlineData(1920, 1080, 518.4)]
+    [InlineData(3440, 1440, 691.2)]
+    [InlineData(3840, 2160, 1036.8)]
+    public Task HomeCardsAreTwentyPercentLargerAndFitTheViewport(int width, int height, double expectedHeroHeight) =>
+        TestAppBuilder.Run(() =>
+        {
+            using var fixture = new ShellFixture(preferences: new PresentationPreferences(ReducedMotion: true));
+            fixture.Window.WindowState = WindowState.Normal;
+            fixture.Window.Width = width;
+            fixture.Window.Height = height;
+            fixture.SignIn();
+            var gallery = fixture.Gallery;
+            var continueCard = gallery.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Classes.Contains("continue-card"));
+            var poster = gallery.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Classes.Contains("media-card"));
+            var originalScale = Math.Clamp(gallery.Bounds.Width / 1600, 1, 1.55);
+            Assert.InRange(Math.Abs(continueCard.Bounds.Width - 290 * originalScale * 1.2), 0, 1);
+            Assert.InRange(Math.Abs(continueCard.Bounds.Height - 163 * originalScale * 1.2), 0, 1);
+            Assert.InRange(Math.Abs(poster.Bounds.Width - 156 * originalScale * 1.2), 0, 1);
+            Assert.InRange(Math.Abs(poster.Bounds.Height - 234 * originalScale * 1.2), 0, 1);
+            Assert.Equal(348 * originalScale, (double)gallery.Resources["Gallery.ContinueWidth"]!, precision: 6);
+            Assert.Equal(195.6 * originalScale, (double)gallery.Resources["Gallery.ContinueHeight"]!, precision: 6);
+            Assert.Equal(187.2 * originalScale, (double)gallery.Resources["Gallery.PosterWidth"]!, precision: 6);
+            Assert.Equal(280.8 * originalScale, (double)gallery.Resources["Gallery.PosterHeight"]!, precision: 6);
+            Assert.Equal(expectedHeroHeight,
+                (double)gallery.Resources["Gallery.HeroHeight"]!, precision: 6);
+            AssertInsideWindow(fixture.Window, continueCard);
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            fixture.Flush();
+            Assert.Same(poster, Focused(fixture.Window));
+            AssertInsideWindow(fixture.Window, poster);
+            fixture.Input.Press(ControllerAction.NavigateUp);
+            fixture.Flush();
+            Assert.Same(continueCard, Focused(fixture.Window));
+            AssertInsideWindow(fixture.Window, continueCard);
+        });
+
+    [Theory]
     [InlineData("en", 1920)]
     [InlineData("en", 3840)]
     [InlineData("qps-plocm", 1920)]
@@ -186,6 +226,8 @@ public sealed class MainWindowNavigationTests
             Assert.False(fixture.Shell.FindControl<StackPanel>("LibrariesUnavailable")!.IsEffectivelyVisible);
             Assert.Equal(40, fixture.Model.LibraryBrowser!.Items.Count);
             Assert.Equal("movie-0", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.InRange(Focused(fixture.Window).Bounds.Width / 206, 1.195, 1.205);
+            Assert.Equal(310 * 1.2, Focused(fixture.Window).Bounds.Height, precision: 6);
             var firstPageOffset = browser.FindControl<ScrollViewer>("LibraryScroll")!.Offset;
             fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
             Assert.Equal("movie-1", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);

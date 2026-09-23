@@ -24,10 +24,10 @@
         <x:Double x:Key="Gallery.HeroBodyLineHeight">30</x:Double>
         <Thickness x:Key="Gallery.HeroTextMargin">0,28,0,0</Thickness>
         <Thickness x:Key="Gallery.HeroTextSpacing">0,0,0,12</Thickness>
-        <x:Double x:Key="Gallery.ContinueWidth">290</x:Double>
-        <x:Double x:Key="Gallery.ContinueHeight">163</x:Double>
-        <x:Double x:Key="Gallery.PosterWidth">156</x:Double>
-        <x:Double x:Key="Gallery.PosterHeight">234</x:Double>
+        <x:Double x:Key="Gallery.ContinueWidth">348</x:Double>
+        <x:Double x:Key="Gallery.ContinueHeight">195.6</x:Double>
+        <x:Double x:Key="Gallery.PosterWidth">187.2</x:Double>
+        <x:Double x:Key="Gallery.PosterHeight">280.8</x:Double>
         <x:Double x:Key="Gallery.CardTitleSize">14</x:Double>
         <x:Double x:Key="Gallery.CardCaptionSize">12</x:Double>
         <x:Double x:Key="Gallery.ItemSpacing">16</x:Double>
