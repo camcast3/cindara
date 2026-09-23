@@ -905,6 +905,52 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
+    public Task SearchSupportsControllerKeyboardGroupingAndExactReturnState() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        var search = fixture.Model.SearchBrowser!;
+        var view = fixture.Shell.SearchView;
+        var query = view.FindControl<TextBox>("SearchTextBox")!;
+        Assert.Equal("Search", fixture.Shell.Destination);
+        Assert.Same(query, Focused(fixture.Window));
+        Assert.Equal(Loc.Get("Search.Name"), AutomationProperties.GetName(query));
+        Assert.Equal(Loc.Get("Search.Help"), AutomationProperties.GetHelpText(query));
+
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(fixture.IsModalVisible);
+        var draft = fixture.Modal.GetVisualDescendants().OfType<TextBox>().Single();
+        draft.Text = "space";
+        fixture.ClickContent(Loc.Get("Keyboard.Done"));
+        await search.LoadPageCommand.ExecuteAsync(0);
+        fixture.Flush();
+
+        Assert.Equal(["Movies", "Series", "Seasons", "Episodes"], search.Groups.Select(group => group.Title));
+        var cards = view.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("search-card")).ToArray();
+        Assert.Equal(MediaSearchPage.PageSize, cards.Length);
+        var selected = cards[17];
+        selected.Focus();
+        view.FindControl<ScrollViewer>("SearchScroll")!.Offset = new Vector(0, 500);
+        fixture.Flush();
+        var offset = view.FindControl<ScrollViewer>("SearchScroll")!.Offset;
+        fixture.Click(selected);
+        Assert.True(fixture.IsModalVisible);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(selected, Focused(fixture.Window));
+
+        fixture.Click(fixture.Shell.FindControl<Button>("DownloadsNavigation")!);
+        fixture.Click(fixture.Shell.FindControl<Button>("SearchNavigation")!);
+        Assert.Equal("space", query.Text);
+        Assert.Same(selected, Focused(fixture.Window));
+        Assert.Equal(offset, view.FindControl<ScrollViewer>("SearchScroll")!.Offset);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Equal("SearchNavigation", Focused(fixture.Window).Name);
+    });
+
+    [Fact]
     public Task LanguageDialogTrapsFocusAndRestoresItsSettingsLauncher() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
@@ -1312,6 +1358,22 @@ public sealed class MainWindowNavigationTests
         public bool WithLibraries { get; set; }
         public bool LayoutLibraries { get; set; }
         public bool PauseLibrary { get; set; }
+        public int SearchCalls { get; private set; }
+        public Task<MediaSearchPage> SearchAsync(AuthenticatedSession session, string query, int startIndex,
+            CancellationToken cancellationToken = default)
+        {
+            SearchCalls++;
+            var types = new[] { "Movie", "Series", "Season", "Episode" };
+            var count = Math.Min(MediaSearchPage.PageSize, 80 - startIndex);
+            return Task.FromResult(new MediaSearchPage(
+                Enumerable.Range(startIndex, count)
+                    .Select(index => new MediaPreviewItem(
+                        $"search-{index}", $"{query} {index}", string.Empty, types[index % types.Length],
+                        null, null, "Search result.", string.Empty, null))
+                    .ToArray(),
+                startIndex,
+                80));
+        }
         public async Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,
             int startIndex, CancellationToken cancellationToken = default)
         {

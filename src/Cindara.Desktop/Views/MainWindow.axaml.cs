@@ -70,6 +70,10 @@ public partial class MainWindow : Window
             {
                 _viewModel?.LibraryBrowser?.CancelLoading();
             }
+            if (Shell.Destination != "Search")
+            {
+                _viewModel?.SearchBrowser?.CancelLoading();
+            }
 
             if (Shell.Destination != "Home" && _viewModel?.ShowDesignGalleryCommand.IsRunning is true)
             {
@@ -104,6 +108,8 @@ public partial class MainWindow : Window
         Shell.LibraryRequested += OnLibraryRequested;
         GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        Shell.SearchView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        Shell.SearchView.KeyboardRequested += (_, target) => ShowKeyboard(target);
     }
 
     private void OpenLibraries()
@@ -201,6 +207,7 @@ public partial class MainWindow : Window
         {
             _viewModel.ShowDesignGalleryCommand.Cancel();
             _viewModel.LibraryBrowser?.CancelLoading();
+            _viewModel.SearchBrowser?.CancelLoading();
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _viewModel.ShowDesignGalleryCommand.PropertyChanged -= OnHomeLoadPropertyChanged;
             _viewModel = null;
@@ -322,6 +329,10 @@ public partial class MainWindow : Window
             {
                 Shell.LibraryView.ResumeFocusMemory();
             }
+            else if (Shell.Destination == "Search")
+            {
+                Shell.SearchView.ResumeFocusMemory();
+            }
         }
     }
 
@@ -434,6 +445,11 @@ public partial class MainWindow : Window
             {
                 return;
             }
+            if (Shell.SearchView.IsEffectivelyVisible && Shell.SearchView.IsKeyboardFocusWithin
+                && Shell.SearchView.TryMove(direction))
+            {
+                return;
+            }
 
             if (_viewModel?.IsDesignGalleryVisible is true && GalleryView.TryMoveGalleryFocus(direction))
             {
@@ -486,6 +502,10 @@ public partial class MainWindow : Window
         else if (_viewModel?.LibraryBrowser?.IsLoading is true)
         {
             _viewModel.LibraryBrowser.CancelLoading();
+        }
+        else if (_viewModel?.SearchBrowser?.IsLoading is true)
+        {
+            _viewModel.SearchBrowser.CancelLoading();
         }
         else if (_viewModel?.IsDesignGalleryVisible is true)
         {

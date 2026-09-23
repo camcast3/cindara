@@ -39,6 +39,24 @@
   <data name="Home.Preview" xml:space="preserve"><value>Preview my media</value></data>
   <data name="Placeholder.Libraries" xml:space="preserve"><value>Library browsing is coming next. Your saved Jellyfin account is ready.</value></data>
   <data name="Placeholder.Search" xml:space="preserve"><value>Search and media details will arrive after library browsing.</value></data>
+  <data name="Search.Name" xml:space="preserve"><value>Search your Jellyfin library</value></data>
+  <data name="Search.Placeholder" xml:space="preserve"><value>Movie, series, season, or episode</value></data>
+  <data name="Search.Help" xml:space="preserve"><value>Type with a physical keyboard, or select this field with a controller to open the on-screen keyboard.</value></data>
+  <data name="Search.Keyboard" xml:space="preserve"><value>On-screen keyboard</value></data>
+  <data name="Search.Prompt" xml:space="preserve"><value>Enter a title to search your available movie and TV libraries.</value></data>
+  <data name="Search.Waiting" xml:space="preserve"><value>Waiting for you to finish typing...</value></data>
+  <data name="Search.Loading" xml:space="preserve"><value>Searching your library...</value></data>
+  <data name="Search.Canceled" xml:space="preserve"><value>Search canceled. Your query is still available.</value></data>
+  <data name="Search.Empty" xml:space="preserve"><value>No matching movies, series, seasons, or episodes were found.</value></data>
+  <data name="Search.Unavailable" xml:space="preserve"><value>Search is unavailable until Home finishes loading your authenticated library session.</value></data>
+  <data name="Search.Retry" xml:space="preserve"><value>Retry search</value></data>
+  <data name="Search.Previous" xml:space="preserve"><value>Previous results</value></data>
+  <data name="Search.Next" xml:space="preserve"><value>Next results</value></data>
+  <data name="Search.Page" xml:space="preserve"><value>{0:N0}-{1:N0} of {2:N0} results</value></data>
+  <data name="Search.Group.Movie" xml:space="preserve"><value>Movies</value></data>
+  <data name="Search.Group.Series" xml:space="preserve"><value>Series</value></data>
+  <data name="Search.Group.Season" xml:space="preserve"><value>Seasons</value></data>
+  <data name="Search.Group.Episode" xml:space="preserve"><value>Episodes</value></data>
   <data name="Placeholder.Downloads" xml:space="preserve"><value>Offline media is not available yet. Downloads keeps its place in your navigation.</value></data>
   <data name="Settings.Account" xml:space="preserve"><value>Account</value></data>
   <data name="Settings.Display" xml:space="preserve"><value>Display</value></data>

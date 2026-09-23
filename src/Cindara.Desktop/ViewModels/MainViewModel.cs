@@ -117,6 +117,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public bool HasLibraryBrowser => LibraryBrowser is not null;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSearchBrowser))]
+    private SearchBrowserViewModel? _searchBrowser;
+
+    public bool HasSearchBrowser => SearchBrowser is not null;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasLibraryLayout))]
     [NotifyPropertyChangedFor(nameof(SidebarLibraries))]
     private LibraryLayoutViewModel? _libraryLayout;
@@ -397,6 +403,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             DesignGallery = gallery;
             LibraryBrowser = new LibraryBrowserViewModel(_mediaPreviewClient, session, home.Libraries,
                 exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
+            SearchBrowser = new SearchBrowserViewModel(_mediaPreviewClient, session,
+                exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
             if (_libraryLayoutStore is not null)
             {
                 LibraryLayout = new LibraryLayoutViewModel(session.Profile, home.Libraries, _libraryLayoutStore, _diagnostics);
@@ -598,6 +606,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var browser = LibraryBrowser;
         LibraryBrowser = null;
         browser?.Dispose();
+        var search = SearchBrowser;
+        SearchBrowser = null;
+        search?.Dispose();
     }
 
     public void Dispose()

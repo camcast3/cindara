@@ -18,7 +18,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
     private readonly Lock _cacheGate = new();
     private AuthenticatedSession? _cacheSession;
     private MediaImageCache _imageCache = new();
-    private const string ItemFields = "PrimaryImageAspectRatio,SeriesName,SeriesId,SeriesPrimaryImageTag,ParentBackdropItemId,ParentIndexNumber,IndexNumber,ProductionYear,UserData,Overview,RunTimeTicks,OfficialRating,BackdropImageTags";
+    private const string ItemFields = "PrimaryImageAspectRatio,SeriesName,SeriesId,SeasonId,SeriesPrimaryImageTag,ParentBackdropItemId,ParentIndexNumber,IndexNumber,ProductionYear,PremiereDate,UserData,Overview,RunTimeTicks,OfficialRating,CommunityRating,CriticRating,Genres,People,MediaSources,MediaStreams,BackdropImageTags";
 
     public JellyfinMediaPreviewClient(JellyfinClientIdentity clientIdentity, LocalDiagnostics? diagnostics = null)
         : this(diagnostics is null ? CreateSecureTransport()
@@ -189,6 +189,139 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             throw new MediaPreviewException(MediaPreviewError.TimedOut, "Loading the library timed out.");
         }
     }
+
+    public async Task<MediaSearchPage> SearchAsync(
+        AuthenticatedSession session,
+        string query,
+        int startIndex,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSession(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        var normalizedQuery = query.Trim();
+        if (normalizedQuery.Length > 200)
+        {
+            throw new ArgumentOutOfRangeException(nameof(query), "Search text cannot exceed 200 characters.");
+        }
+
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
+        try
+        {
+            var result = await GetAsync<ItemResult>(load,
+                $"Users/{Uri.EscapeDataString(session.UserId)}/Items"
+                + $"?SearchTerm={Uri.EscapeDataString(normalizedQuery)}&StartIndex={startIndex}&Limit={MediaSearchPage.PageSize}"
+                + "&Recursive=true&SortBy=SortName&SortOrder=Ascending&EnableTotalRecordCount=true"
+                + $"&IncludeItemTypes=Movie,Series,Season,Episode&Fields={ItemFields}",
+                "search results").ConfigureAwait(false);
+            if (result?.Items is not { } sources || result.TotalRecordCount is not { } total
+                || total < 0 || startIndex > 0 && startIndex >= total
+                || sources.Length > MediaSearchPage.PageSize
+                || sources.Any(item => item is null || string.IsNullOrWhiteSpace(item.Id)
+                    || string.IsNullOrWhiteSpace(item.Name) || !IsSupportedSearchType(item.Type))
+                || sources.Length == 0 && startIndex < total
+                || sources.Length > 0 && (long)startIndex + sources.Length > total)
+            {
+                throw InvalidResponse(new JsonException("Invalid search page."));
+            }
+
+            var items = sources
+                .OrderBy(item => SearchTypeOrder(item.Type))
+                .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.Id, StringComparer.Ordinal)
+                .Select(item => CreatePreviewItem(item, landscape: false, null, null) with
+                {
+                    ArtworkItemId = GetArtworkItemId(item, landscape: false),
+                })
+                .ToArray();
+            cancellationToken.ThrowIfCancellationRequested();
+            deadline.Token.ThrowIfCancellationRequested();
+            return new MediaSearchPage(items, startIndex, total);
+        }
+        catch (OperationCanceledException) when (
+            deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new MediaPreviewException(MediaPreviewError.TimedOut, "Searching Jellyfin timed out.");
+        }
+    }
+
+    public async Task<MediaItemDetails> GetItemDetailsAsync(
+        AuthenticatedSession session,
+        string itemId,
+        CancellationToken cancellationToken = default)
+    {
+        var item = await GetSingleItemAsync(session, itemId, cancellationToken).ConfigureAwait(false);
+        return CreateDetails(item);
+    }
+
+    public async Task<IReadOnlyList<MediaSeason>> GetSeasonsAsync(
+        AuthenticatedSession session,
+        string seriesId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSession(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(seriesId);
+        return await GetDetailListAsync(
+            session,
+            $"Shows/{Uri.EscapeDataString(seriesId)}/Seasons?UserId={Uri.EscapeDataString(session.UserId)}"
+            + $"&Fields={ItemFields}&EnableUserData=true",
+            "series seasons",
+            item => new MediaSeason(
+                item.Id!,
+                item.Name!,
+                item.IndexNumber,
+                CreateUserState(item.UserData),
+                item.ImageTags?.ContainsKey("Primary") is true),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<MediaEpisode>> GetEpisodesAsync(
+        AuthenticatedSession session,
+        string seriesId,
+        string seasonId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSession(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(seriesId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(seasonId);
+        return await GetDetailListAsync(
+            session,
+            $"Shows/{Uri.EscapeDataString(seriesId)}/Episodes?UserId={Uri.EscapeDataString(session.UserId)}"
+            + $"&SeasonId={Uri.EscapeDataString(seasonId)}&Fields={ItemFields}&EnableUserData=true",
+            "season episodes",
+            item => new MediaEpisode(
+                item.Id!,
+                item.Name!,
+                item.SeriesId!,
+                item.SeasonId,
+                item.ParentIndexNumber,
+                item.IndexNumber,
+                ParseDate(item.PremiereDate),
+                item.RunTimeTicks,
+                item.OfficialRating,
+                item.Overview,
+                CreateCredits(item.People),
+                CreateUserState(item.UserData),
+                item.ImageTags?.ContainsKey("Primary") is true),
+            cancellationToken,
+            item => !string.IsNullOrWhiteSpace(item.SeriesId)).ConfigureAwait(false);
+    }
+
+    public Task<MediaUserState> SetFavoriteAsync(
+        AuthenticatedSession session,
+        string itemId,
+        bool isFavorite,
+        CancellationToken cancellationToken = default) =>
+        SetUserStateAsync(session, itemId, isFavorite, "FavoriteItems", "favorite state", cancellationToken);
+
+    public Task<MediaUserState> SetPlayedAsync(
+        AuthenticatedSession session,
+        string itemId,
+        bool isPlayed,
+        CancellationToken cancellationToken = default) =>
+        SetUserStateAsync(session, itemId, isPlayed, "PlayedItems", "played state", cancellationToken);
 
     public async Task<byte[]?> GetLibraryArtworkAsync(
         AuthenticatedSession session,
@@ -477,6 +610,117 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             }
         });
 
+    private async Task<JellyfinItem> GetSingleItemAsync(
+        AuthenticatedSession session,
+        string itemId,
+        CancellationToken cancellationToken)
+    {
+        ValidateSession(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
+        try
+        {
+            var item = await GetAsync<JellyfinItem>(
+                load,
+                $"Users/{Uri.EscapeDataString(session.UserId)}/Items/{Uri.EscapeDataString(itemId)}?Fields={ItemFields}",
+                "item details").ConfigureAwait(false);
+            if (!IsValidDetailItem(item))
+            {
+                throw InvalidResponse(new JsonException("Invalid item details."));
+            }
+
+            return item!;
+        }
+        catch (OperationCanceledException) when (
+            deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new MediaPreviewException(MediaPreviewError.TimedOut, "Loading item details timed out.");
+        }
+    }
+
+    private async Task<IReadOnlyList<T>> GetDetailListAsync<T>(
+        AuthenticatedSession session,
+        string relativeUri,
+        string operation,
+        Func<JellyfinItem, T> create,
+        CancellationToken cancellationToken,
+        Func<JellyfinItem, bool>? validate = null)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
+        try
+        {
+            var result = await GetAsync<ItemResult>(load, relativeUri, operation).ConfigureAwait(false);
+            if (result?.Items is not { } items
+                || items.Any(item => !IsValidDetailItem(item) || validate?.Invoke(item!) is false))
+            {
+                throw InvalidResponse(new JsonException($"Invalid {operation}."));
+            }
+
+            return items
+                .OrderBy(item => item.ParentIndexNumber ?? item.IndexNumber ?? int.MaxValue)
+                .ThenBy(item => item.IndexNumber ?? int.MaxValue)
+                .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => item.Id, StringComparer.Ordinal)
+                .Select(item => create(item!))
+                .ToArray();
+        }
+        catch (OperationCanceledException) when (
+            deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new MediaPreviewException(MediaPreviewError.TimedOut, $"Loading {operation} timed out.");
+        }
+    }
+
+    private async Task<MediaUserState> SetUserStateAsync(
+        AuthenticatedSession session,
+        string itemId,
+        bool value,
+        string collection,
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        ValidateSession(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
+        try
+        {
+            var state = await load.RunRequestAsync(async token =>
+            {
+                var uri = new Uri(session.Server.BaseUri,
+                    $"Users/{Uri.EscapeDataString(session.UserId)}/{collection}/{Uri.EscapeDataString(itemId)}");
+                using var request = CreateAuthenticatedRequest(session, uri, value ? HttpMethod.Post : HttpMethod.Delete);
+                using var response = await SendAsync(request, token).ConfigureAwait(false);
+                EnsureSuccess(response, operation);
+                try
+                {
+                    return await response.Content.ReadFromJsonAsync<JellyfinUserData>(
+                        SerializerOptions, token).ConfigureAwait(false);
+                }
+                catch (JsonException exception)
+                {
+                    throw InvalidResponse(exception);
+                }
+            }).ConfigureAwait(false);
+            if (state is null)
+            {
+                throw InvalidResponse(new JsonException($"Missing {operation}."));
+            }
+
+            return CreateUserState(state);
+        }
+        catch (OperationCanceledException) when (
+            deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new MediaPreviewException(MediaPreviewError.TimedOut, $"Updating {operation} timed out.");
+        }
+    }
+
     private async Task<IReadOnlyList<MediaPreviewItem>> PopulateArtworkAsync(
         PreviewLoad load,
         IReadOnlyList<JellyfinItem> items,
@@ -570,9 +814,10 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
 
     private HttpRequestMessage CreateAuthenticatedRequest(
         AuthenticatedSession session,
-        Uri uri)
+        Uri uri,
+        HttpMethod? method = null)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        var request = new HttpRequestMessage(method ?? HttpMethod.Get, uri);
         request.Headers.TryAddWithoutValidation(
             "Authorization",
             _clientIdentity.CreateAuthorizationHeader(session.AccessToken));
@@ -658,6 +903,92 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             item.OfficialRating,
             preferSeriesTitle);
 
+    private static bool IsSupportedSearchType(string? type) =>
+        type is "Movie" or "Series" or "Season" or "Episode";
+
+    private static int SearchTypeOrder(string? type) => type switch
+    {
+        "Movie" => 0,
+        "Series" => 1,
+        "Season" => 2,
+        "Episode" => 3,
+        _ => int.MaxValue,
+    };
+
+    private static bool IsValidDetailItem(JellyfinItem? item) =>
+        item is not null && !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.Name);
+
+    private static MediaItemDetails CreateDetails(JellyfinItem item)
+    {
+        var ratings = new List<MediaRating>(2);
+        if (item.CommunityRating is { } community)
+        {
+            ratings.Add(new("Community", community));
+        }
+
+        if (item.CriticRating is { } critic)
+        {
+            ratings.Add(new("Critic", critic));
+        }
+
+        var streams = item.MediaSources?.SelectMany(source => source.MediaStreams ?? [])
+            .Concat(item.MediaStreams ?? [])
+            .DistinctBy(stream => (stream.Type, stream.Index))
+            .Select(stream => new MediaTrackInfo(
+                stream.Type ?? "Unknown",
+                stream.Codec,
+                stream.DisplayTitle,
+                stream.Language,
+                stream.Width,
+                stream.Height,
+                stream.Channels,
+                stream.IsDefault ?? false,
+                stream.IsExternal ?? false))
+            .ToArray() ?? [];
+        return new MediaItemDetails(
+            item.Id!,
+            item.Name!,
+            item.Type ?? "Unknown",
+            item.SeriesId,
+            item.SeriesName,
+            item.SeasonId,
+            item.ParentIndexNumber,
+            item.IndexNumber,
+            item.ProductionYear,
+            ParseDate(item.PremiereDate),
+            item.RunTimeTicks,
+            item.OfficialRating,
+            item.Genres ?? [],
+            ratings,
+            item.Overview,
+            CreateCredits(item.People),
+            streams,
+            CreateUserState(item.UserData),
+            item.ImageTags?.ContainsKey("Primary") is true,
+            item.BackdropImageTags is { Length: > 0 });
+    }
+
+    private static MediaCredit[] CreateCredits(IReadOnlyList<JellyfinPerson>? people) =>
+        people?
+            .Where(person => !string.IsNullOrWhiteSpace(person.Id) && !string.IsNullOrWhiteSpace(person.Name))
+            .Select(person => new MediaCredit(
+                person.Id!,
+                person.Name!,
+                person.Role,
+                person.Type ?? "Unknown",
+                person.PrimaryImageTag))
+            .ToArray() ?? [];
+
+    private static MediaUserState CreateUserState(JellyfinUserData? state) =>
+        new(
+            state?.IsFavorite ?? false,
+            state?.Played ?? false,
+            state?.PlayedPercentage,
+            state?.PlaybackPositionTicks);
+
+    private static DateOnly? ParseDate(DateTimeOffset? value) =>
+        value is { } date ? DateOnly.FromDateTime(date.UtcDateTime) : null;
+
     private sealed class PreviewLoad(
         AuthenticatedSession session,
         CancellationTokenSource cancellation,
@@ -706,15 +1037,23 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         string? Type,
         string? SeriesName,
         string? SeriesId,
+        string? SeasonId,
         string? SeriesPrimaryImageTag,
         string? ParentBackdropItemId,
         string? CollectionType,
         int? ParentIndexNumber,
         int? IndexNumber,
         int? ProductionYear,
+        DateTimeOffset? PremiereDate,
         long? RunTimeTicks,
         string? OfficialRating,
+        double? CommunityRating,
+        double? CriticRating,
         string? Overview,
+        string[]? Genres,
+        JellyfinPerson[]? People,
+        JellyfinMediaSource[]? MediaSources,
+        JellyfinMediaStream[]? MediaStreams,
         string[]? BackdropImageTags,
         Dictionary<string, string>? ImageTags,
         JellyfinUserData? UserData);
@@ -723,5 +1062,27 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         double? PlayedPercentage,
         long? PlaybackPositionTicks,
         bool? Played,
-        DateTimeOffset? LastPlayedDate);
+        DateTimeOffset? LastPlayedDate,
+        bool? IsFavorite);
+
+    private sealed record JellyfinPerson(
+        string? Id,
+        string? Name,
+        string? Role,
+        string? Type,
+        string? PrimaryImageTag);
+
+    private sealed record JellyfinMediaSource(JellyfinMediaStream[]? MediaStreams);
+
+    private sealed record JellyfinMediaStream(
+        int? Index,
+        string? Type,
+        string? Codec,
+        string? DisplayTitle,
+        string? Language,
+        int? Width,
+        int? Height,
+        int? Channels,
+        bool? IsDefault,
+        bool? IsExternal);
 }

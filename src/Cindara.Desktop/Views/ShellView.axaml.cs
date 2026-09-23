@@ -39,9 +39,10 @@ public partial class ShellView : UserControl
         "Settings" => SettingsLanguageButton,
         "Libraries" => LibraryView.IsEffectivelyVisible && LibraryView.InitialFocus != LibraryView
             ? LibraryView.InitialFocus : LibrariesNavigation,
+        "Search" => SearchView.IsEffectivelyVisible ? SearchView.InitialFocus : SearchNavigation,
         _ => NavigationButtons.Children.OfType<Button>().Single(button => Equals(button.Tag, _destination)),
     };
-    public Control ContentFocus => IsHomeLoading || _destination == "Libraries" ? InitialFocus
+    public Control ContentFocus => IsHomeLoading || _destination is "Libraries" or "Search" ? InitialFocus
         : _contentMemory.TryGetValue(_destination, out var control)
         && control.IsEffectivelyVisible && control.IsEffectivelyEnabled ? control : InitialFocus;
 
@@ -67,17 +68,21 @@ public partial class ShellView : UserControl
         {
             LibraryView.SuspendFocusMemory();
         }
+        if (destination != "Search")
+        {
+            SearchView.SuspendFocusMemory();
+        }
 
         _destination = destination;
         HomePage.IsVisible = destination == "Home";
         SettingsPage.IsVisible = destination == "Settings";
         LibrariesPage.IsVisible = destination == "Libraries";
-        PageScroll.IsVisible = !LibrariesPage.IsVisible;
-        PlaceholderPage.IsVisible = !HomePage.IsVisible && !SettingsPage.IsVisible && !LibrariesPage.IsVisible;
+        SearchPage.IsVisible = destination == "Search";
+        PageScroll.IsVisible = !LibrariesPage.IsVisible && !SearchPage.IsVisible;
+        PlaceholderPage.IsVisible = destination == "Downloads";
         DestinationTitle.Text = Loc.Get($"Nav.{destination}");
         DestinationMessage.Text = destination switch
         {
-            "Search" => Loc.Get("Placeholder.Search"),
             "Downloads" => Loc.Get("Placeholder.Downloads"),
             _ => string.Empty,
         };
