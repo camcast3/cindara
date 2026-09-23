@@ -168,8 +168,10 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 throw InvalidResponse(new JsonException("Invalid library page."));
             }
 
-            var items = await PopulateArtworkAsync(load, sources, landscape: false, loadBackdrops: false)
-                .ConfigureAwait(false);
+            var items = sources.Select(item => CreatePreviewItem(item, landscape: false, null, null) with
+            {
+                ArtworkItemId = GetArtworkItemId(item, landscape: false),
+            }).ToArray();
             cancellationToken.ThrowIfCancellationRequested();
             deadline.Token.ThrowIfCancellationRequested();
             return new MediaLibraryPage(items, startIndex, total);
@@ -179,6 +181,18 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         {
             throw new MediaPreviewException(MediaPreviewError.TimedOut, "Loading the library timed out.");
         }
+    }
+
+    public async Task<byte[]?> GetLibraryArtworkAsync(
+        AuthenticatedSession session,
+        string itemId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSession(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
+        return await GetArtworkAsync(load, itemId, landscape: false).ConfigureAwait(false);
     }
 
     private static void ValidateSession(AuthenticatedSession session)
@@ -395,21 +409,13 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
     private async Task<IReadOnlyList<MediaPreviewItem>> PopulateArtworkAsync(
         PreviewLoad load,
         IReadOnlyList<JellyfinItem> items,
-        bool landscape,
-        bool loadBackdrops = true)
+        bool landscape)
     {
         var tasks = items
             .Where(item => !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.Name))
             .Select(async (item, index) =>
         {
-            var artworkItemId = !landscape
-                && item.Type == "Episode"
-                && !string.IsNullOrWhiteSpace(item.SeriesId)
-                && !string.IsNullOrWhiteSpace(item.SeriesPrimaryImageTag)
-                    ? item.SeriesId
-                    : item.ImageTags?.ContainsKey("Primary") is true
-                        ? item.Id
-                        : null;
+            var artworkItemId = GetArtworkItemId(item, landscape);
             var artworkTask = artworkItemId is not null
                 ? GetArtworkAsync(
                     load,
@@ -418,31 +424,31 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 : Task.FromResult<byte[]?>(null);
             var hasBackdrop = item.BackdropImageTags is { Length: > 0 }
                 || !string.IsNullOrWhiteSpace(item.ParentBackdropItemId);
-            var shouldLoadBackdrop = loadBackdrops && (landscape || index < 8 && hasBackdrop);
+            var shouldLoadBackdrop = landscape || index < 8 && hasBackdrop;
             var backdropTask = shouldLoadBackdrop
                 ? GetBackdropAsync(load, GetBackdropItemId(item))
                 : Task.FromResult<byte[]?>(null);
             await Task.WhenAll(artworkTask, backdropTask).ConfigureAwait(false);
             var artwork = await artworkTask.ConfigureAwait(false);
             var backdrop = await backdropTask.ConfigureAwait(false);
-            return new MediaPreviewItem(
-                item.Id!,
-                BuildName(item, preferSeriesTitle: !landscape),
-                string.Empty,
-                item.Type ?? "Unknown",
-                artwork,
-                backdrop ?? artwork,
-                item.Overview,
-                string.Empty,
-                GetPlayedPercentage(item) is { } percentage
-                    ? Math.Clamp(percentage, 0, 100)
-                    : null,
-                HeroName: BuildName(item, preferSeriesTitle: true),
-                Metadata: CreateMetadata(item, preferSeriesTitle: !landscape));
+            return CreatePreviewItem(item, landscape, artwork, backdrop);
         });
 
         return await Task.WhenAll(tasks).ConfigureAwait(false);
     }
+
+    private static string? GetArtworkItemId(JellyfinItem item, bool landscape) =>
+        !landscape && item.Type == "Episode" && !string.IsNullOrWhiteSpace(item.SeriesId)
+            && !string.IsNullOrWhiteSpace(item.SeriesPrimaryImageTag)
+            ? item.SeriesId
+            : item.ImageTags?.ContainsKey("Primary") is true ? item.Id : null;
+
+    private static MediaPreviewItem CreatePreviewItem(JellyfinItem item, bool landscape, byte[]? artwork, byte[]? backdrop) =>
+        new(item.Id!, BuildName(item, preferSeriesTitle: !landscape), string.Empty,
+            item.Type ?? "Unknown", artwork, backdrop ?? artwork, item.Overview, string.Empty,
+            GetPlayedPercentage(item) is { } percentage ? Math.Clamp(percentage, 0, 100) : null,
+            HeroName: BuildName(item, preferSeriesTitle: true),
+            Metadata: CreateMetadata(item, preferSeriesTitle: !landscape));
 
     private async Task<byte[]?> GetArtworkAsync(
         PreviewLoad load,

@@ -28,12 +28,18 @@
             <TextBlock Classes="secondary" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
                        TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             <TextBlock Classes="secondary" Text="{loc:Tr Library.Empty}" IsVisible="{Binding IsEmpty}" />
+            <TextBlock Classes="caption" Text="{Binding ArtworkMessage}" IsVisible="{Binding HasArtworkMessage}"
+                       TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             <StackPanel Orientation="Horizontal" Spacing="16">
                 <Button x:Name="CancelLibraryLoading" Content="{loc:Tr Action.CancelLoading}"
                         Command="{Binding LoadPageCancelCommand}" IsVisible="{Binding IsLoading}" />
                 <Button x:Name="RetryLibraryLoading" Content="{loc:Tr Library.Retry}"
                         Command="{Binding LoadPageCommand}" CommandParameter="{Binding RetryIndex}"
                         IsVisible="{Binding CanRetry}" />
+                <Button x:Name="CancelLibraryArtwork" Content="{loc:Tr Library.CancelArtwork}"
+                        Command="{Binding LoadArtworkCancelCommand}" IsVisible="{Binding LoadArtworkCommand.IsRunning}" />
+                <Button x:Name="RetryLibraryArtwork" Content="{loc:Tr Library.RetryArtwork}"
+                        Command="{Binding LoadArtworkCommand}" IsVisible="{Binding CanRetryArtwork}" />
             </StackPanel>
         </StackPanel>
         <ScrollViewer x:Name="LibraryScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
@@ -49,7 +55,7 @@
                                     AutomationProperties.HelpText="{Binding Subtitle}"
                                     GotFocus="OnCardFocused" Click="OnCardClicked">
                                 <Grid>
-                                    <TextBlock Text="{loc:Tr Library.ArtworkUnavailable}"
+                                    <TextBlock Text="{Binding ArtworkPlaceholder}"
                                                IsVisible="{Binding !HasArtwork}" TextWrapping="Wrap"
                                                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12" />
                                     <Image Source="{Binding Artwork}" Stretch="UniformToFill" />

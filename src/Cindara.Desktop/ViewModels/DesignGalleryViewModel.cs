@@ -127,10 +127,11 @@ public sealed class MediaPreviewRailViewModel : IDisposable
     }
 }
 
-public sealed class MediaPreviewCardViewModel : IDisposable
+public sealed class MediaPreviewCardViewModel : ObservableObject, IDisposable
 {
-    private readonly PreviewImage? _artwork;
+    private PreviewImage? _artwork;
     private readonly PreviewImage? _backdrop;
+    private bool _isArtworkLoading;
 
     public MediaPreviewCardViewModel(MediaPreviewItem item)
         : this(item, PreviewImage.Decode)
@@ -197,8 +198,29 @@ public sealed class MediaPreviewCardViewModel : IDisposable
 
     public IImage? Artwork => _artwork?.Source;
     public bool HasArtwork => Artwork is not null;
+    public bool IsArtworkLoading
+    {
+        get => _isArtworkLoading;
+        internal set
+        {
+            if (SetProperty(ref _isArtworkLoading, value))
+            {
+                OnPropertyChanged(nameof(ArtworkPlaceholder));
+            }
+        }
+    }
+    public string ArtworkPlaceholder => Loc.Get(IsArtworkLoading ? "Library.LoadingArtwork" : "Library.ArtworkUnavailable");
 
     public IImage? Backdrop => _backdrop?.Source;
+
+    internal void SetArtwork(PreviewImage? artwork)
+    {
+        _artwork?.Dispose();
+        _artwork = artwork;
+        IsArtworkLoading = false;
+        OnPropertyChanged(nameof(Artwork));
+        OnPropertyChanged(nameof(HasArtwork));
+    }
 
     public void Dispose()
     {

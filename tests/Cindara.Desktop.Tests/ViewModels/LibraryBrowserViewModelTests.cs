@@ -195,6 +195,8 @@ public sealed class LibraryBrowserViewModelTests
 
     private sealed class Client : IJellyfinMediaPreviewClient
     {
+        public Task<byte[]?> GetLibraryArtworkAsync(AuthenticatedSession session, string itemId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public List<int> StartIndexes { get; } = [];
         public MediaPreviewError? Error { get; set; }
         public int Total { get; set; } = 47;

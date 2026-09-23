@@ -243,7 +243,10 @@ Startup uses the OS-selected display rather than persisting a display preference
 
 This gallery intentionally caps rows at 20 items and preloads a bounded subset
 of recently-added backdrops, falling back to card artwork elsewhere. Library
-destinations load at most 40 items per page without preloading backdrops.
+destinations publish at most 40 metadata cards per page without waiting for
+artwork or preloading backdrops. Six background workers progressively fill the
+existing cards, preserving focus. Poster requests keep a 15-second timeout;
+failure leaves the grid usable and offers an explicit artwork-only retry.
 Playback and mutations are not implemented here. Metadata and artwork overlap under a six-request cap,
 images are deduplicated within the request, and a 30-second deadline prevents
 unbounded loading. Cancel loading/Back stops the request and enables Retry.
@@ -276,7 +279,9 @@ discarded on authentication boundaries. HTTP responses are capped at 8 MiB.
 ```
 
 Initial focus: first poster, library choice if empty, Cancel while loading, or
-Retry after a failed/canceled request. Left/right stays within a grid row; up/down
+Retry after a failed/canceled metadata request. Artwork loading does not disable
+the grid or pagination; it has separate loading/cancel/retry controls.
+Left/right stays within a grid row; up/down
 moves five cards. Up from row one reaches the library choices; left from column
 one enters Libraries in the rail (mirrored for RTL). Paging focuses the first
 card of the new page. The grid keeps only the current page's decoded artwork.

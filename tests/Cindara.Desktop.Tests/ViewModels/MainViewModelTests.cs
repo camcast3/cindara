@@ -598,6 +598,8 @@ public sealed class MainViewModelTests
 
     private sealed class PendingPreviewClient : IJellyfinMediaPreviewClient
     {
+        public Task<byte[]?> GetLibraryArtworkAsync(AuthenticatedSession session, string itemId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public void ClearImageCache() { }
         public Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,
             int startIndex, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -728,6 +730,8 @@ public sealed class MainViewModelTests
 
     private sealed class TestMediaPreviewClient : IJellyfinMediaPreviewClient
     {
+        public Task<byte[]?> GetLibraryArtworkAsync(AuthenticatedSession session, string itemId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public int CacheClears { get; private set; }
         public MediaPreviewError? LibraryError { get; set; }
         public void ClearImageCache() => CacheClears++;

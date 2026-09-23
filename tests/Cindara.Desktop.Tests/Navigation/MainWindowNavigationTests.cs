@@ -27,6 +27,50 @@ public sealed class MainWindowNavigationTests
 {
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads"];
 
+    [Fact]
+    public Task LibraryRemainsNavigableWhilePostersLoadAndArtworkUpdatesOnTheUiThread() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.ProgressiveArtwork = true;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.False(model.IsLoading);
+        Assert.True(model.LoadArtworkCommand.IsRunning);
+        Assert.True(fixture.Shell.LibraryView.FindControl<Button>("NextLibraryPage")!.IsEffectivelyEnabled);
+        fixture.Key(Key.Right);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Flush();
+        var focused = Focused(fixture.Window);
+        var card = Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
+        Assert.Equal("movie-6", card.Id);
+        Assert.True(card.IsArtworkLoading);
+        var artworkChanged = false;
+        card.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(card.Artwork))
+            {
+                Assert.True(Dispatcher.UIThread.CheckAccess());
+                artworkChanged = true;
+            }
+        };
+
+        fixture.Preview.ArtworkGate.SetResult(CreateReviewArtwork());
+        await model.LoadArtworkCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.True(artworkChanged);
+        Assert.True(card.HasArtwork);
+        Assert.Same(focused, Focused(fixture.Window));
+        AssertInsideWindow(fixture.Window, focused);
+        Assert.False(model.CanRetryArtwork);
+        Assert.False(fixture.Shell.LibraryView.FindControl<Button>("CancelLibraryArtwork")!.IsEffectivelyVisible);
+    });
+
     [Theory]
     [InlineData(1280, 720, 299.2)]
     [InlineData(1920, 1080, 518.4)]
@@ -1012,6 +1056,10 @@ public sealed class MainWindowNavigationTests
 
     private sealed class PreviewClient : IJellyfinMediaPreviewClient
     {
+        public Task<byte[]?> GetLibraryArtworkAsync(AuthenticatedSession session, string itemId,
+            CancellationToken cancellationToken = default) => ArtworkGate.Task.WaitAsync(cancellationToken);
+        public TaskCompletionSource<byte[]?> ArtworkGate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool ProgressiveArtwork { get; set; }
         public void ClearImageCache() { }
         public int LibraryCalls { get; private set; }
         public bool WithLibraries { get; set; }
@@ -1027,7 +1075,10 @@ public sealed class MainWindowNavigationTests
 
             return new MediaLibraryPage(Enumerable.Range(startIndex, Math.Min(40, 47 - startIndex))
                 .Select(index => new MediaPreviewItem($"movie-{index}", $"Movie {index}", "2026", "Movie",
-                    null, null, "A media description.", "1h 5m", null)).ToArray(), startIndex, 47);
+                    null, null, "A media description.", "1h 5m", null)
+                {
+                    ArtworkItemId = ProgressiveArtwork ? $"movie-{index}" : null,
+                }).ToArray(), startIndex, 47);
         }
 
         public int Calls { get; private set; }

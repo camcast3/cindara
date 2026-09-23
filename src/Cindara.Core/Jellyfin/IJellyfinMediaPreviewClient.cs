@@ -15,4 +15,9 @@ public interface IJellyfinMediaPreviewClient
         CancellationToken cancellationToken = default);
 
     void ClearImageCache();
+
+    Task<byte[]?> GetLibraryArtworkAsync(
+        AuthenticatedSession session,
+        string itemId,
+        CancellationToken cancellationToken = default);
 }

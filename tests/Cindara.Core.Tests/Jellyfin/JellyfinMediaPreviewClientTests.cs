@@ -535,20 +535,13 @@ public sealed class JellyfinMediaPreviewClientTests
         Assert.DoesNotContain(handler.Requests, IsImage);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task LibraryPageDeadlineDrainsRequests(bool duringArtwork)
+    [Fact]
+    public async Task LibraryMetadataDeadlineDrainsRequests()
     {
         using var clock = new ManualDeadlineTimeProvider();
         var started = NewSignal();
         using var handler = new AsyncPreviewHandler(async (request, token) =>
         {
-            if (duringArtwork && !IsImage(request))
-            {
-                return JsonResponse("""{"Items":[{"Id":"movie","Name":"Movie","ImageTags":{"Primary":"tag"}}],"TotalRecordCount":1}""");
-            }
-
             started.TrySetResult();
             await Task.Delay(Timeout.Infinite, token);
             throw new InvalidOperationException("The request should be canceled.");

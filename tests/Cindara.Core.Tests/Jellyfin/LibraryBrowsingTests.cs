@@ -140,19 +140,19 @@ public sealed class LibraryBrowsingTests
             return Task.FromResult(Json(PageJson(0, 1, 1, artwork: true)));
         }, checkToken: false);
         using var client = Client(handler);
-        var first = await client.GetLibraryPageAsync(Session, Library, 0);
-        var second = await client.GetLibraryPageAsync(Session, Library, 0);
-        Assert.Same(first.Items[0].Artwork, second.Items[0].Artwork);
+        var first = await client.GetLibraryArtworkAsync(Session, "movie-0");
+        var second = await client.GetLibraryArtworkAsync(Session, "movie-0");
+        Assert.Same(first, second);
         Assert.Equal(1, imageRequests);
 
-        await client.GetLibraryPageAsync(Session with { AccessToken = "replacement-token" }, Library, 0);
+        await client.GetLibraryArtworkAsync(Session with { AccessToken = "replacement-token" }, "movie-0");
         Assert.Equal(2, imageRequests);
-        await client.GetLibraryPageAsync(Session with { UserId = "another-user" }, Library, 0);
+        await client.GetLibraryArtworkAsync(Session with { UserId = "another-user" }, "movie-0");
         Assert.Equal(3, imageRequests);
-        await client.GetLibraryPageAsync(Session, Library, 0);
+        await client.GetLibraryArtworkAsync(Session, "movie-0");
         Assert.Equal(4, imageRequests);
         client.ClearImageCache();
-        await client.GetLibraryPageAsync(Session, Library, 0);
+        await client.GetLibraryArtworkAsync(Session, "movie-0");
         Assert.Equal(5, imageRequests);
     }
 
@@ -165,46 +165,28 @@ public sealed class LibraryBrowsingTests
         using var client = Client(handler);
         var page = await client.GetLibraryPageAsync(Session, Library, 0);
         Assert.Null(Assert.Single(page.Items).Artwork);
+        Assert.Equal("movie-0", page.Items[0].ArtworkItemId);
+        Assert.Null(await client.GetLibraryArtworkAsync(Session, page.Items[0].ArtworkItemId!));
     }
 
     [Fact]
-    public async Task PageCancellationDrainsBoundedArtworkRequests()
+    public async Task PageMetadataReturnsWithoutWaitingForAnyArtwork()
     {
-        var sixImages = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var images = 0;
-        var active = 0;
-        using var handler = new Handler(async (request, token) =>
+        using var handler = new Handler((request, _) =>
         {
-            if (!request.RequestUri!.AbsolutePath.Contains("/Images/", StringComparison.Ordinal))
-            {
-                return Json(PageJson(0, 40, 400, artwork: true));
-            }
-
-            Interlocked.Increment(ref active);
-            if (Interlocked.Increment(ref images) == 6)
-            {
-                sixImages.SetResult();
-            }
-
-            try
-            {
-                await Task.Delay(Timeout.Infinite, token);
-                throw new InvalidOperationException("The image request should be canceled.");
-            }
-            finally
-            {
-                Interlocked.Decrement(ref active);
-            }
+            Assert.DoesNotContain("/Images/", request.RequestUri!.AbsolutePath, StringComparison.Ordinal);
+            return Task.FromResult(Json(PageJson(0, 40, 400, artwork: true)));
         });
         using var client = Client(handler);
-        using var cancellation = new CancellationTokenSource();
-        var loading = client.GetLibraryPageAsync(Session, Library, 0, cancellation.Token);
-        await sixImages.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal(6, active);
-        cancellation.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => loading);
-        Assert.Equal(0, active);
-        Assert.Equal(6, images);
+        var page = await client.GetLibraryPageAsync(Session, Library, 0);
+        Assert.Equal(40, page.Items.Count);
+        Assert.Single(handler.Requests);
+        Assert.All(page.Items, item =>
+        {
+            Assert.Null(item.Artwork);
+            Assert.Null(item.Backdrop);
+            Assert.Equal(item.Id, item.ArtworkItemId);
+        });
     }
 
     [Fact]
@@ -215,7 +197,48 @@ public sealed class LibraryBrowsingTests
         var session = Session with { Server = Session.Server with { BaseUri = new Uri("http://media.example/") } };
         var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetLibraryPageAsync(session, Library, 0));
         Assert.Equal(MediaPreviewError.InsecureConnection, exception.Error);
+        exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetLibraryArtworkAsync(session, "movie-0"));
+        Assert.Equal(MediaPreviewError.InsecureConnection, exception.Error);
         Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, MediaPreviewError.AccessDenied)]
+    [InlineData(HttpStatusCode.Forbidden, MediaPreviewError.AccessDenied)]
+    [InlineData(HttpStatusCode.InternalServerError, MediaPreviewError.UnexpectedStatus)]
+    public async Task ArtworkErrorsRemainTypedAndDoNotHideRejectedSessions(HttpStatusCode status, MediaPreviewError expected)
+    {
+        using var handler = new Handler((_, _) => Task.FromResult(new HttpResponseMessage(status)));
+        using var client = Client(handler);
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetLibraryArtworkAsync(Session, "movie-0"));
+        Assert.Equal(expected, exception.Error);
+    }
+
+    [Fact]
+    public async Task IndividualPosterRetainsItsRequestTimeout()
+    {
+        using var handler = new Handler((_, _) => throw new OperationCanceledException());
+        using var client = Client(handler);
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetLibraryArtworkAsync(Session, "movie-0"));
+        Assert.Equal(MediaPreviewError.TimedOut, exception.Error);
+    }
+
+    [Fact]
+    public async Task CallerCanCancelAPosterWithoutChangingItToATimeout()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var handler = new Handler(async (_, token) =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.Infinite, token);
+            throw new InvalidOperationException("Expected cancellation.");
+        });
+        using var client = Client(handler);
+        using var cancellation = new CancellationTokenSource();
+        var loading = client.GetLibraryArtworkAsync(Session, "movie-0", cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => loading);
     }
 
     [Fact]
@@ -266,7 +289,7 @@ public sealed class LibraryBrowsingTests
                 ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[8 * 1024 * 1024 + 1]) }
                 : Json(PageJson(0, 1, 1, artwork: true))));
         using var client = Client(handler);
-        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetLibraryPageAsync(Session, Library, 0));
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetLibraryArtworkAsync(Session, "movie-0"));
         Assert.Equal(MediaPreviewError.Network, exception.Error);
     }
 

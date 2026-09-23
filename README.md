@@ -45,9 +45,15 @@ expanded and right-to-left pseudo-localization modes.
 See [accessibility and localization](docs/accessibility.md) for defaults,
 limitations, validation, and the keyboard/screen-reader release checklist.
 
-Home and library-page loading overlap metadata and artwork with at most six
-requests in flight per load, deduplicate images within that load, and have a
-30-second overall deadline. Library pages do not eagerly fetch hero backdrops.
+Home loads metadata and artwork with at most six requests in flight and a
+30-second overall deadline. Library metadata has the same deadline, but the
+grid appears immediately without waiting for posters. Up to six poster requests
+then run in the background, each with a 15-second request timeout; navigation,
+card summaries, and paging remain available. Failed/missing posters show an
+explicit placeholder and **Retry missing artwork**, without discarding the page.
+Leaving the library, paging, or changing accounts cancels the old artwork work.
+Library pages do not eagerly fetch hero backdrops. Duplicate images share a
+request within each load.
 An in-memory LRU artwork cache holds at most 128 entries / 32 MiB, expires after
 five minutes, and is isolated to the exact authenticated session (including its
 token). Account changes, sign-out, and shutdown clear it; no artwork is cached
