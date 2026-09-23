@@ -1,6 +1,7 @@
 using Cindara.Core.Authentication;
 using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
+using Cindara.Desktop.Localization;
 using Cindara.Desktop.Tests.Localization;
 using Cindara.Desktop.Tests.Navigation;
 using Cindara.Desktop.ViewModels;
@@ -82,9 +83,13 @@ public sealed class LibraryBrowserViewModelTests
         }
     }
 
-    [Fact]
-    public async Task PagesReplaceRatherThanAccumulateAndReopeningPreservesTheCurrentPage()
+    [Theory]
+    [InlineData("en")]
+    [InlineData("qps-ploc")]
+    [InlineData("qps-plocm")]
+    public async Task PagesReplaceRatherThanAccumulateAndReopeningPreservesTheCurrentPage(string culture)
     {
+        using var scope = new CultureScope(culture);
         var client = new Client();
         using var model = Model(client);
         await model.OpenLibraryCommand.ExecuteAsync(Library);
@@ -97,7 +102,7 @@ public sealed class LibraryBrowserViewModelTests
         Assert.False(model.HasNextPage);
         Assert.True(model.HasPreviousPage);
         Assert.Equal(0, model.PreviousIndex);
-        Assert.Equal("41-47 of 47", model.PageDescription);
+        Assert.Equal(Loc.Format("Library.Page", 41, 47, 47), model.PageDescription);
         var previous = model.Items;
         await model.OpenLibraryCommand.ExecuteAsync(Library);
         Assert.Same(previous, model.Items);
@@ -234,9 +239,13 @@ public sealed class LibraryBrowserViewModelTests
         Assert.All(model.Items, item => Assert.True(item.HasArtwork));
     });
 
-    [Fact]
-    public async Task CorruptPageArtworkReportsFailureAndDisposesOnlyThePartialReplacement()
+    [Theory]
+    [InlineData("en")]
+    [InlineData("qps-ploc")]
+    [InlineData("qps-plocm")]
+    public async Task CorruptPageArtworkReportsFailureAndDisposesOnlyThePartialReplacement(string culture)
     {
+        using var scope = new CultureScope(culture);
         var decoder = new TestPreviewImageDecoder();
         var client = new Client { Artwork = true };
         using var model = new LibraryBrowserViewModel(client, Session, [Library],
@@ -250,7 +259,7 @@ public sealed class LibraryBrowserViewModelTests
 
         Assert.Same(original, model.Items);
         Assert.True(model.CanRetry);
-        Assert.Contains("could not be decoded", model.Message, StringComparison.Ordinal);
+        Assert.Equal(Loc.Get("Error.Preview.InvalidResponse"), model.Message);
         Assert.All(decoder.Resources.Take(initialResources), resource => Assert.Equal(0, resource.DisposeCount));
         Assert.All(decoder.Resources.Skip(initialResources), resource => Assert.Equal(1, resource.DisposeCount));
         model.Dispose();
