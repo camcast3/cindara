@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using Cindara.Core.Jellyfin;
 using Cindara.Desktop.Localization;
 
 namespace Cindara.Desktop.Views;
@@ -25,6 +26,8 @@ public partial class ShellView : UserControl
     public event EventHandler? DestinationChanged;
     public event EventHandler? ExitRequested;
     public event EventHandler? LanguageRequested;
+    public event EventHandler? LibraryLayoutRequested;
+    public event EventHandler<MediaLibrary>? LibraryRequested;
     public string Destination => _destination;
     public Control? HomeLoadingAction { get; set; }
     private bool IsHomeLoading => _destination == "Home"
@@ -34,9 +37,11 @@ public partial class ShellView : UserControl
         "Home" when IsHomeLoading => HomeLoadingAction!,
         "Home" => RetryHomeButton.IsEffectivelyVisible && RetryHomeButton.IsEffectivelyEnabled ? RetryHomeButton : HomeNavigation,
         "Settings" => SettingsLanguageButton,
+        "Libraries" => LibraryView.IsEffectivelyVisible && LibraryView.InitialFocus != LibraryView
+            ? LibraryView.InitialFocus : LibrariesNavigation,
         _ => NavigationButtons.Children.OfType<Button>().Single(button => Equals(button.Tag, _destination)),
     };
-    public Control ContentFocus => IsHomeLoading ? InitialFocus
+    public Control ContentFocus => IsHomeLoading || _destination == "Libraries" ? InitialFocus
         : _contentMemory.TryGetValue(_destination, out var control)
         && control.IsEffectivelyVisible && control.IsEffectivelyEnabled ? control : InitialFocus;
 
@@ -58,14 +63,20 @@ public partial class ShellView : UserControl
             _contentMemory.Remove("Settings");
         }
 
+        if (destination != "Libraries")
+        {
+            LibraryView.SuspendFocusMemory();
+        }
+
         _destination = destination;
         HomePage.IsVisible = destination == "Home";
         SettingsPage.IsVisible = destination == "Settings";
-        PlaceholderPage.IsVisible = !HomePage.IsVisible && !SettingsPage.IsVisible;
+        LibrariesPage.IsVisible = destination == "Libraries";
+        PageScroll.IsVisible = !LibrariesPage.IsVisible;
+        PlaceholderPage.IsVisible = !HomePage.IsVisible && !SettingsPage.IsVisible && !LibrariesPage.IsVisible;
         DestinationTitle.Text = Loc.Get($"Nav.{destination}");
         DestinationMessage.Text = destination switch
         {
-            "Libraries" => Loc.Get("Placeholder.Libraries"),
             "Search" => Loc.Get("Placeholder.Search"),
             "Downloads" => Loc.Get("Placeholder.Downloads"),
             _ => string.Empty,
@@ -91,7 +102,7 @@ public partial class ShellView : UserControl
         }
 
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
-        var buttons = NavigationButtons.Children.OfType<Button>().ToArray();
+        var buttons = NavigationButtons.GetVisualDescendants().OfType<Button>().ToArray();
         var index = Array.FindIndex(buttons, button => button == focused);
         if (index >= 0)
         {
@@ -101,6 +112,7 @@ public partial class ShellView : UserControl
                 case NavigationDirection.Down:
                     buttons[Math.Clamp(index + (direction == NavigationDirection.Up ? -1 : 1), 0, buttons.Length - 1)]
                         .Focus(NavigationMethod.Directional);
+                    (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control)?.BringIntoView();
                     return true;
                 case NavigationDirection.Left:
                     return true;
@@ -161,4 +173,15 @@ public partial class ShellView : UserControl
 
     private void OnLanguageClicked(object? sender, RoutedEventArgs args) =>
         LanguageRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnLibraryLayoutClicked(object? sender, RoutedEventArgs args) =>
+        LibraryLayoutRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnLibraryClicked(object? sender, RoutedEventArgs args)
+    {
+        if (sender is Button { DataContext: MediaLibrary library })
+        {
+            LibraryRequested?.Invoke(this, library);
+        }
+    }
 }

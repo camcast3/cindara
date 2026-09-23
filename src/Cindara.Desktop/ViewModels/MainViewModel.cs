@@ -3,6 +3,7 @@ using Cindara.Core.Authentication;
 using Cindara.Core.Diagnostics;
 using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
+using Cindara.Desktop.Libraries;
 using Cindara.Desktop.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,6 +17,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly IJellyfinMediaPreviewClient? _mediaPreviewClient;
     private readonly Func<MediaPreviewHome, DesignGalleryViewModel> _createGallery;
     private readonly LocalDiagnostics? _diagnostics;
+    private readonly LibraryLayoutSettingsStore? _libraryLayoutStore;
     private AuthenticatedSession? _currentSession;
     private bool _disposed;
 
@@ -23,8 +25,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IJellyfinServerClient serverClient,
         IAuthenticationService authenticationService,
         IJellyfinMediaPreviewClient? mediaPreviewClient = null,
-        LocalDiagnostics? diagnostics = null)
-        : this(serverClient, authenticationService, mediaPreviewClient, DesignGalleryViewModel.Create, diagnostics)
+        LocalDiagnostics? diagnostics = null,
+        LibraryLayoutSettingsStore? libraryLayoutStore = null)
+        : this(serverClient, authenticationService, mediaPreviewClient, DesignGalleryViewModel.Create, diagnostics, libraryLayoutStore)
     {
     }
 
@@ -33,13 +36,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IAuthenticationService authenticationService,
         IJellyfinMediaPreviewClient? mediaPreviewClient,
         Func<MediaPreviewHome, DesignGalleryViewModel> createGallery,
-        LocalDiagnostics? diagnostics = null)
+        LocalDiagnostics? diagnostics = null,
+        LibraryLayoutSettingsStore? libraryLayoutStore = null)
     {
         _serverClient = serverClient;
         _authenticationService = authenticationService;
         _mediaPreviewClient = mediaPreviewClient;
         _createGallery = createGallery;
         _diagnostics = diagnostics;
+        _libraryLayoutStore = libraryLayoutStore;
     }
 
     public ObservableCollection<SessionProfile> SavedSessions { get; } = [];
@@ -104,6 +109,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private DesignGalleryViewModel? _designGallery;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLibraryBrowser))]
+    private LibraryBrowserViewModel? _libraryBrowser;
+
+    public bool HasLibraryBrowser => LibraryBrowser is not null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLibraryLayout))]
+    [NotifyPropertyChangedFor(nameof(SidebarLibraries))]
+    private LibraryLayoutViewModel? _libraryLayout;
+
+    public bool HasLibraryLayout => LibraryLayout is not null;
+    public IReadOnlyList<MediaLibrary> SidebarLibraries => LibraryLayout?.SidebarLibraries ?? [];
 
     public void SetControllerStatus(string status)
     {
@@ -289,6 +308,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        LibraryBrowser?.CancelLoading();
         IsBusy = true;
         var profile = _currentSession.Profile;
         using var operation = _diagnostics?.Begin(DiagnosticArea.Authentication, DiagnosticAction.SignOut);
@@ -362,9 +382,27 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            var gallery = _createGallery(home);
+            DesignGalleryViewModel gallery;
+            try
+            {
+                gallery = _createGallery(home);
+            }
+            catch (MediaPreviewException exception) when (exception.Error == MediaPreviewError.InvalidResponse)
+            {
+                _mediaPreviewClient.ClearImageCache();
+                throw;
+            }
+
             ClearDesignGallery();
             DesignGallery = gallery;
+            LibraryBrowser = new LibraryBrowserViewModel(_mediaPreviewClient, session, home.Libraries,
+                exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
+            if (_libraryLayoutStore is not null)
+            {
+                LibraryLayout = new LibraryLayoutViewModel(session.Profile, home.Libraries, _libraryLayoutStore, _diagnostics);
+                LibraryLayout.Applied += OnLibraryLayoutApplied;
+                ApplyLibraryLayout();
+            }
             IsDesignGalleryVisible = true;
             StatusMessage = Loc.Get("Status.PreviewLoaded");
             operation?.Complete();
@@ -380,29 +418,48 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             StatusMessage = LocalizedErrors.Get(exception);
             if (exception.Error == MediaPreviewError.AccessDenied)
             {
-                PrepareForReauthentication(session.Profile);
-                StatusMessage = Loc.Format("Status.SignInAgain", LocalizedErrors.Get(exception));
-                try
-                {
-                    await _authenticationService.InvalidateAsync(session);
-                }
-                catch (AuthenticationException invalidationException)
-                {
-                    operation?.Fail(invalidationException);
-                    StatusMessage = Loc.Format("Status.Combined", StatusMessage,
-                        Loc.Format("Error.SessionInvalidation", LocalizedErrors.Get(invalidationException)));
-                }
+                await HandleRejectedMediaSessionAsync(session, exception);
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
-                try
-                {
-                    await RefreshSavedSessionsAsync(CancellationToken.None);
-                }
-                catch (AuthenticationException refreshException)
-                {
-                    operation?.Fail(refreshException);
-                    StatusMessage = Loc.Format("Status.Combined", StatusMessage,
-                        Loc.Format("Error.SessionRefresh", LocalizedErrors.Get(refreshException)));
-                }
+    private async Task HandleRejectedMediaSessionAsync(AuthenticatedSession session, MediaPreviewException exception)
+    {
+        if (_disposed || _currentSession != session)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        using var operation = _diagnostics?.Begin(DiagnosticArea.Authentication, DiagnosticAction.RestoreSession);
+        try
+        {
+            PrepareForReauthentication(session.Profile);
+            StatusMessage = Loc.Format("Status.SignInAgain", LocalizedErrors.Get(exception));
+            try
+            {
+                await _authenticationService.InvalidateAsync(session);
+            }
+            catch (AuthenticationException invalidationException)
+            {
+                operation?.Fail(invalidationException);
+                StatusMessage = Loc.Format("Status.Combined", StatusMessage,
+                    Loc.Format("Error.SessionInvalidation", LocalizedErrors.Get(invalidationException)));
+            }
+
+            try
+            {
+                await RefreshSavedSessionsAsync(CancellationToken.None);
+            }
+            catch (AuthenticationException refreshException)
+            {
+                operation?.Fail(refreshException);
+                StatusMessage = Loc.Format("Status.Combined", StatusMessage,
+                    Loc.Format("Error.SessionRefresh", LocalizedErrors.Get(refreshException)));
             }
         }
         finally
@@ -413,6 +470,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [RelayCommand]
     private void HideDesignGallery() => IsDesignGalleryVisible = false;
+
+    private void OnLibraryLayoutApplied(object? sender, EventArgs args) => ApplyLibraryLayout();
+
+    private void ApplyLibraryLayout()
+    {
+        if (LibraryLayout is { } layout)
+        {
+            DesignGallery?.ApplyLibraryLayout(
+                layout.SidebarLibraries.Select(library => library.Id).ToArray(),
+                layout.HomeLibraries.Select(library => library.Id).ToArray(), layout.HomeWarning);
+            OnPropertyChanged(nameof(SidebarLibraries));
+        }
+    }
 
     private void PrepareForReauthentication(SessionProfile profile)
     {
@@ -483,6 +553,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void ShowAuthenticated(AuthenticatedSession session)
     {
+        _mediaPreviewClient?.ClearImageCache();
         ClearDesignGallery();
         AuthenticatedAccount = LocaleFormat.SessionDisplayName(session.Profile);
         StatusMessage = Loc.Format("Status.SignedIn", session.Server.DisplayName);
@@ -503,6 +574,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         IsAuthenticatedVisible = authenticated;
         if (!authenticated)
         {
+            _mediaPreviewClient?.ClearImageCache();
             _currentSession = null;
             AuthenticatedAccount = string.Empty;
             ClearDesignGallery();
@@ -513,10 +585,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void ClearDesignGallery()
     {
+        if (LibraryLayout is { } layout)
+        {
+            layout.Applied -= OnLibraryLayoutApplied;
+            LibraryLayout = null;
+        }
+
         IsDesignGalleryVisible = false;
         var gallery = DesignGallery;
         DesignGallery = null;
         gallery?.Dispose();
+        var browser = LibraryBrowser;
+        LibraryBrowser = null;
+        browser?.Dispose();
     }
 
     public void Dispose()
@@ -524,6 +605,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _disposed = true;
         ShowDesignGalleryCommand.Cancel();
         ClearDesignGallery();
+        _mediaPreviewClient?.ClearImageCache();
         GC.SuppressFinalize(this);
     }
 }

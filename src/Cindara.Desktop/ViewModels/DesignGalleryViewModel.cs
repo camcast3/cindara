@@ -9,17 +9,28 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
 {
     private readonly MediaPreviewCardViewModel? _initialFeatured;
     private MediaPreviewCardViewModel? _featured;
+    private readonly IReadOnlyList<MediaPreviewRailViewModel> _allRails;
+    private readonly IReadOnlyList<MediaLibrary> _allLibraries;
+    private IReadOnlyList<MediaPreviewRailViewModel> _recentlyAddedLibraries;
+    private IReadOnlyList<MediaLibrary> _libraries;
+    private IReadOnlyList<MediaLibrary> _sidebarLibraries = [];
+    private string _libraryLayoutWarning = string.Empty;
     private bool _disposed;
 
     private DesignGalleryViewModel(
         MediaPreviewCardViewModel? featured,
         IReadOnlyList<MediaPreviewCardViewModel> continueWatching,
-        IReadOnlyList<MediaPreviewRailViewModel> recentlyAddedLibraries)
+        IReadOnlyList<MediaPreviewRailViewModel> recentlyAddedLibraries,
+        IReadOnlyList<MediaLibrary> libraries)
     {
         _initialFeatured = featured;
         _featured = featured;
         ContinueWatching = continueWatching;
-        RecentlyAddedLibraries = recentlyAddedLibraries;
+        _allRails = recentlyAddedLibraries;
+        _recentlyAddedLibraries = recentlyAddedLibraries;
+        _allLibraries = libraries;
+        _libraries = libraries;
+        _sidebarLibraries = libraries.Where(library => library.IsSupportedVideoLibrary).ToArray();
     }
 
     public MediaPreviewCardViewModel? Featured
@@ -30,9 +41,46 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<MediaPreviewCardViewModel> ContinueWatching { get; }
 
-    public IReadOnlyList<MediaPreviewRailViewModel> RecentlyAddedLibraries { get; }
+    public IReadOnlyList<MediaPreviewRailViewModel> RecentlyAddedLibraries => _recentlyAddedLibraries;
 
     public bool HasContinueWatching => ContinueWatching.Count > 0;
+    public IReadOnlyList<MediaLibrary> Libraries => _libraries;
+    public IReadOnlyList<MediaLibrary> SidebarLibraries => _sidebarLibraries;
+    public bool HasLibraries => Libraries.Count > 0;
+    public string LibraryLayoutWarning => _libraryLayoutWarning;
+    public bool HasLibraryLayoutWarning => !string.IsNullOrEmpty(LibraryLayoutWarning);
+    public bool IsEmpty => !HasContinueWatching && RecentlyAddedLibraries.All(rail => rail.Items.Count == 0);
+
+    public void ApplyLibraryLayout(IReadOnlyList<string> sidebarIds, IReadOnlyList<string> homeIds, string warning)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var sidebar = sidebarIds.Select(id => _allLibraries.FirstOrDefault(library => library.Id == id)).OfType<MediaLibrary>().ToArray();
+        if (!SidebarLibraries.Select(library => library.Id).SequenceEqual(sidebar.Select(library => library.Id)))
+        {
+            _sidebarLibraries = sidebar;
+            OnPropertyChanged(nameof(SidebarLibraries));
+        }
+
+        var libraries = homeIds.Select(id => _allLibraries.FirstOrDefault(library => library.Id == id)).OfType<MediaLibrary>().ToArray();
+        var rails = homeIds.Select(id => _allRails.FirstOrDefault(rail => rail.LibraryId == id)).OfType<MediaPreviewRailViewModel>().ToArray();
+        if (!Libraries.Select(library => library.Id).SequenceEqual(libraries.Select(library => library.Id))
+            || !RecentlyAddedLibraries.Select(rail => rail.LibraryId).SequenceEqual(rails.Select(rail => rail.LibraryId)))
+        {
+            _libraries = libraries;
+            _recentlyAddedLibraries = rails;
+            Featured = ContinueWatching.Count > 0 ? ContinueWatching[0]
+                : rails.SelectMany(rail => rail.Items).FirstOrDefault();
+            OnPropertyChanged(nameof(Libraries));
+            OnPropertyChanged(nameof(HasLibraries));
+            OnPropertyChanged(nameof(RecentlyAddedLibraries));
+            OnPropertyChanged(nameof(IsEmpty));
+        }
+
+        if (SetProperty(ref _libraryLayoutWarning, warning, nameof(LibraryLayoutWarning)))
+        {
+            OnPropertyChanged(nameof(HasLibraryLayoutWarning));
+        }
+    }
 
     public void SelectFeatured(MediaPreviewCardViewModel item)
     {
@@ -64,7 +112,8 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
                     rail.LibraryName is { } libraryName
                         ? Loc.Format("Format.RecentlyAdded", libraryName)
                         : rail.Title,
-                    rail.Items.Select(CreateCard).ToArray())).ToArray());
+                    rail.Items.Select(CreateCard).ToArray(), rail.LibraryId)).ToArray(),
+                home.Libraries);
             completed = true;
             return gallery;
         }
@@ -94,7 +143,7 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
             item.Dispose();
         }
 
-        foreach (var rail in RecentlyAddedLibraries)
+        foreach (var rail in _allRails)
         {
             rail.Dispose();
         }
@@ -103,13 +152,15 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
 
 public sealed class MediaPreviewRailViewModel : IDisposable
 {
-    internal MediaPreviewRailViewModel(string title, IReadOnlyList<MediaPreviewCardViewModel> items)
+    internal MediaPreviewRailViewModel(string title, IReadOnlyList<MediaPreviewCardViewModel> items, string? libraryId = null)
     {
         Title = title;
         Items = items;
+        LibraryId = libraryId;
     }
 
     public string Title { get; }
+    public string? LibraryId { get; }
 
     public IReadOnlyList<MediaPreviewCardViewModel> Items { get; }
 
@@ -122,10 +173,11 @@ public sealed class MediaPreviewRailViewModel : IDisposable
     }
 }
 
-public sealed class MediaPreviewCardViewModel : IDisposable
+public sealed class MediaPreviewCardViewModel : ObservableObject, IDisposable
 {
-    private readonly PreviewImage? _artwork;
+    private PreviewImage? _artwork;
     private readonly PreviewImage? _backdrop;
+    private bool _isArtworkLoading;
 
     public MediaPreviewCardViewModel(MediaPreviewItem item)
         : this(item, PreviewImage.Decode)
@@ -134,6 +186,7 @@ public sealed class MediaPreviewCardViewModel : IDisposable
 
     internal MediaPreviewCardViewModel(MediaPreviewItem item, Func<byte[], PreviewImage> decode)
     {
+        Id = item.Id;
         Name = item.Name;
         HeroName = item.HeroName ?? item.Name;
         Overview = item.Overview ?? string.Empty;
@@ -173,6 +226,7 @@ public sealed class MediaPreviewCardViewModel : IDisposable
     }
 
     public string Name { get; }
+    public string Id { get; }
 
     public string Subtitle { get; }
 
@@ -189,8 +243,30 @@ public sealed class MediaPreviewCardViewModel : IDisposable
     public bool HasPlaybackProgress => PlaybackProgress > 0;
 
     public IImage? Artwork => _artwork?.Source;
+    public bool HasArtwork => Artwork is not null;
+    public bool IsArtworkLoading
+    {
+        get => _isArtworkLoading;
+        internal set
+        {
+            if (SetProperty(ref _isArtworkLoading, value))
+            {
+                OnPropertyChanged(nameof(ArtworkPlaceholder));
+            }
+        }
+    }
+    public string ArtworkPlaceholder => Loc.Get(IsArtworkLoading ? "Library.LoadingArtwork" : "Library.ArtworkUnavailable");
 
     public IImage? Backdrop => _backdrop?.Source;
+
+    internal void SetArtwork(PreviewImage? artwork)
+    {
+        _artwork?.Dispose();
+        _artwork = artwork;
+        IsArtworkLoading = false;
+        OnPropertyChanged(nameof(Artwork));
+        OnPropertyChanged(nameof(HasArtwork));
+    }
 
     public void Dispose()
     {

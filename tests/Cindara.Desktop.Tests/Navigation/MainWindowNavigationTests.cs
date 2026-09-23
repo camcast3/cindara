@@ -15,6 +15,7 @@ using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
 using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.Input;
+using Cindara.Desktop.Libraries;
 using Cindara.Desktop.Localization;
 using Cindara.Desktop.Tests.Localization;
 using Cindara.Desktop.ViewModels;
@@ -26,6 +27,578 @@ namespace Cindara.Desktop.Tests.Navigation;
 public sealed class MainWindowNavigationTests
 {
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads"];
+
+    [Fact]
+    public Task NullNextUpResponseKeepsSignInAndRecoversThroughHomeRetry() => TestAppBuilder.Run(async () =>
+    {
+        using var handler = new RepairableArtworkHandler(CreateReviewArtwork()) { NullNextUp = true };
+        using var client = new JellyfinMediaPreviewClient(handler,
+            new JellyfinClientIdentity("Cindara", "UI tests", "device", "1.0"));
+        using var fixture = new ShellFixture(mediaClient: client);
+        fixture.SignIn(waitForHome: false);
+        await fixture.Model.OpenHomeCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.True(fixture.Model.IsAuthenticatedVisible);
+        Assert.False(fixture.Model.IsBusy);
+        Assert.False(fixture.Model.IsDesignGalleryVisible);
+        Assert.Equal(Loc.Get("Error.Preview.InvalidResponse"), fixture.Model.StatusMessage);
+        Assert.Equal("RetryHomeButton", Focused(fixture.Window).Name);
+
+        handler.NullNextUp = false;
+        fixture.Click(fixture.Shell.FindControl<Button>("RetryHomeButton")!);
+        await fixture.Model.OpenHomeCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.True(fixture.Model.IsDesignGalleryVisible);
+        Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CorruptCachedArtworkRetryFetchesFreshBytesInHomeAndLibrary(bool library) =>
+        TestAppBuilder.Run(async () =>
+        {
+            using var handler = new RepairableArtworkHandler(CreateReviewArtwork()) { Corrupt = !library };
+            using var client = new JellyfinMediaPreviewClient(handler,
+                new JellyfinClientIdentity("Cindara", "UI tests", "device", "1.0"));
+            using var fixture = new ShellFixture(mediaClient: client);
+            fixture.SignIn(waitForHome: false);
+            await fixture.Model.OpenHomeCommand.ExecutionTask!;
+            fixture.Flush();
+            if (!library)
+            {
+                Assert.False(fixture.Model.IsDesignGalleryVisible);
+                Assert.Equal(Loc.Get("Error.Preview.InvalidResponse"), fixture.Model.StatusMessage);
+                var firstRequests = handler.ImageRequests.Values.Sum();
+                handler.Corrupt = false;
+                fixture.Click(fixture.Shell.FindControl<Button>("RetryHomeButton")!);
+                await fixture.Model.OpenHomeCommand.ExecutionTask!;
+                fixture.Flush();
+                Assert.True(fixture.Model.IsDesignGalleryVisible, fixture.Model.StatusMessage);
+                Assert.True(handler.ImageRequests.Values.Sum() > firstRequests);
+                Assert.True(fixture.Model.DesignGallery!.ContinueWatching[0].HasArtwork);
+            }
+            else
+            {
+                Assert.True(fixture.Model.IsDesignGalleryVisible);
+                handler.Corrupt = true;
+                fixture.Click(fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
+                    .GetVisualDescendants().OfType<Button>().Single());
+                var browser = fixture.Model.LibraryBrowser!;
+                await browser.OpenLibraryCommand.ExecutionTask!;
+                await browser.LoadArtworkCommand.ExecutionTask!;
+                fixture.Flush();
+                var card = Assert.Single(browser.Items);
+                Assert.False(card.HasArtwork);
+                Assert.True(browser.CanRetryArtwork);
+                var cardControl = fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>()
+                    .Single(button => button.DataContext == card);
+                handler.Corrupt = false;
+                fixture.Click(fixture.Shell.LibraryView.FindControl<Button>("RetryLibraryArtwork")!);
+                await browser.LoadArtworkCommand.ExecutionTask!;
+                fixture.Flush();
+                Assert.Same(card, Assert.Single(browser.Items));
+                Assert.True(card.HasArtwork);
+                Assert.False(browser.CanRetryArtwork);
+                Assert.Equal(2, handler.ImageRequests["/Items/library-item/Images/Primary"]);
+                Assert.Contains(cardControl, fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>());
+                fixture.Click(cardControl);
+                Assert.True(fixture.IsModalVisible);
+                fixture.Input.Press(ControllerAction.Back);
+                Assert.Same(cardControl, Focused(fixture.Window));
+            }
+        });
+
+    private sealed class RepairableArtworkHandler(byte[] validArtwork) : HttpMessageHandler
+    {
+        public bool Corrupt { get; set; }
+        public bool NullNextUp { get; set; }
+        public System.Collections.Concurrent.ConcurrentDictionary<string, int> ImageRequests { get; } = new(StringComparer.Ordinal);
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.Contains("/Images/", StringComparison.Ordinal))
+            {
+                ImageRequests.AddOrUpdate(path, 1, (_, count) => count + 1);
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(Corrupt ? [0, 1, 2, 3] : validArtwork),
+                });
+            }
+
+            var json = path switch
+            {
+                "/Users/first/Items/Resume" => """{"Items":[{"Id":"resume","Name":"Resumable movie","Type":"Movie","ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":50}}]}""",
+                "/Shows/NextUp" => NullNextUp ? """{"Items":[null]}""" : """{"Items":[]}""",
+                "/Users/first/Views" => """{"Items":[{"Id":"tv","Name":"TV","CollectionType":"tvshows"}]}""",
+                "/Users/first/Items/Latest" => "[]",
+                "/Users/first/Items" => """{"Items":[{"Id":"library-item","Name":"Library item","Type":"Series","ImageTags":{"Primary":"tag"}}],"TotalRecordCount":1}""",
+                _ => throw new InvalidOperationException($"Unexpected test request: {path}"),
+            };
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
+    [Fact]
+    public Task LibraryLayoutSaveFailureStaysInTheEditorAndDoesNotChangeHome() => TestAppBuilder.Run(() =>
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"cindara-layout-blocked-{Guid.NewGuid():N}");
+        try
+        {
+            using var fixture = new ShellFixture(libraryLayoutStore: new LibraryLayoutSettingsStore(path));
+            fixture.Preview.LayoutLibraries = true;
+            fixture.SignIn();
+            File.WriteAllText(path, "Block creation of the settings directory.");
+            fixture.OpenSettings();
+            fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+            fixture.ClickAutomationId("ConfigureHomeLibraries");
+            fixture.ClickAutomationId("library-Home-tv-toggle");
+            fixture.ClickAutomationId("SaveLibraryLayout");
+            Assert.True(fixture.IsModalVisible);
+            Assert.Equal("SaveLibraryLayout", AutomationProperties.GetAutomationId(Focused(fixture.Window)));
+            Assert.Contains(fixture.Modal.Children.OfType<TextBlock>(),
+                block => block.Text == Loc.Get("LibraryLayout.SaveFailed"));
+            Assert.Equal(["tv", "movies", "anime"], fixture.Model.DesignGallery!.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
+            fixture.ClickAutomationId("CancelLibraryLayout");
+            Assert.Equal("SettingsLibraryLayoutButton", Focused(fixture.Window).Name);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    });
+
+    [Theory]
+    [InlineData("en")]
+    [InlineData("qps-plocm")]
+    public Task LibraryLayoutEditorSavesIndependentOrdersAndRestoresThemOnlyForTheSameAccount(string cultureName) =>
+        TestAppBuilder.Run(() =>
+        {
+            using var culture = new CultureScope(cultureName);
+            var directory = Path.Combine(Path.GetTempPath(), $"cindara-layout-ui-{Guid.NewGuid():N}");
+            var store = new LibraryLayoutSettingsStore(directory);
+            try
+            {
+                using (var fixture = new ShellFixture(libraryLayoutStore: store))
+                {
+                    fixture.Preview.LayoutLibraries = true;
+                    fixture.SignIn();
+                    Assert.Equal(["tv", "movies", "anime"], fixture.Model.SidebarLibraries.Select(library => library.Id));
+                    Assert.Equal(["tv", "movies", "anime"], fixture.Model.DesignGallery!.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
+                    Assert.All(fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
+                        .GetVisualDescendants().OfType<Button>(), button =>
+                        Assert.Single(Assert.Single(button.GetVisualDescendants().OfType<TextBlock>()).TextLayout.TextLines));
+                    fixture.OpenSettings();
+                    fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+                    fixture.ClickAutomationId("ConfigureSidebarLibraries");
+                    Assert.Equal(3, fixture.Modal.GetVisualDescendants().OfType<Button>()
+                        .Count(button => AutomationProperties.GetAutomationId(button)?.EndsWith("-toggle", StringComparison.Ordinal) is true));
+                    Assert.DoesNotContain(fixture.Modal.GetVisualDescendants().OfType<TextBlock>(),
+                        text => text.Text is "Collections" or "People");
+                    Assert.Equal(Loc.Format("LibraryLayout.HideFor", "TV"), AutomationProperties.GetName(Focused(fixture.Window)));
+                    fixture.ClickAutomationId("library-Sidebar-movies-toggle");
+                    Assert.Equal("library-Sidebar-movies-toggle", AutomationProperties.GetAutomationId(Focused(fixture.Window)));
+                    Assert.Equal(Loc.Format("LibraryLayout.ShowFor", "Movies"), AutomationProperties.GetName(Focused(fixture.Window)));
+                    Assert.Equal(Loc.Get("LibraryLayout.Show"),
+                        Assert.IsType<TextBlock>(Assert.IsType<Button>(Focused(fixture.Window)).Content).Text);
+                    AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+                    Capture(fixture.Window, $"library-layout-sidebar-{cultureName}");
+                    fixture.ClickAutomationId("SaveLibraryLayout");
+                    Assert.False(fixture.IsModalVisible);
+                    fixture.Click(fixture.Shell.FindControl<Button>("BackHomeButton")!);
+                    Assert.Equal(["tv", "anime"], fixture.Model.DesignGallery!.SidebarLibraries.Select(library => library.Id));
+                    Assert.Equal(["tv", "movies", "anime"], fixture.Model.DesignGallery.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
+                    var shortcuts = fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
+                        .GetVisualDescendants().OfType<Button>().ToArray();
+                    Assert.Equal(["TV", "Anime"], shortcuts.Select(AutomationProperties.GetName));
+
+                    fixture.OpenSettings();
+                    fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+                    fixture.ClickAutomationId("ConfigureHomeLibraries");
+                    Assert.DoesNotContain(fixture.Modal.GetVisualDescendants().OfType<TextBlock>(),
+                        text => text.Text is "Collections" or "People");
+                    fixture.ClickAutomationId("library-Home-anime-up");
+                    fixture.ClickAutomationId("library-Home-anime-up");
+                    Assert.Equal("library-Home-anime-toggle", AutomationProperties.GetAutomationId(Focused(fixture.Window)));
+                    fixture.ClickAutomationId("library-Home-tv-toggle");
+                    fixture.ClickAutomationId("SaveLibraryLayout");
+                    fixture.Click(fixture.Shell.FindControl<Button>("BackHomeButton")!);
+                    Assert.Equal(["anime", "movies"], fixture.Model.DesignGallery!.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
+                    Assert.Equal(["tv", "anime"], fixture.Model.DesignGallery.SidebarLibraries.Select(library => library.Id));
+                    Assert.Equal(1, fixture.Preview.Calls);
+
+                    fixture.OpenSettings();
+                    fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+                    fixture.ClickAutomationId("ConfigureSidebarLibraries");
+                    fixture.ClickAutomationId("library-Sidebar-tv-toggle");
+                    fixture.Key(Key.Escape);
+                    Assert.False(fixture.IsModalVisible);
+                    Assert.Equal(["tv", "anime"], fixture.Model.SidebarLibraries.Select(library => library.Id));
+                }
+
+                using var restored = new ShellFixture(libraryLayoutStore: store);
+                restored.Preview.LayoutLibraries = true;
+                restored.SignIn();
+                Assert.Equal(["tv", "anime"], restored.Model.DesignGallery!.SidebarLibraries.Select(library => library.Id));
+                Assert.Equal(["anime", "movies"], restored.Model.DesignGallery.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
+                var shortcut = restored.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
+                    .GetVisualDescendants().OfType<Button>().Single(button => button.DataContext is MediaLibrary { Id: "anime" });
+                restored.Click(shortcut);
+                Assert.Equal("Libraries", restored.Shell.Destination);
+                Assert.Equal("anime", restored.Model.LibraryBrowser!.SelectedLibrary!.Id);
+                restored.Model.BackToSessionsCommand.Execute(null);
+                restored.Flush();
+                Assert.Null(restored.Model.LibraryLayout);
+                Assert.Empty(restored.Model.SidebarLibraries);
+                restored.Model.SelectedSavedSession = restored.Model.SavedSessions.Single(profile => profile.UserId == "second");
+                restored.SignIn();
+                Assert.Equal(["tv", "movies", "anime"], restored.Model.SidebarLibraries.Select(library => library.Id));
+                Assert.Equal(["tv", "movies", "anime"], restored.Model.DesignGallery!.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
+            }
+            finally
+            {
+                if (Directory.Exists(directory)) { Directory.Delete(directory, recursive: true); }
+            }
+        });
+
+    [Fact]
+    public Task LibraryRemainsNavigableWhilePostersLoadAndArtworkUpdatesOnTheUiThread() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.ProgressiveArtwork = true;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.False(model.IsLoading);
+        Assert.True(model.LoadArtworkCommand.IsRunning);
+        Assert.True(fixture.Shell.LibraryView.FindControl<Button>("NextLibraryPage")!.IsEffectivelyEnabled);
+        fixture.Key(Key.Right);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Flush();
+        var focused = Focused(fixture.Window);
+        var card = Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
+        Assert.Equal("movie-6", card.Id);
+        Assert.True(card.IsArtworkLoading);
+        var artworkChanged = false;
+        card.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(card.Artwork))
+            {
+                Assert.True(Dispatcher.UIThread.CheckAccess());
+                artworkChanged = true;
+            }
+        };
+
+        fixture.Preview.ArtworkGate.SetResult(CreateReviewArtwork());
+        await model.LoadArtworkCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.True(artworkChanged);
+        Assert.True(card.HasArtwork);
+        Assert.Same(focused, Focused(fixture.Window));
+        AssertInsideWindow(fixture.Window, focused);
+        Assert.False(model.CanRetryArtwork);
+        Assert.False(fixture.Shell.LibraryView.FindControl<Button>("CancelLibraryArtwork")!.IsEffectivelyVisible);
+    });
+
+    [Theory]
+    [InlineData(1280, 720, 299.2)]
+    [InlineData(1920, 1080, 518.4)]
+    [InlineData(3440, 1440, 691.2)]
+    [InlineData(3840, 2160, 1036.8)]
+    public Task HomeCardsAreTwentyPercentLargerAndFitTheViewport(int width, int height, double expectedHeroHeight) =>
+        TestAppBuilder.Run(() =>
+        {
+            using var fixture = new ShellFixture(preferences: new PresentationPreferences(ReducedMotion: true));
+            fixture.Window.WindowState = WindowState.Normal;
+            fixture.Window.Width = width;
+            fixture.Window.Height = height;
+            fixture.SignIn();
+            var gallery = fixture.Gallery;
+            var continueCard = gallery.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Classes.Contains("continue-card"));
+            var poster = gallery.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.Classes.Contains("media-card"));
+            var originalScale = Math.Clamp(gallery.Bounds.Width / 1600, 1, 1.55);
+            Assert.InRange(Math.Abs(continueCard.Bounds.Width - 290 * originalScale * 1.2), 0, 1);
+            Assert.InRange(Math.Abs(continueCard.Bounds.Height - 163 * originalScale * 1.2), 0, 1);
+            Assert.InRange(Math.Abs(poster.Bounds.Width - 156 * originalScale * 1.2), 0, 1);
+            Assert.InRange(Math.Abs(poster.Bounds.Height - 234 * originalScale * 1.2), 0, 1);
+            Assert.Equal(348 * originalScale, (double)gallery.Resources["Gallery.ContinueWidth"]!, precision: 6);
+            Assert.Equal(195.6 * originalScale, (double)gallery.Resources["Gallery.ContinueHeight"]!, precision: 6);
+            Assert.Equal(187.2 * originalScale, (double)gallery.Resources["Gallery.PosterWidth"]!, precision: 6);
+            Assert.Equal(280.8 * originalScale, (double)gallery.Resources["Gallery.PosterHeight"]!, precision: 6);
+            Assert.Equal(expectedHeroHeight,
+                (double)gallery.Resources["Gallery.HeroHeight"]!, precision: 6);
+            AssertInsideWindow(fixture.Window, continueCard);
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            fixture.Flush();
+            Assert.Same(poster, Focused(fixture.Window));
+            AssertInsideWindow(fixture.Window, poster);
+            fixture.Input.Press(ControllerAction.NavigateUp);
+            fixture.Flush();
+            Assert.Same(continueCard, Focused(fixture.Window));
+            AssertInsideWindow(fixture.Window, continueCard);
+        });
+
+    [Theory]
+    [InlineData("en", 1920)]
+    [InlineData("en", 3840)]
+    [InlineData("qps-plocm", 1920)]
+    public Task UnifiedContinueWatchingWalkthroughUsesRealApiSelectionAndRestoresFocus(string cultureName, int width) =>
+        TestAppBuilder.Run(async () =>
+        {
+            using var culture = new CultureScope(cultureName);
+            using var handler = new ContinueWatchingUiHandler(CreateReviewArtwork());
+            using var client = new JellyfinMediaPreviewClient(handler,
+                new JellyfinClientIdentity("Cindara", "UI tests", "device", "1.0"));
+            using var fixture = new ShellFixture(preferences: new PresentationPreferences(ReducedMotion: true), mediaClient: client);
+            fixture.Window.WindowState = WindowState.Normal;
+            fixture.Window.Width = width;
+            fixture.Window.Height = width * 9 / 16;
+            fixture.SignIn(waitForHome: false);
+            await fixture.Model.OpenHomeCommand.ExecutionTask!;
+            fixture.Flush();
+
+            var gallery = fixture.Gallery;
+            var row = gallery.FindControl<ItemsControl>("ContinueWatchingRow")!;
+            var cards = row.GetVisualDescendants().OfType<Button>().ToArray();
+            var items = cards.Select(card => Assert.IsType<MediaPreviewCardViewModel>(card.DataContext)).ToArray();
+            Assert.Equal(["sky-11", "north-6", "moon", "river-1", "harbor-1", "orbit-1", "garden-1", "summit-1"],
+                items.Select(item => item.Id));
+            Assert.Equal(42, items[1].PlaybackProgress);
+            Assert.False(items[0].HasPlaybackProgress);
+            Assert.All(items, item => Assert.True(item.HasArtwork));
+            Assert.Single(gallery.GetVisualDescendants().OfType<TextBlock>(),
+                block => block.Text == Loc.Get("Gallery.ContinueWatching"));
+            Assert.DoesNotContain(gallery.GetVisualDescendants().OfType<TextBlock>(), block => block.Text == "Next Up");
+            Assert.Same(cards[0], Focused(fixture.Window));
+            AssertInsideWindow(fixture.Window, cards[0]);
+            Capture(fixture.Window, $"continue-watching-{cultureName}-{width}");
+
+            var rtl = cultureName == "qps-plocm";
+            fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+            Assert.Same(cards[1], Focused(fixture.Window));
+            Assert.Equal("Northstar", fixture.Model.DesignGallery!.Featured!.HeroName);
+            for (var index = 2; index < cards.Length; index++)
+            {
+                fixture.Key(rtl ? Key.Left : Key.Right);
+                Assert.Same(cards[index], Focused(fixture.Window));
+            }
+
+            AssertInsideWindow(fixture.Window, cards[^1]);
+            var scroll = row.GetVisualAncestors().OfType<ScrollViewer>().First();
+            Assert.True(scroll.Offset.X > 0);
+            var offset = scroll.Offset;
+            Capture(fixture.Window, $"continue-watching-scrolled-{cultureName}-{width}");
+            fixture.Key(Key.Enter);
+            Assert.True(fixture.IsModalVisible);
+            fixture.Key(Key.Escape);
+            Assert.Same(cards[^1], Focused(fixture.Window));
+            Assert.Equal(offset, scroll.Offset);
+            fixture.OpenSettings();
+            fixture.Click(fixture.Shell.FindControl<Button>("BackHomeButton")!);
+            Assert.Same(cards[^1], Focused(fixture.Window));
+            Assert.Equal(offset, scroll.Offset);
+            fixture.Input.Press(ControllerAction.Back);
+            Assert.Equal("SidebarHomeButton", Focused(fixture.Window).Name);
+            fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+            Assert.Same(cards[^1], Focused(fixture.Window));
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext);
+            Assert.Contains("media-card", Focused(fixture.Window).Classes);
+            Assert.DoesNotContain(gallery.FindControl<StackPanel>("MediaRowsPanel")!.GetVisualDescendants().OfType<Button>(),
+                button => button.DataContext is MediaLibrary);
+        });
+
+    private static byte[] CreateReviewArtwork()
+    {
+        using var bitmap = new RenderTargetBitmap(new PixelSize(720, 405));
+        using (var drawing = bitmap.CreateDrawingContext())
+        {
+            drawing.FillRectangle(new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#18394F")), new Rect(0, 0, 720, 405));
+            drawing.FillRectangle(new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#367A88")), new Rect(0, 240, 720, 165));
+            drawing.DrawEllipse(new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#E3BE76")), null, new Point(535, 100), 48, 48);
+            drawing.DrawText(new Avalonia.Media.FormattedText("Cindara UI review",
+                System.Globalization.CultureInfo.InvariantCulture, Avalonia.Media.FlowDirection.LeftToRight,
+                Avalonia.Media.Typeface.Default, 30, Avalonia.Media.Brushes.White), new Point(32, 320));
+        }
+
+        using var stream = new MemoryStream();
+        bitmap.Save(stream, PngBitmapEncoderOptions.Default);
+        return stream.ToArray();
+    }
+
+    private sealed class ContinueWatchingUiHandler(byte[] artwork) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            Assert.Equal("test-token", request.Headers.GetValues("X-Emby-Token").Single());
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.Contains("/Images/", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new ByteArrayContent(artwork) });
+            }
+
+            const string north = """{"Id":"north-6","Name":"Signals from Home","Type":"Episode","SeriesId":"north","SeriesName":"Northstar","ParentIndexNumber":1,"IndexNumber":6,"ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":42}}""";
+            const string sky = """{"Id":"sky-10","Name":"The Crossing","Type":"Episode","SeriesId":"sky","SeriesName":"Skyward","ParentIndexNumber":1,"IndexNumber":10,"ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":95}}""";
+            var json = path switch
+            {
+                "/Users/first/Items/Resume" => $$$"""
+                    {"Items":[{{{north}}},{{{sky}}},
+                    {"Id":"sky-9","Name":"Old episode","Type":"Episode","SeriesId":"sky","UserData":{"PlayedPercentage":30}},
+                    {"Id":"river-season","Name":"Season 1","Type":"Season","SeriesId":"river","SeriesName":"Riverbend","UserData":{"PlayedPercentage":20}},
+                    {"Id":"moon","Name":"Moon Garden","Type":"Movie","ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":58}}]}
+                    """,
+                "/Shows/NextUp" => $$$"""
+                    {"Items":[{{{north}}},{{{sky}}},
+                    {"Id":"river-1","Name":"First Light","Type":"Episode","SeriesId":"river","SeriesName":"Riverbend","ImageTags":{"Primary":"tag"}},
+                    {"Id":"harbor-1","Name":"The Arrival","Type":"Episode","SeriesId":"harbor","SeriesName":"Harbor Lights","ImageTags":{"Primary":"tag"}},
+                    {"Id":"orbit-1","Name":"New Horizons","Type":"Episode","SeriesId":"orbit","SeriesName":"Orbit","ImageTags":{"Primary":"tag"}},
+                    {"Id":"garden-1","Name":"A New Season","Type":"Episode","SeriesId":"garden","SeriesName":"Wild Gardens","ImageTags":{"Primary":"tag"}},
+                    {"Id":"summit-1","Name":"The Ascent","Type":"Episode","SeriesId":"summit","SeriesName":"Summit","ImageTags":{"Primary":"tag"}}]}
+                    """,
+                "/Shows/sky/Episodes" => """
+                    {"Items":[{"Id":"sky-11","Name":"Beyond the Clouds","Type":"Episode","SeriesId":"sky","SeriesName":"Skyward",
+                    "ParentIndexNumber":1,"IndexNumber":11,"ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":0}}]}
+                    """,
+                "/Users/first/Views" => """{"Items":[{"Id":"tv","Name":"TV","CollectionType":"tvshows"}]}""",
+                "/Users/first/Items" when request.RequestUri.Query.Contains("ParentId=sky&", StringComparison.Ordinal) =>
+                    """{"Items":[{"UserData":{"LastPlayedDate":"2026-09-22T15:00:00Z"}}]}""",
+                "/Users/first/Items" when request.RequestUri.Query.Contains("ParentId=north&", StringComparison.Ordinal) =>
+                    """{"Items":[{"UserData":{"LastPlayedDate":"2026-09-21T15:00:00Z"}}]}""",
+                "/Users/first/Items" => """{"Items":[]}""",
+                "/Users/first/Items/Latest" => $"[{north}]",
+                _ => throw new InvalidOperationException($"Unexpected UI test endpoint: {path}"),
+            };
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
+    [Theory]
+    [InlineData("en", 1920)]
+    [InlineData("en", 3840)]
+    [InlineData("qps-plocm", 1920)]
+    public Task LibrariesPageThroughMediaAndRestoreFocusAndScrollFromSummaryAndHome(string cultureName, int width) =>
+        TestAppBuilder.Run(async () =>
+        {
+            using var culture = new CultureScope(cultureName);
+            using var fixture = new ShellFixture(preferences: new PresentationPreferences(ReducedMotion: true));
+            fixture.Window.WindowState = WindowState.Normal;
+            fixture.Window.Width = width;
+            fixture.Window.Height = width * 9 / 16;
+            fixture.Preview.WithLibraries = true;
+            fixture.SignIn();
+            var homeLibrary = fixture.Gallery.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.DataContext is MediaLibrary { Id: "movies" });
+            fixture.Click(homeLibrary);
+            var browser = fixture.Shell.LibraryView;
+            await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+            fixture.Flush();
+            Assert.Equal("Libraries", fixture.Shell.Destination);
+            Assert.False(fixture.Shell.FindControl<StackPanel>("LibrariesUnavailable")!.IsEffectivelyVisible);
+            Assert.Equal(40, fixture.Model.LibraryBrowser!.Items.Count);
+            Assert.Equal("movie-0", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.InRange(Focused(fixture.Window).Bounds.Width / 206, 1.195, 1.205);
+            Assert.Equal(310 * 1.2, Focused(fixture.Window).Bounds.Height, precision: 6);
+            var firstPageOffset = browser.FindControl<ScrollViewer>("LibraryScroll")!.Offset;
+            fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+            Assert.Equal("movie-1", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            fixture.Flush();
+            var card = Focused(fixture.Window);
+            Assert.Equal("movie-11", Assert.IsType<MediaPreviewCardViewModel>(card.DataContext).Id);
+            AssertInsideWindow(fixture.Window, card);
+            var scroll = browser.FindControl<ScrollViewer>("LibraryScroll")!;
+            var offset = scroll.Offset;
+            Assert.True(offset.Y > 0);
+            fixture.Input.Press(ControllerAction.Accept);
+            fixture.Flush();
+            Assert.True(fixture.IsModalVisible);
+            Assert.Equal(Loc.Get("Action.Back"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
+            fixture.Input.Press(ControllerAction.Back);
+            fixture.Flush();
+            Assert.Same(card, Focused(fixture.Window));
+            Assert.Equal(offset, scroll.Offset);
+            Capture(fixture.Window, $"library-{cultureName}-{width}");
+
+            fixture.Click(fixture.Shell.FindControl<Button>("HomeNavigation")!);
+            Assert.True(fixture.Model.IsDesignGalleryVisible);
+            Assert.Same(homeLibrary, Focused(fixture.Window));
+            fixture.Click(homeLibrary);
+            Assert.Equal("movie-11", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.Same(card, Focused(fixture.Window));
+            Assert.Equal(offset, scroll.Offset);
+            Assert.Equal(1, fixture.Preview.LibraryCalls);
+
+            fixture.Click(browser.FindControl<Button>("NextLibraryPage")!);
+            await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
+            fixture.Flush();
+            Assert.Equal(7, fixture.Model.LibraryBrowser.Items.Count);
+            Assert.Equal("movie-40", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.False(browser.FindControl<Button>("NextLibraryPage")!.IsEffectivelyEnabled);
+            fixture.Click(browser.FindControl<Button>("PreviousLibraryPage")!);
+            await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
+            fixture.Flush();
+            Assert.Equal("movie-0", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.Equal(firstPageOffset, scroll.Offset);
+        });
+
+    [Fact]
+    public Task LibraryCancellationRetryAndAccountBoundaryAreExplicit() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.PauseLibrary = true;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
+        Assert.Equal("CancelLibraryLoading", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.Back);
+        await fixture.Model.LibraryBrowser!.LoadPageCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.Equal("RetryLibraryLoading", Focused(fixture.Window).Name);
+        Assert.True(fixture.Model.IsAuthenticatedVisible);
+        fixture.Preview.PauseLibrary = false;
+        fixture.Input.Press(ControllerAction.Accept);
+        await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.Equal(40, fixture.Model.LibraryBrowser!.Items.Count);
+        var oldBrowser = fixture.Model.LibraryBrowser;
+        fixture.Model.BackToSessionsCommand.Execute(null);
+        fixture.Flush();
+        Assert.Null(fixture.Model.LibraryBrowser);
+        Assert.Empty(oldBrowser.Items);
+        Assert.Equal("SavedAccountButton", Focused(fixture.Window).Name);
+    });
+
+    [Fact]
+    public Task NextUpCardsHaveWorkingSummaryAndRestoreTheirHomeFocus() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        var nextUp = fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaPreviewCardViewModel { Id: "next-up" });
+        fixture.Click(nextUp);
+        Assert.True(fixture.IsModalVisible);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(nextUp, Focused(fixture.Window));
+    });
 
     [Theory]
     [InlineData(false, "en", 1280)]
@@ -49,7 +622,7 @@ public sealed class MainWindowNavigationTests
             {
                 fixture.SignIn();
                 fixture.OpenSettings();
-                Assert.Equal(3, fixture.Shell.FindControl<StackPanel>("SettingsActions")!.Children.OfType<Button>().Count());
+                Assert.Equal(4, fixture.Shell.FindControl<StackPanel>("SettingsActions")!.Children.OfType<Button>().Count());
                 fixture.Input.Press(ControllerAction.NavigateDown);
                 fixture.Input.Press(ControllerAction.NavigateDown);
                 fixture.Input.Press(ControllerAction.NavigateDown);
@@ -160,7 +733,7 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
-    public Task SettingsHasExactlyThreeActionsAndHomeReturnDoesNotReload() => TestAppBuilder.Run(() =>
+    public Task SettingsIncludesLibraryLayoutAndHomeReturnDoesNotReload() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
@@ -169,7 +742,7 @@ public sealed class MainWindowNavigationTests
         Assert.Equal("Settings", fixture.Shell.Destination);
         Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
         var actions = fixture.Shell.FindControl<StackPanel>("SettingsActions")!.Children.OfType<Button>().ToArray();
-        Assert.Equal(new[] { Loc.Get("Language.Selection"), Loc.Get("Action.Exit"), Loc.Get("Nav.BackHome") },
+        Assert.Equal(new[] { Loc.Get("Language.Selection"), Loc.Get("LibraryLayout.Title"), Loc.Get("Action.Exit"), Loc.Get("Nav.BackHome") },
             actions.Select(button => button.Content));
         fixture.Input.Press(ControllerAction.Accept);
         Assert.True(fixture.IsModalVisible);
@@ -610,9 +1183,11 @@ public sealed class MainWindowNavigationTests
     private sealed class ShellFixture : IDisposable
     {
         public ShellFixture(bool savedAccounts = true, PresentationPreferences? preferences = null,
-            LocalDiagnostics? diagnostics = null)
+            LocalDiagnostics? diagnostics = null, IJellyfinMediaPreviewClient? mediaClient = null,
+            LibraryLayoutSettingsStore? libraryLayoutStore = null)
         {
-            Model = new MainViewModel(new ServerClient(), new AuthenticationService(savedAccounts), Preview);
+            Model = new MainViewModel(new ServerClient(), new AuthenticationService(savedAccounts), mediaClient ?? Preview,
+                libraryLayoutStore: libraryLayoutStore);
             Window = new TestMainWindow(Input, preferences, diagnostics) { DataContext = Model };
             Window.Show();
             Window.Activate();
@@ -650,6 +1225,9 @@ public sealed class MainWindowNavigationTests
 
         public void ClickContent(string text) =>
             Click(Modal.GetVisualDescendants().OfType<Button>().Single(button => Equals(button.Content, text)));
+
+        public void ClickAutomationId(string id) =>
+            Click(Modal.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetAutomationId(button) == id));
 
         public void Key(Key key, RawInputModifiers modifiers = RawInputModifiers.None)
         {
@@ -725,6 +1303,32 @@ public sealed class MainWindowNavigationTests
 
     private sealed class PreviewClient : IJellyfinMediaPreviewClient
     {
+        public Task<byte[]?> GetLibraryArtworkAsync(AuthenticatedSession session, string itemId,
+            CancellationToken cancellationToken = default) => ArtworkGate.Task.WaitAsync(cancellationToken);
+        public TaskCompletionSource<byte[]?> ArtworkGate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool ProgressiveArtwork { get; set; }
+        public void ClearImageCache() { }
+        public int LibraryCalls { get; private set; }
+        public bool WithLibraries { get; set; }
+        public bool LayoutLibraries { get; set; }
+        public bool PauseLibrary { get; set; }
+        public async Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,
+            int startIndex, CancellationToken cancellationToken = default)
+        {
+            LibraryCalls++;
+            if (PauseLibrary)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+
+            return new MediaLibraryPage(Enumerable.Range(startIndex, Math.Min(40, 47 - startIndex))
+                .Select(index => new MediaPreviewItem($"movie-{index}", $"Movie {index}", "2026", "Movie",
+                    null, null, "A media description.", "1h 5m", null)
+                {
+                    ArtworkItemId = ProgressiveArtwork ? $"movie-{index}" : null,
+                }).ToArray(), startIndex, 47);
+        }
+
         public int Calls { get; private set; }
         public bool Pause { get; set; }
         public bool Empty { get; set; }
@@ -754,7 +1358,27 @@ public sealed class MainWindowNavigationTests
             var overview = LongDescription
                 ? string.Concat(Enumerable.Repeat("A long readable media description. ", 100)) : "Your media description.";
             var item = new MediaPreviewItem("movie", "First movie", "2026", "Movie", null, null, overview, "1h 5m", 40);
-            return new MediaPreviewHome(item, [item], [new MediaPreviewRail("movies", "Movies", [item])]);
+            if (LayoutLibraries)
+            {
+                MediaLibrary[] libraries =
+                [
+                    new("tv", "TV", "tvshows"), new("collections", "Collections", "boxsets"),
+                    new("movies", "Movies", "movies"), new("people", "People", "people"), new("anime", "Anime", "tvshows"),
+                ];
+                return new MediaPreviewHome(item, [item],
+                    libraries.Select(library => new MediaPreviewRail(library.Id, library.Name,
+                        [item with { Id = library.Id, Name = library.Name }], library.Name)).ToArray())
+                {
+                    Libraries = libraries,
+                };
+            }
+
+            return new MediaPreviewHome(item,
+                WithLibraries ? [item, item with { Id = "next-up", Name = "Next episode", MediaType = "Episode" }] : [item],
+                [new MediaPreviewRail("movies", "Movies", [item])])
+            {
+                Libraries = WithLibraries ? [new MediaLibrary("movies", "Movies", "movies")] : [],
+            };
         }
     }
 

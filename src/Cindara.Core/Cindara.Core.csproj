@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <InternalsVisibleTo Include="Cindara.Core.Tests" />
+    <InternalsVisibleTo Include="Cindara.Desktop.Tests" />
   </ItemGroup>
 </Project>

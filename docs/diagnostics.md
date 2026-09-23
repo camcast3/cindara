@@ -9,7 +9,7 @@ remain user-driven and keep their existing credential transport rules.
 
 1. Reproduce the problem, then select **Diagnostics** in the login/shell footer.
    From media Home, open **Settings**, then the footer's **Diagnostics** button.
-   Settings itself still has exactly Language, Exit, and Back to Home.
+   Settings itself contains Language, Library layout, Exit, and Back to Home.
 2. Read app/.NET/Avalonia versions, platform/process architecture, the configured
    Skia renderer, SDL3 availability/count, and recent sanitized errors.
    GPU acceleration/driver details are not probed. Playback is explicitly

@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Core.Jellyfin;
 using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.ViewModels;
@@ -14,8 +15,13 @@ public partial class DesignGalleryView : UserControl
 {
     private double _heroHeight = 420;
     private Button? _focusedCard;
+    private Button? _libraryReturnFocus;
     private bool _pinAfterLayout;
     private PresentationPreferences _preferences = new();
+    private bool _rememberFocus;
+    private DesignGalleryViewModel? _gallery;
+
+    public void SuspendFocusMemory() => _rememberFocus = false;
 
     public DesignGalleryView()
     {
@@ -29,8 +35,21 @@ public partial class DesignGalleryView : UserControl
         SizeChanged += OnSizeChanged;
         DataContextChanged += (_, _) =>
         {
+            if (_gallery is not null)
+            {
+                _gallery.PropertyChanged -= OnGalleryChanged;
+            }
+
+            _gallery = DataContext as DesignGalleryViewModel;
+            if (_gallery is not null)
+            {
+                _gallery.PropertyChanged += OnGalleryChanged;
+            }
+
             HeroTextScroll.Offset = default;
             _focusedCard = null;
+            _libraryReturnFocus = null;
+            _rememberFocus = false;
         };
         HeroPanel.SizeChanged += (_, _) =>
         {
@@ -47,6 +66,18 @@ public partial class DesignGalleryView : UserControl
                 UpdateHeroArtwork();
             }
         };
+    }
+
+    private void OnGalleryChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(DesignGalleryViewModel.Libraries)
+            or nameof(DesignGalleryViewModel.RecentlyAddedLibraries))
+        {
+            _focusedCard = null;
+            MediaScrollViewer.Offset = default;
+            HeroTextScroll.Offset = default;
+            _pinAfterLayout = true;
+        }
     }
 
     public void ApplyPreferences(PresentationPreferences preferences)
@@ -83,10 +114,10 @@ public partial class DesignGalleryView : UserControl
         Resources["Gallery.HeroBodyLineHeight"] = 30 * heroScale * textScale;
         Resources["Gallery.HeroTextMargin"] = new Thickness(0, 28 * heroScale, 0, 0);
         Resources["Gallery.HeroTextSpacing"] = new Thickness(0, 0, 0, 12 * heroScale);
-        Resources["Gallery.ContinueWidth"] = 290 * scale;
-        Resources["Gallery.ContinueHeight"] = 163 * scale;
-        Resources["Gallery.PosterWidth"] = 156 * scale;
-        Resources["Gallery.PosterHeight"] = 234 * scale;
+        Resources["Gallery.ContinueWidth"] = 348 * scale;
+        Resources["Gallery.ContinueHeight"] = 195.6 * scale;
+        Resources["Gallery.PosterWidth"] = 187.2 * scale;
+        Resources["Gallery.PosterHeight"] = 280.8 * scale;
         Resources["Gallery.CardTitleSize"] = 14 * scale * textScale;
         Resources["Gallery.CardCaptionSize"] = 12 * scale * textScale;
         Resources["Gallery.ItemSpacing"] = 16 * scale;
@@ -111,7 +142,7 @@ public partial class DesignGalleryView : UserControl
 
     private void OnMediaCardFocused(object? sender, RoutedEventArgs eventArgs)
     {
-        if (sender is Button { DataContext: MediaPreviewCardViewModel item }
+        if (_rememberFocus && sender is Button { DataContext: MediaPreviewCardViewModel item }
             && DataContext is DesignGalleryViewModel gallery)
         {
             if (!ReferenceEquals(gallery.Featured, item))
@@ -145,23 +176,68 @@ public partial class DesignGalleryView : UserControl
     }
 
     public event EventHandler? SettingsRequested;
+    public event EventHandler? LibrariesRequested;
+    public event EventHandler? SearchRequested;
+    public event EventHandler<MediaLibrary>? LibraryRequested;
+    public event EventHandler<MediaPreviewCardViewModel>? ItemRequested;
 
     public Control HomeNavigation => SidebarHomeButton;
 
-    public bool FocusHomeContent()
+    public bool RestoreHomeFocus()
     {
-        if (_focusedCard is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true })
+        var shortcut = _libraryReturnFocus;
+        _libraryReturnFocus = null;
+        if (shortcut is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true }
+            && shortcut.GetVisualAncestors().Contains(this)
+            && shortcut.Focus(NavigationMethod.Directional))
         {
-            return _focusedCard.Focus(NavigationMethod.Directional);
+            _rememberFocus = true;
+            shortcut.BringIntoView();
+            return true;
         }
 
-        var rows = GetMediaRows().ToArray();
-        return rows.Length > 0 ? FocusMediaRow(rows[0]) : SidebarHomeButton.Focus(NavigationMethod.Directional);
+        return FocusHomeContent();
+    }
+
+    public bool FocusHomeContent()
+    {
+        bool focused;
+        if (_focusedCard is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true })
+        {
+            focused = _focusedCard.Focus(NavigationMethod.Directional);
+        }
+        else
+        {
+            var rows = GetMediaRows().ToArray();
+            focused = rows.Length > 0 ? FocusMediaRow(rows[0]) : SidebarHomeButton.Focus(NavigationMethod.Directional);
+        }
+
+        _rememberFocus = true;
+        return focused;
     }
 
     private void OnHomeClicked(object? sender, RoutedEventArgs args) => FocusHomeContent();
 
     private void OnSettingsClicked(object? sender, RoutedEventArgs args) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+    private void OnLibrariesClicked(object? sender, RoutedEventArgs args) => LibrariesRequested?.Invoke(this, EventArgs.Empty);
+    private void OnSearchClicked(object? sender, RoutedEventArgs args) => SearchRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnLibraryClicked(object? sender, RoutedEventArgs args)
+    {
+        if (sender is Button { DataContext: MediaLibrary library })
+        {
+            _libraryReturnFocus = (Button)sender;
+            LibraryRequested?.Invoke(this, library);
+        }
+    }
+
+    private void OnCardClicked(object? sender, RoutedEventArgs args)
+    {
+        if (sender is Button { DataContext: MediaPreviewCardViewModel item })
+        {
+            ItemRequested?.Invoke(this, item);
+        }
+    }
 
     public void ScrollDescription(bool forward)
     {

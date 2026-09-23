@@ -10,9 +10,14 @@ translations must retain these contracts as they are implemented.
 The login screen and **Settings** expose **Language: English**, with
 English as the only supported choice. The selected language is exposed in
 visible text and automation state. The signed-in Settings screen contains only
-**Language: English**, **Exit**, and **Back to Home**, with consistently centered
+**Language: English**, **Library layout**, **Exit**, and **Back to Home**, with consistently centered
 button labels. Account, display, input, and appearance settings are deferred to
 [the expanded settings feature request](https://github.com/camcast3/cindara/issues/27).
+Library layout uses separate focus-trapped sidebar/Home editors. Each library
+has an explicit Hide/Show action. Shown/Hidden states are exposed as text and
+automation item status; each library's Move
+up/down buttons have distinct accessible names. Reordering preserves logical
+focus on the moved library, and Save/Cancel returns to the Settings launcher.
 There is no intermediate Home/preview launcher or top Home/Trending/Activity/Profile
 bar. Back/Escape in media Home moves focus to its single Home navigation action.
 The login/shell footer also offers **Diagnostics**, separate from Settings actions.

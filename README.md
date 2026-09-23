@@ -14,13 +14,30 @@ Windows, or Keychain on macOS; rejected tokens remove only the affected
 account and return it to sign-in.
 
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
-Settings. Library/search/download content remains explicitly unavailable until
-its roadmap work lands. Signing in opens the current media Home directly, without
+Settings. Home includes a single Continue Watching row and recently added media
+from the selected libraries, with no generic Libraries shortcut row. Open libraries
+from the sidebar or library chooser. Libraries open alphabetically sorted, 40-item
+poster pages with explicit Previous/Next controls rather than loading the
+entire collection. Selecting a card opens a read-only summary; Back restores
+the card and scroll position. Full details, episode navigation, search, and
+downloads remain deferred to their roadmap work. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
-Settings contains exactly **Language: English**, **Exit**, and **Back to Home**.
-Expanded account, display, input, and appearance settings are deferred to
-[the settings feature request](https://github.com/camcast3/cindara/issues/27).
+Settings contains **Language: English**, **Library layout**, **Exit**, and **Back to Home**.
+Library layout has independent ordered selections for sidebar shortcuts and Home
+libraries. Use each library's Hide/Show and Move up/Move down buttons, then Save layout; Cancel
+discards the draft. Defaults are TV libraries, Movies, then Anime. Choices are
+saved separately for each account/server address on this device under
+`library-layouts` in Cindara's local application data. They do not change Jellyfin
+permissions or other devices. Save failures preserve the active layout; unreadable
+settings show a warning before the user chooses to replace them.
+Only Jellyfin movie and TV-show library types are offered for browsing or layout
+selection (including Anime libraries using the TV-show type). Unsupported views
+such as Collections and People are omitted, and no latest-media requests are made
+for them. Previously saved selections cannot bring unsupported views back.
+Minimal account switching, logout, and fullscreen/windowed controls are tracked
+separately in [the settings feature request](https://github.com/camcast3/cindara/issues/27);
+expanded settings categories, input, and appearance preferences remain deferred.
 The separate login/shell footer **Diagnostics** action shows local technical
 details and sanitized errors, with an explicit support-bundle preview and export.
 It makes no diagnostic network requests or uploads. Logs are capped at 1 MiB
@@ -40,10 +57,51 @@ expanded and right-to-left pseudo-localization modes.
 See [accessibility and localization](docs/accessibility.md) for defaults,
 limitations, validation, and the keyboard/screen-reader release checklist.
 
-Home loading overlaps metadata and artwork with at most six requests in flight,
-deduplicates images within that load, and has a 30-second overall deadline.
+Home loads metadata and artwork with at most six requests in flight and a
+30-second overall deadline. Library metadata has the same deadline, but the
+grid appears immediately without waiting for posters. Up to six poster requests
+then run in the background, each with a 15-second request timeout; navigation,
+card summaries, and paging remain available. Failed/missing posters show an
+explicit placeholder and **Retry missing artwork**, without discarding the page.
+Leaving the library, paging, or changing accounts cancels the old artwork work.
+Library pages do not eagerly fetch hero backdrops. Duplicate images share a
+request within each load.
+An in-memory LRU artwork cache holds at most 128 entries / 32 MiB and uses a
+five-minute **cache-wide expiry window**, checked on lookup. The first lookup
+after the deadline clears the cache and starts a new window; an image added near
+the deadline can therefore expire sooner than five minutes after insertion.
+This is not a per-image minimum lifetime. Per-image expiry is deferred to
+[the caching follow-up](https://github.com/camcast3/cindara/issues/10).
+The cache is isolated to the exact authenticated session (including its token).
+Account changes, sign-out, and shutdown clear it; no artwork is cached on disk.
+An artwork decode failure also clears the reusable image cache so Retry can fetch
+fresh bytes rather than repeatedly decoding the same corrupt response. Existing
+displayed cards/images are retained, and ordinary network failures do not clear it.
+Each HTTP response is limited to 8 MiB.
+Continue Watching combines Jellyfin resume and next-up results into at most 20
+cards, with only one episode per series. The most recently played resume episode
+takes priority; below 90% watched it resumes, while at or above 90% it advances
+to the following unplayed episode in Jellyfin's episode order. Completed movies
+are omitted. The rule uses existing Jellyfin APIs, requires no plugin, and does
+not mark anything watched or alter server progress. Unstarted shows are not
+suggested by the next-up query. Only movies and episodes qualify; series and season
+containers are excluded. Selection happens before artwork is downloaded.
+The whole row is ordered newest-first by the last playback anywhere in each
+series (including completed episodes and rewatches), not by the unplayed next
+episode or by whether a card is resumable. Movies use their own last-played
+timestamp. Equal timestamps keep server order; missing timestamps sort last.
+For two or more candidate series, one bounded request reads the 200 most recently
+played episode records and supplies timestamps for matching series. Only series
+absent from that activity window need an exact per-series lookup; one-series
+loads use that lookup directly. All lookups share the existing six-request cap
+and 30-second Home deadline. The candidate set is not trimmed before ranking.
 **Cancel loading** or Back/Escape cancels the request; failures retain sign-in and
-offer Retry (except a rejected session, which returns to sign-in). Returning
+offer Retry (except a rejected session, which returns to sign-in). An unsuccessful
+page change keeps the previous page and retries the failed offset. This includes
+a library shrinking so the requested page is now past its end; Previous page
+remains available to recover without replacing the last useful page with an empty
+result. Empty libraries
+and missing artwork have visible states. Returning
 from Settings reuses the current account's loaded Home instead of downloading
 it again. Account switching and sign-out clear that data.
 

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Cindara.Desktop.ViewModels"
+             xmlns:core="using:Cindara.Core.Jellyfin"
              xmlns:loc="using:Cindara.Desktop.Localization"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -23,17 +24,17 @@
         <x:Double x:Key="Gallery.HeroBodyLineHeight">30</x:Double>
         <Thickness x:Key="Gallery.HeroTextMargin">0,28,0,0</Thickness>
         <Thickness x:Key="Gallery.HeroTextSpacing">0,0,0,12</Thickness>
-        <x:Double x:Key="Gallery.ContinueWidth">290</x:Double>
-        <x:Double x:Key="Gallery.ContinueHeight">163</x:Double>
-        <x:Double x:Key="Gallery.PosterWidth">156</x:Double>
-        <x:Double x:Key="Gallery.PosterHeight">234</x:Double>
+        <x:Double x:Key="Gallery.ContinueWidth">348</x:Double>
+        <x:Double x:Key="Gallery.ContinueHeight">195.6</x:Double>
+        <x:Double x:Key="Gallery.PosterWidth">187.2</x:Double>
+        <x:Double x:Key="Gallery.PosterHeight">280.8</x:Double>
         <x:Double x:Key="Gallery.CardTitleSize">14</x:Double>
         <x:Double x:Key="Gallery.CardCaptionSize">12</x:Double>
         <x:Double x:Key="Gallery.ItemSpacing">16</x:Double>
     </UserControl.Resources>
 
     <Grid Background="{DynamicResource Cindara.Brush.Background}"
-          ColumnDefinitions="74,*">
+          ColumnDefinitions="96,*">
         <Border Grid.Column="0"
                 Padding="10,24"
                 Background="{DynamicResource Cindara.Brush.Background}">
@@ -49,12 +50,12 @@
                                Foreground="{DynamicResource Cindara.Brush.OnAccent}"
                                Text="{loc:Tr Brand.Monogram}" />
                 </Border>
-                <StackPanel Grid.Row="1"
-                            VerticalAlignment="Center"
-                            Spacing="12">
+                <ScrollViewer Grid.Row="1" VerticalAlignment="Center"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Hidden">
+                <StackPanel Spacing="12">
                     <Button Width="52"
                             AutomationProperties.Name="{loc:Tr Nav.Search}"
-                            AutomationProperties.HelpText="{loc:Tr Gallery.PreviewOnly}"
+                            Click="OnSearchClicked"
                             Classes="nav"
                             ToolTip.Tip="{loc:Tr Nav.Search}">
                         <PathIcon Width="22"
@@ -73,43 +74,32 @@
                                  Height="22"
                                  Data="M12,3 2,12 5,12 5,21 10,21 10,15 14,15 14,21 19,21 19,12 22,12 Z" />
                     </Button>
-                    <Button Width="52"
-                            AutomationProperties.Name="{loc:Tr Gallery.Saved}"
-                            AutomationProperties.HelpText="{loc:Tr Gallery.PreviewOnly}"
+                    <Button x:Name="GalleryLibrariesButton" Width="52"
+                            AutomationProperties.Name="{loc:Tr Nav.Libraries}"
+                            Click="OnLibrariesClicked"
                             Classes="nav"
-                            ToolTip.Tip="{loc:Tr Gallery.Saved}">
-                        <PathIcon Width="22"
-                                 Height="22"
-                                 Data="M7,3 C5.9,3 5,3.9 5,5 L5,21 12,18 19,21 19,5 C19,3.9 18.1,3 17,3 Z" />
-                    </Button>
-                    <Button Width="52"
-                            AutomationProperties.Name="{loc:Tr Gallery.Shows}"
-                            AutomationProperties.HelpText="{loc:Tr Gallery.PreviewOnly}"
-                            Classes="nav"
-                            ToolTip.Tip="{loc:Tr Gallery.Shows}">
+                            ToolTip.Tip="{loc:Tr Nav.Libraries}">
                         <PathIcon Width="22"
                                  Height="22"
                                  Data="M4,3 C2.3,3 1,4.3 1,6 L1,16 C1,17.7 2.3,19 4,19 L9,19 9,21 6,21 6,23 18,23 18,21 15,21 15,19 20,19 C21.7,19 23,17.7 23,16 L23,6 C23,4.3 21.7,3 20,3 Z M4,5 20,5 Q21,5 21,6 L21,16 Q21,17 20,17 L4,17 Q3,17 3,16 L3,6 Q3,5 4,5 Z" />
                     </Button>
-                    <Button Width="52"
-                            AutomationProperties.Name="{loc:Tr Gallery.Movies}"
-                            AutomationProperties.HelpText="{loc:Tr Gallery.PreviewOnly}"
-                            Classes="nav"
-                            ToolTip.Tip="{loc:Tr Gallery.Movies}">
-                        <PathIcon Width="22"
-                                 Height="22"
-                                 Data="M4,4 6,8 9,8 7,4 10,4 12,8 15,8 13,4 16,4 18,8 21,8 19,4 20,4 C21.1,4 22,4.9 22,6 L22,19 C22,20.1 21.1,21 20,21 L4,21 C2.9,21 2,20.1 2,19 L2,6 C2,4.9 2.9,4 4,4 Z M4,10 4,19 20,19 20,10 Z" />
-                    </Button>
-                    <Button Width="52"
-                            AutomationProperties.Name="{loc:Tr Gallery.Anime}"
-                            AutomationProperties.HelpText="{loc:Tr Gallery.PreviewOnly}"
-                            Classes="nav"
-                            ToolTip.Tip="{loc:Tr Gallery.Anime}">
-                        <PathIcon Width="22"
-                                 Height="22"
-                                 Data="F1 M1,2 Q12,5 23,2 L23,4 Q12,7 1,4 Z M3,7 H21 V9 H19 L20,23 H17 L16,9 H8 L7,23 H4 L5,9 H3 Z M10.8,5 H13.2 V8 H10.8 Z" />
-                    </Button>
+                    <ItemsControl x:Name="GalleryLibraryShortcuts" ItemsSource="{Binding SidebarLibraries}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="core:MediaLibrary">
+                                <Button Width="74" MinHeight="48" Classes="nav" Click="OnLibraryClicked"
+                                        AutomationProperties.Name="{Binding Name}" ToolTip.Tip="{Binding Name}">
+                                    <TextBlock Text="{Binding Name}" FontSize="14" MaxWidth="68"
+                                               TextWrapping="Wrap" TextAlignment="Center" MaxLines="2"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
+                </ScrollViewer>
                 <Button x:Name="GallerySettingsButton" Grid.Row="2"
                         Width="52"
                         AutomationProperties.Name="{loc:Tr Nav.Settings}"
@@ -175,28 +165,32 @@
                               Width="{DynamicResource Gallery.HeroContentWidth}"
                               Margin="{DynamicResource Gallery.HeroTextMargin}"
                               HorizontalAlignment="Left"
-                              RowDefinitions="Auto,Auto,Auto,Auto"
+                              RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                               Background="{DynamicResource Cindara.Brush.Background}">
-                            <TextBlock Classes="display"
+                            <TextBlock Text="{Binding LibraryLayoutWarning}"
+                                       IsVisible="{Binding HasLibraryLayoutWarning}" TextWrapping="Wrap"
+                                       FontSize="{DynamicResource Gallery.HeroBodySize}"
+                                       Margin="{DynamicResource Gallery.HeroTextSpacing}" />
+                            <TextBlock Grid.Row="1" Classes="display"
                                        Margin="{DynamicResource Gallery.HeroTextSpacing}"
                                        FontSize="{DynamicResource Gallery.HeroTitleSize}"
                                        LineHeight="{DynamicResource Gallery.HeroTitleLineHeight}"
                                        Text="{Binding Featured.HeroName}"
                                        TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="1"
+                            <TextBlock Grid.Row="2"
                                        Margin="{DynamicResource Gallery.HeroTextSpacing}"
                                        Foreground="{DynamicResource Cindara.Brush.AccentStrong}"
                                        FontSize="{DynamicResource Gallery.HeroSubtitleSize}"
                                        FontWeight="SemiBold"
                                        Text="{Binding Featured.HeroSubtitle}"
                                        TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="2"
+                            <TextBlock Grid.Row="3"
                                        Classes="caption"
                                        Margin="{DynamicResource Gallery.HeroTextSpacing}"
                                        FontSize="{DynamicResource Gallery.HeroBodySize}"
                                        Text="{Binding Featured.Details}"
                                        TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="3"
+                            <TextBlock Grid.Row="4"
                                        VerticalAlignment="Top"
                                        FontSize="{DynamicResource Gallery.HeroBodySize}"
                                        LineHeight="{DynamicResource Gallery.HeroBodyLineHeight}"
@@ -229,7 +223,7 @@
                         <TextBlock Classes="heading" Text="{loc:Tr Gallery.ContinueWatching}" />
                         <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                       VerticalScrollBarVisibility="Disabled">
-                            <ItemsControl Classes="media-row" ItemsSource="{Binding ContinueWatching}">
+                            <ItemsControl x:Name="ContinueWatchingRow" Classes="media-row" ItemsSource="{Binding ContinueWatching}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal"
@@ -246,10 +240,13 @@
                                                     Classes="card continue-card"
                                                     AutomationProperties.Name="{Binding Name}"
                                                     AutomationProperties.HelpText="{Binding Subtitle}"
+                                                    Click="OnCardClicked"
                                                     GotFocus="OnMediaCardFocused">
                                                 <Border ClipToBounds="True"
                                                         CornerRadius="{DynamicResource Cindara.Radius.Medium}">
                                                     <Grid>
+                                                        <TextBlock Text="{loc:Tr Library.ArtworkUnavailable}" IsVisible="{Binding !HasArtwork}"
+                                                                   TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                         <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
                                                         <ProgressBar Height="3"
                                                                      AutomationProperties.Name="{loc:Tr Gallery.Progress}"
@@ -278,6 +275,7 @@
                         </ScrollViewer>
                     </StackPanel>
 
+                    <TextBlock Classes="secondary" Text="{loc:Tr Home.Empty}" IsVisible="{Binding IsEmpty}" TextWrapping="Wrap" />
                     <ItemsControl ItemsSource="{Binding RecentlyAddedLibraries}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -307,11 +305,15 @@
                                                                 Classes="card media-card"
                                                                 AutomationProperties.Name="{Binding Name}"
                                                                 AutomationProperties.HelpText="{Binding Subtitle}"
+                                                                Click="OnCardClicked"
                                                                 GotFocus="OnMediaCardFocused">
                                                             <Border ClipToBounds="True"
                                                                     CornerRadius="{DynamicResource Cindara.Radius.Medium}">
-                                                                <Image Source="{Binding Artwork}"
-                                                                       Stretch="UniformToFill" />
+                                                                <Grid>
+                                                                    <TextBlock Text="{loc:Tr Library.ArtworkUnavailable}" IsVisible="{Binding !HasArtwork}"
+                                                                               TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                    <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
+                                                                </Grid>
                                                             </Border>
                                                         </Button>
                                                         <TextBlock Margin="4,0"

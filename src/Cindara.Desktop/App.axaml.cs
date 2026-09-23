@@ -7,6 +7,7 @@ using Cindara.Core.Diagnostics;
 using Cindara.Core.Jellyfin;
 using Cindara.Desktop.Authentication;
 using Cindara.Desktop.Input;
+using Cindara.Desktop.Libraries;
 using Cindara.Desktop.Localization;
 using Cindara.Desktop.ViewModels;
 using Cindara.Desktop.Views;
@@ -53,7 +54,8 @@ public partial class App : Application
             var viewModel = new MainViewModel(
                 new JellyfinServerClient(httpClient),
                 authenticationService,
-                mediaPreviewClient, diagnostics);
+                mediaPreviewClient, diagnostics,
+                new LibraryLayoutSettingsStore(Path.Combine(applicationData, "library-layouts")));
             desktop.Exit += (_, _) =>
             {
                 viewModel.Dispose();

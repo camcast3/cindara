@@ -12,4 +12,7 @@ public sealed record MediaPreviewItem(
     double? PlaybackProgress,
     string? HeroName = null,
     string? HeroSubtitle = null,
-    MediaPreviewMetadata? Metadata = null);
+    MediaPreviewMetadata? Metadata = null)
+{
+    public string? ArtworkItemId { get; init; }
+}

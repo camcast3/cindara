@@ -15,25 +15,26 @@ offline media ships so later work does not destabilize navigation order.
 Details are entered from content rather than added to the rail. Playback is a
 temporary full-screen layer.
 
-The approved authenticated preview uses a compact icon rail with Search, Home,
-Saved, TV, Movies, Anime, and Settings. The product owner removed the speculative
+The authenticated Home uses a compact icon rail with Search, Home,
+Libraries, and Settings. The product owner removed the speculative
 Home/Trending/Activity/Profile top bar. Home focuses the media content and Settings
-opens the signed-in settings; other preview icons remain placeholders.
-The production shell implements the five destinations above; library content,
-details, and playback flows remain assigned to #3, #5, and #4.
+opens the signed-in settings. Libraries use the account's actual server-provided
+entries rather than hard-coded TV/Movie/Anime shortcuts. Search leads to its
+explicit unavailable state. Full details and playback remain assigned to #5 and #4.
 
 ## Implemented shell navigation
 
 `ShellView` owns the production frame, not browsing data. Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
-There is no intermediate preview launcher or redundant Home-screen back button. Libraries,
-Search, and Downloads show honest unavailable-content states and retain rail
-focus. Settings exposes exactly Language: English, Exit, and Back to Home;
-initial focus is Language. Up/down traverses the three actions, and left
+There is no intermediate preview launcher or redundant Home-screen back button.
+Libraries opens paged browsing; Search and Downloads show honest unavailable-content
+states and retain rail focus. Settings exposes Language: English, Library layout, Exit, and Back to Home;
+initial focus is Language. Up/down traverses these actions, and left
 returns to the rail. Button labels are centered with consistent padding.
 Entering Settings from another screen resets focus to Language; moving between
 its actions, language dialog, and rail preserves focus within the same visit.
-Expanded settings are deferred to [#27](https://github.com/camcast3/cindara/issues/27).
+Minimal account/window controls are tracked separately in [#27](https://github.com/camcast3/cindara/issues/27);
+expanded settings remain deferred.
 
 The rail expands on focus or hover and collapses to original vector icons when
 content is focused. Up/down follows Home, Libraries, Search, Downloads, Settings
@@ -144,6 +145,14 @@ inside the safe area. Hero artwork carries a dark Cindara gradient so text
 remains readable. Dialogs dim, but do not blur, the context. Toasts do not take
 focus. Skeletons preserve final geometry and respect reduced motion.
 
+Media cards are 20% wider and taller than the initial browsing slice. Before
+viewport scaling, Home landscape cards are 348 x 195.6 and Home posters are
+187.2 x 280.8 logical pixels. Library-grid posters are 247.2 x 372 logical
+pixels in the existing shell coordinate system. Text sizes, spacing, and viewport
+scaling remain unchanged. Short windows reduce the hero's height to leave room
+for a full poster, its labels, and input hints; 1080p/ultrawide/4K hero geometry
+is unchanged.
+
 `DesignGalleryView.axaml` supplies the current authenticated Home preview with a
 navigation rail, hero, landscape cards, and poster rails. The reusable
 styles also define dialog, toast, empty-state actions, and loading skeleton
@@ -208,13 +217,24 @@ heading position. Automatic vertical bring-into-view is suppressed to avoid a
 snap before the transition; horizontal card visibility remains automatic.
 
 The preview has a single Home navigation action in the sidebar. Settings opens
-the three-action settings panel; returning Home preserves the
+the compact settings panel; returning Home preserves the
 loaded media and focused card. The top tab bar has been removed pending a
 product decision about its purpose.
-TV uses a screen-and-stand glyph; Anime has its own torii gate glyph, accessible
-name, and tooltip rather than sharing the TV icon.
-Both the sidebar's library icons and recently-added rows use TV, Movies, Anime
-order; Continue Watching stays first. Anime libraries are distinguished by
+Continue Watching stays first and combines resume and next-up episodes into one
+row, followed directly by the configured recently-added media rows. Library
+entry points live only in the sidebar/chooser, never in a generic Home row.
+Each series appears at most once: the most
+recent resume episode below 90% watched wins, otherwise the next unplayed episode
+in Jellyfin's order is shown. Movies at or above 90% watched are omitted.
+This client-side display rule does not change server playback progress.
+The row is ordered by each series' latest playback, newest first, with resumed
+and next episodes mixed together. Movies use their own last-played timestamp;
+missing timestamps sort last and ties retain server order.
+Activity timestamps are batched from up to 200 recent episode records when
+multiple series are candidates, with exact lookups only for missing series.
+This avoids a request per series in the common case without dropping candidates
+before the newest-first sort. A one-series load skips the extra batch request.
+Recently-added rows use TV, Movies, Anime order. Anime libraries are distinguished by
 their name because Jellyfin normally reports them as `tvshows`. Separate
 libraries within each group retain the server's order and are never merged.
 
@@ -228,9 +248,12 @@ layout for display migration; its DPI-change behavior has headless coverage.
 Startup uses the OS-selected display rather than persisting a display preference.
 
 This gallery intentionally caps rows at 20 items and preloads a bounded subset
-of recently-added backdrops, falling back to card artwork elsewhere. Full
-library destinations, playback, mutations, paging, and production image caching
-are not implemented here. Metadata and artwork overlap under a six-request cap,
+of recently-added backdrops, falling back to card artwork elsewhere. Library
+destinations publish at most 40 metadata cards per page without waiting for
+artwork or preloading backdrops. Six background workers progressively fill the
+existing cards, preserving focus. Poster requests keep a 15-second timeout;
+failure leaves the grid usable and offers an explicit artwork-only retry.
+Playback and mutations are not implemented here. Metadata and artwork overlap under a six-request cap,
 images are deduplicated within the request, and a 30-second deadline prevents
 unbounded loading. Cancel loading/Back stops the request and enables Retry.
 Loading Home initially focuses Cancel loading, and moving right from the Home
@@ -247,19 +270,33 @@ partially decoded images. Gallery replacement is transactional: a failed load
 does not dispose the previous gallery before the replacement is ready. Ending
 authentication, switching accounts/servers, or exiting the app disposes and
 clears the old gallery; merely returning from the preview to the same account
-retains it until replacement or authentication ends.
+retains it until replacement or authentication ends. The session-scoped in-memory
+image LRU is capped at 128 entries / 32 MiB with a five-minute cache-wide expiry
+window. A lookup after its deadline clears all entries and starts a new window,
+so recently inserted images may expire sooner; there is no per-image minimum
+lifetime. Per-image expiry is deferred to #10. Authentication boundaries also
+discard the cache. HTTP responses are capped at 8 MiB.
 
 ### Library
 
 ```text
-[Rail]  [Library title] [Filter] [Sort]
-        [Poster] [Poster] [Poster] [Poster]
-        [Poster] [Poster] [Poster] [Poster]
+[Rail]  Libraries
+        [Library choices]
+        [Selected library / loading or error state]
+        [Poster] [Poster] [Poster] [Poster] [Poster]
+        [Previous page] [Item range / total] [Next page]
 ```
 
-Initial focus: first poster, or Filter when the grid is empty. The grid moves
-spatially; up from row one reaches Filter, then Sort to its right. Left from
-column one enters Libraries in the rail. Paging preserves the nearest column.
+Initial focus: first poster, library choice if empty, Cancel while loading, or
+Retry after a failed/canceled metadata request. Artwork loading does not disable
+the grid or pagination; it has separate loading/cancel/retry controls.
+Left/right stays within a grid row; up/down
+moves five cards. Up from row one reaches the library choices; left from column
+one enters Libraries in the rail (mirrored for RTL). Paging focuses the first
+card of the new page. The grid keeps only the current page's decoded artwork.
+Selecting a card opens a read-only metadata summary; Back restores the exact
+card and scroll position. Returning from Home or Settings reuses the page.
+Sorting is alphabetical; configurable filters/sorting are not exposed.
 
 ### Details
 
@@ -291,14 +328,32 @@ an explanatory empty state and returns up to the field.
 ```text
 [Rail]  Settings
         [Language: English]
+        [Library layout]
         [Exit]
         [Back to Home]
 ```
 
-Initial focus: Language. Up/down moves between the three actions; left returns
+Initial focus: Language. Up/down moves between the actions; left returns
 to the rail. The language picker traps focus until selection or Back and currently
 offers English only. Exit closes the app, while Back to Home restores media
 without a new load. No category navigation or expanded settings are exposed yet.
+
+Library layout opens a choice between Sidebar libraries and Home libraries.
+Each editor has explicit Hide/Show and Move up/down actions for every available
+server library, followed by Save layout and Cancel. Both orders are independent
+and saved per account, server ID, and canonical server address on this device.
+Defaults show TV, Movies, then Anime; saved empty lists remain empty and newly
+discovered libraries stay hidden until selected. Changing a sidebar list does
+not change Home, and vice versa. Cancel never applies the draft.
+
+Both the Home and browsing sidebars expose the configured library shortcuts.
+Only supported movie/TV library types are offered; Collections, People, and other
+unsupported views are excluded from the chooser and both layout editors, even
+when an older saved layout includes their IDs. Filtering uses Jellyfin's type,
+not the displayed library name.
+They scroll when needed. Home filters and orders its existing loaded rows without
+re-fetching media; resources for hidden rows remain owned until the gallery is
+disposed. Layout changes recover focus if the previously focused row was hidden.
 
 ### Playback overlay
 
