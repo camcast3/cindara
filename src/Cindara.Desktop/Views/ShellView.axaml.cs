@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using Cindara.Core.Jellyfin;
 using Cindara.Desktop.Localization;
 
 namespace Cindara.Desktop.Views;
@@ -25,6 +26,8 @@ public partial class ShellView : UserControl
     public event EventHandler? DestinationChanged;
     public event EventHandler? ExitRequested;
     public event EventHandler? LanguageRequested;
+    public event EventHandler? LibraryLayoutRequested;
+    public event EventHandler<MediaLibrary>? LibraryRequested;
     public string Destination => _destination;
     public Control? HomeLoadingAction { get; set; }
     private bool IsHomeLoading => _destination == "Home"
@@ -99,7 +102,7 @@ public partial class ShellView : UserControl
         }
 
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
-        var buttons = NavigationButtons.Children.OfType<Button>().ToArray();
+        var buttons = NavigationButtons.GetVisualDescendants().OfType<Button>().ToArray();
         var index = Array.FindIndex(buttons, button => button == focused);
         if (index >= 0)
         {
@@ -109,6 +112,7 @@ public partial class ShellView : UserControl
                 case NavigationDirection.Down:
                     buttons[Math.Clamp(index + (direction == NavigationDirection.Up ? -1 : 1), 0, buttons.Length - 1)]
                         .Focus(NavigationMethod.Directional);
+                    (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control)?.BringIntoView();
                     return true;
                 case NavigationDirection.Left:
                     return true;
@@ -169,4 +173,15 @@ public partial class ShellView : UserControl
 
     private void OnLanguageClicked(object? sender, RoutedEventArgs args) =>
         LanguageRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnLibraryLayoutClicked(object? sender, RoutedEventArgs args) =>
+        LibraryLayoutRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnLibraryClicked(object? sender, RoutedEventArgs args)
+    {
+        if (sender is Button { DataContext: MediaLibrary library })
+        {
+            LibraryRequested?.Invoke(this, library);
+        }
+    }
 }

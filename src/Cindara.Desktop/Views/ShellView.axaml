@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Cindara.Desktop.ViewModels"
              xmlns:views="using:Cindara.Desktop.Views"
+             xmlns:core="using:Cindara.Core.Jellyfin"
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.ShellView"
              x:DataType="vm:MainViewModel">
@@ -35,6 +36,9 @@
                         <Button x:Name="SettingsLanguageButton" Classes="settings-action"
                                 HorizontalAlignment="Stretch"
                                 Content="{loc:Tr Language.Selection}" Click="OnLanguageClicked" />
+                        <Button x:Name="SettingsLibraryLayoutButton" Classes="settings-action"
+                                HorizontalAlignment="Stretch" IsEnabled="{Binding HasLibraryLayout}"
+                                Content="{loc:Tr LibraryLayout.Title}" Click="OnLibraryLayoutClicked" />
                         <Button x:Name="ExitButton" Classes="settings-action"
                                 HorizontalAlignment="Stretch"
                                 Content="{loc:Tr Action.Exit}" Click="OnExitClicked" />
@@ -59,6 +63,7 @@
         <Border x:Name="NavigationRail" Width="88" HorizontalAlignment="Left"
                 VerticalAlignment="Top" Background="{DynamicResource Cindara.Brush.Surface}"
                 CornerRadius="{DynamicResource Cindara.Radius.Medium}">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Hidden">
             <StackPanel x:Name="NavigationButtons" Spacing="16" Margin="8">
                 <Button x:Name="HomeNavigation" Classes="nav selected" Tag="Home" Click="OnDestinationClicked"
                         AutomationProperties.Name="{loc:Tr Nav.Home}" ToolTip.Tip="{loc:Tr Nav.Home}" HorizontalAlignment="Stretch">
@@ -81,6 +86,20 @@
                         <TextBlock Text="{loc:Tr Nav.Search}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
                     </StackPanel>
                 </Button>
+                <ItemsControl x:Name="ShellLibraryShortcuts" ItemsSource="{Binding SidebarLibraries}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Spacing="16" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="core:MediaLibrary">
+                            <Button Classes="nav" HorizontalAlignment="Stretch" Click="OnLibraryClicked"
+                                    AutomationProperties.Name="{Binding Name}" ToolTip.Tip="{Binding Name}">
+                                <TextBlock Text="{Binding Name}" FontSize="16" TextWrapping="Wrap"
+                                           TextAlignment="Center" MaxWidth="240" Margin="4" />
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
                 <Button x:Name="DownloadsNavigation" Classes="nav" Tag="Downloads" Click="OnDestinationClicked"
                         AutomationProperties.Name="{loc:Tr Nav.Downloads}" ToolTip.Tip="{loc:Tr Nav.Downloads}" HorizontalAlignment="Stretch">
                     <StackPanel Orientation="Horizontal" Spacing="16">
@@ -96,6 +115,7 @@
                     </StackPanel>
                 </Button>
             </StackPanel>
+            </ScrollViewer>
         </Border>
     </Grid>
 </UserControl>

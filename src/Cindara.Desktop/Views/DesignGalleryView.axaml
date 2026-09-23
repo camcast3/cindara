@@ -34,7 +34,7 @@
     </UserControl.Resources>
 
     <Grid Background="{DynamicResource Cindara.Brush.Background}"
-          ColumnDefinitions="74,*">
+          ColumnDefinitions="96,*">
         <Border Grid.Column="0"
                 Padding="10,24"
                 Background="{DynamicResource Cindara.Brush.Background}">
@@ -50,9 +50,9 @@
                                Foreground="{DynamicResource Cindara.Brush.OnAccent}"
                                Text="{loc:Tr Brand.Monogram}" />
                 </Border>
-                <StackPanel Grid.Row="1"
-                            VerticalAlignment="Center"
-                            Spacing="12">
+                <ScrollViewer Grid.Row="1" VerticalAlignment="Center"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Hidden">
+                <StackPanel Spacing="12">
                     <Button Width="52"
                             AutomationProperties.Name="{loc:Tr Nav.Search}"
                             Click="OnSearchClicked"
@@ -83,7 +83,23 @@
                                  Height="22"
                                  Data="M4,3 C2.3,3 1,4.3 1,6 L1,16 C1,17.7 2.3,19 4,19 L9,19 9,21 6,21 6,23 18,23 18,21 15,21 15,19 20,19 C21.7,19 23,17.7 23,16 L23,6 C23,4.3 21.7,3 20,3 Z M4,5 20,5 Q21,5 21,6 L21,16 Q21,17 20,17 L4,17 Q3,17 3,16 L3,6 Q3,5 4,5 Z" />
                     </Button>
+                    <ItemsControl x:Name="GalleryLibraryShortcuts" ItemsSource="{Binding SidebarLibraries}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="core:MediaLibrary">
+                                <Button Width="74" MinHeight="48" Classes="nav" Click="OnLibraryClicked"
+                                        AutomationProperties.Name="{Binding Name}" ToolTip.Tip="{Binding Name}">
+                                    <TextBlock Text="{Binding Name}" FontSize="14" MaxWidth="68"
+                                               TextWrapping="Wrap" TextAlignment="Center" MaxLines="2"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
+                </ScrollViewer>
                 <Button x:Name="GallerySettingsButton" Grid.Row="2"
                         Width="52"
                         AutomationProperties.Name="{loc:Tr Nav.Settings}"
@@ -149,28 +165,32 @@
                               Width="{DynamicResource Gallery.HeroContentWidth}"
                               Margin="{DynamicResource Gallery.HeroTextMargin}"
                               HorizontalAlignment="Left"
-                              RowDefinitions="Auto,Auto,Auto,Auto"
+                              RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                               Background="{DynamicResource Cindara.Brush.Background}">
-                            <TextBlock Classes="display"
+                            <TextBlock Text="{Binding LibraryLayoutWarning}"
+                                       IsVisible="{Binding HasLibraryLayoutWarning}" TextWrapping="Wrap"
+                                       FontSize="{DynamicResource Gallery.HeroBodySize}"
+                                       Margin="{DynamicResource Gallery.HeroTextSpacing}" />
+                            <TextBlock Grid.Row="1" Classes="display"
                                        Margin="{DynamicResource Gallery.HeroTextSpacing}"
                                        FontSize="{DynamicResource Gallery.HeroTitleSize}"
                                        LineHeight="{DynamicResource Gallery.HeroTitleLineHeight}"
                                        Text="{Binding Featured.HeroName}"
                                        TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="1"
+                            <TextBlock Grid.Row="2"
                                        Margin="{DynamicResource Gallery.HeroTextSpacing}"
                                        Foreground="{DynamicResource Cindara.Brush.AccentStrong}"
                                        FontSize="{DynamicResource Gallery.HeroSubtitleSize}"
                                        FontWeight="SemiBold"
                                        Text="{Binding Featured.HeroSubtitle}"
                                        TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="2"
+                            <TextBlock Grid.Row="3"
                                        Classes="caption"
                                        Margin="{DynamicResource Gallery.HeroTextSpacing}"
                                        FontSize="{DynamicResource Gallery.HeroBodySize}"
                                        Text="{Binding Featured.Details}"
                                        TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="3"
+                            <TextBlock Grid.Row="4"
                                        VerticalAlignment="Top"
                                        FontSize="{DynamicResource Gallery.HeroBodySize}"
                                        LineHeight="{DynamicResource Gallery.HeroBodyLineHeight}"
@@ -255,7 +275,7 @@
                         </ScrollViewer>
                     </StackPanel>
 
-                    <StackPanel Classes="media-rail" Spacing="10">
+                    <StackPanel Classes="media-rail" Spacing="10" IsVisible="{Binding HasLibraries}">
                         <TextBlock Classes="heading" Text="{loc:Tr Nav.Libraries}" />
                         <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
                             <ItemsControl Classes="media-row" ItemsSource="{Binding Libraries}">

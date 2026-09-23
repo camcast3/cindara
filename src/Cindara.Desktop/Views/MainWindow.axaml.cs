@@ -86,6 +86,7 @@ public partial class MainWindow : Window
         };
         Shell.ExitRequested += (_, _) => Close();
         Shell.LanguageRequested += (_, _) => ShowLanguage();
+        Shell.LibraryLayoutRequested += (_, _) => ShowLibraryLayout();
         GalleryView.SettingsRequested += (_, _) =>
         {
             GalleryView.SuspendFocusMemory();
@@ -99,14 +100,8 @@ public partial class MainWindow : Window
             Shell.Navigate("Search");
             _viewModel?.HideDesignGalleryCommand.Execute(null);
         };
-        GalleryView.LibraryRequested += async (_, library) =>
-        {
-            OpenLibraries();
-            if (_viewModel?.LibraryBrowser is { } browser && browser.OpenLibraryCommand.CanExecute(library))
-            {
-                await browser.OpenLibraryCommand.ExecuteAsync(library);
-            }
-        };
+        GalleryView.LibraryRequested += OnLibraryRequested;
+        Shell.LibraryRequested += OnLibraryRequested;
         GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
     }
@@ -116,6 +111,15 @@ public partial class MainWindow : Window
         GalleryView.SuspendFocusMemory();
         Shell.Navigate("Libraries");
         _viewModel?.HideDesignGalleryCommand.Execute(null);
+    }
+
+    private async void OnLibraryRequested(object? sender, Cindara.Core.Jellyfin.MediaLibrary library)
+    {
+        OpenLibraries();
+        if (_viewModel?.LibraryBrowser is { } browser && browser.OpenLibraryCommand.CanExecute(library))
+        {
+            await browser.OpenLibraryCommand.ExecuteAsync(library);
+        }
     }
 
     private void ShowMediaSummary(MediaPreviewCardViewModel item)
@@ -583,13 +587,17 @@ public partial class MainWindow : Window
         return button;
     }
 
-    private void FocusModal() => Dispatcher.UIThread.Post(() =>
+    private void FocusModal(Control? initial = null) => Dispatcher.UIThread.Post(() =>
     {
         if (ModalOverlay.IsVisible && !_closed)
         {
             // Each modal is a new scope; do not retain removed options or entered credentials.
-            _navigation.SetScope(ModalActions, ModalActions.GetVisualDescendants().OfType<Button>().FirstOrDefault(),
+            _navigation.SetScope(ModalActions, initial ?? ModalActions.GetVisualDescendants().OfType<Button>().FirstOrDefault(),
                 "modal");
+            if (initial is not null)
+            {
+                _navigation.Focus(initial);
+            }
         }
     }, DispatcherPriority.Loaded);
 

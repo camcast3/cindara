@@ -114,4 +114,24 @@
   <data name="Library.ArtworkCanceled" xml:space="preserve"><value>Artwork loading canceled. You can still browse or retry the missing artwork.</value></data>
   <data name="Library.CancelArtwork" xml:space="preserve"><value>Cancel artwork loading</value></data>
   <data name="Library.RetryArtwork" xml:space="preserve"><value>Retry missing artwork</value></data>
+  <data name="LibraryLayout.Title" xml:space="preserve"><value>Library layout</value></data>
+  <data name="LibraryLayout.Scope" xml:space="preserve"><value>Choose and order libraries separately for the sidebar and Home. Saved for this account and server on this device.</value></data>
+  <data name="LibraryLayout.Sidebar" xml:space="preserve"><value>Sidebar libraries</value></data>
+  <data name="LibraryLayout.Home" xml:space="preserve"><value>Home libraries</value></data>
+  <data name="LibraryLayout.Instructions" xml:space="preserve"><value>Use Hide or Show for each library, and Move up or Move down to change its order. Changes apply only when you save.</value></data>
+  <data name="LibraryLayout.Hide" xml:space="preserve"><value>Hide</value></data>
+  <data name="LibraryLayout.Show" xml:space="preserve"><value>Show</value></data>
+  <data name="LibraryLayout.HideFor" xml:space="preserve"><value>Hide {0}</value></data>
+  <data name="LibraryLayout.ShowFor" xml:space="preserve"><value>Show {0}</value></data>
+  <data name="LibraryLayout.Shown" xml:space="preserve"><value>Shown</value></data>
+  <data name="LibraryLayout.Hidden" xml:space="preserve"><value>Hidden</value></data>
+  <data name="LibraryLayout.Up" xml:space="preserve"><value>Move up</value></data>
+  <data name="LibraryLayout.Down" xml:space="preserve"><value>Move down</value></data>
+  <data name="LibraryLayout.UpFor" xml:space="preserve"><value>Move {0} up</value></data>
+  <data name="LibraryLayout.DownFor" xml:space="preserve"><value>Move {0} down</value></data>
+  <data name="LibraryLayout.Save" xml:space="preserve"><value>Save layout</value></data>
+  <data name="LibraryLayout.Replace" xml:space="preserve"><value>Save and replace unreadable layout</value></data>
+  <data name="LibraryLayout.Saved" xml:space="preserve"><value>Library layout saved.</value></data>
+  <data name="LibraryLayout.LoadFailed" xml:space="preserve"><value>Your saved library layout could not be read. Default libraries are shown. Review Library layout in Settings before replacing the saved layout.</value></data>
+  <data name="LibraryLayout.SaveFailed" xml:space="preserve"><value>Library layout could not be saved. Your previous layout is still active. Check local storage permissions and try again.</value></data>
 </root>

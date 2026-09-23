@@ -28,8 +28,8 @@ explicit unavailable state. Full details and playback remain assigned to #5 and 
 Home automatically, initially focusing a card (or the sidebar Home if empty).
 There is no intermediate preview launcher or redundant Home-screen back button.
 Libraries opens paged browsing; Search and Downloads show honest unavailable-content
-states and retain rail focus. Settings exposes exactly Language: English, Exit, and Back to Home;
-initial focus is Language. Up/down traverses the three actions, and left
+states and retain rail focus. Settings exposes Language: English, Library layout, Exit, and Back to Home;
+initial focus is Language. Up/down traverses these actions, and left
 returns to the rail. Button labels are centered with consistent padding.
 Entering Settings from another screen resets focus to Language; moving between
 its actions, language dialog, and rail preserves focus within the same visit.
@@ -217,7 +217,7 @@ heading position. Automatic vertical bring-into-view is suppressed to avoid a
 snap before the transition; horizontal card visibility remains automatic.
 
 The preview has a single Home navigation action in the sidebar. Settings opens
-the three-action settings panel; returning Home preserves the
+the compact settings panel; returning Home preserves the
 loaded media and focused card. The top tab bar has been removed pending a
 product decision about its purpose.
 Continue Watching stays first and combines resume and next-up episodes into one
@@ -319,14 +319,28 @@ an explanatory empty state and returns up to the field.
 ```text
 [Rail]  Settings
         [Language: English]
+        [Library layout]
         [Exit]
         [Back to Home]
 ```
 
-Initial focus: Language. Up/down moves between the three actions; left returns
+Initial focus: Language. Up/down moves between the actions; left returns
 to the rail. The language picker traps focus until selection or Back and currently
 offers English only. Exit closes the app, while Back to Home restores media
 without a new load. No category navigation or expanded settings are exposed yet.
+
+Library layout opens a choice between Sidebar libraries and Home libraries.
+Each editor has explicit Hide/Show and Move up/down actions for every available
+server library, followed by Save layout and Cancel. Both orders are independent
+and saved per account, server ID, and canonical server address on this device.
+Defaults show TV, Movies, then Anime; saved empty lists remain empty and newly
+discovered libraries stay hidden until selected. Changing a sidebar list does
+not change Home, and vice versa. Cancel never applies the draft.
+
+Both the Home and browsing sidebars expose the configured library shortcuts.
+They scroll when needed. Home filters and orders its existing loaded rows without
+re-fetching media; resources for hidden rows remain owned until the gallery is
+disposed. Layout changes recover focus if the previously focused row was hidden.
 
 ### Playback overlay
 

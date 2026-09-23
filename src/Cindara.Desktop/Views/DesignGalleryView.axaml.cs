@@ -18,6 +18,7 @@ public partial class DesignGalleryView : UserControl
     private bool _pinAfterLayout;
     private PresentationPreferences _preferences = new();
     private bool _rememberFocus;
+    private DesignGalleryViewModel? _gallery;
 
     public void SuspendFocusMemory() => _rememberFocus = false;
 
@@ -33,6 +34,17 @@ public partial class DesignGalleryView : UserControl
         SizeChanged += OnSizeChanged;
         DataContextChanged += (_, _) =>
         {
+            if (_gallery is not null)
+            {
+                _gallery.PropertyChanged -= OnGalleryChanged;
+            }
+
+            _gallery = DataContext as DesignGalleryViewModel;
+            if (_gallery is not null)
+            {
+                _gallery.PropertyChanged += OnGalleryChanged;
+            }
+
             HeroTextScroll.Offset = default;
             _focusedCard = null;
             _rememberFocus = false;
@@ -52,6 +64,18 @@ public partial class DesignGalleryView : UserControl
                 UpdateHeroArtwork();
             }
         };
+    }
+
+    private void OnGalleryChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(DesignGalleryViewModel.Libraries)
+            or nameof(DesignGalleryViewModel.RecentlyAddedLibraries))
+        {
+            _focusedCard = null;
+            MediaScrollViewer.Offset = default;
+            HeroTextScroll.Offset = default;
+            _pinAfterLayout = true;
+        }
     }
 
     public void ApplyPreferences(PresentationPreferences preferences)

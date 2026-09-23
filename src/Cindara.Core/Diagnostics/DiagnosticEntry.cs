@@ -14,6 +14,7 @@ public enum DiagnosticAction
     Start, Stop, Connect, LoadSessions, SignIn, RestoreSession, RemoveSession, SignOut,
     LoadHome, Request, InitializeController, OpenController, ControllerConnected,
     ControllerDisconnected, PollController, PlaybackUnavailable, PreviewBundle, ExportBundle, LoadLibrary, LoadArtwork,
+    LoadLibraryLayout, SaveLibraryLayout,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<DiagnosticOutcome>))]

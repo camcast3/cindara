@@ -22,7 +22,14 @@ the card and scroll position. Full details, episode navigation, search, and
 downloads remain deferred to their roadmap work. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
-Settings contains exactly **Language: English**, **Exit**, and **Back to Home**.
+Settings contains **Language: English**, **Library layout**, **Exit**, and **Back to Home**.
+Library layout has independent ordered selections for sidebar shortcuts and Home
+libraries. Use each library's Hide/Show and Move up/Move down buttons, then Save layout; Cancel
+discards the draft. Defaults are TV libraries, Movies, then Anime. Choices are
+saved separately for each account/server address on this device under
+`library-layouts` in Cindara's local application data. They do not change Jellyfin
+permissions or other devices. Save failures preserve the active layout; unreadable
+settings show a warning before the user chooses to replace them.
 Minimal account switching, logout, and fullscreen/windowed controls are tracked
 separately in [the settings feature request](https://github.com/camcast3/cindara/issues/27);
 expanded settings categories, input, and appearance preferences remain deferred.
