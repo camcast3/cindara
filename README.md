@@ -66,10 +66,15 @@ explicit placeholder and **Retry missing artwork**, without discarding the page.
 Leaving the library, paging, or changing accounts cancels the old artwork work.
 Library pages do not eagerly fetch hero backdrops. Duplicate images share a
 request within each load.
-An in-memory LRU artwork cache holds at most 128 entries / 32 MiB, expires after
-five minutes, and is isolated to the exact authenticated session (including its
-token). Account changes, sign-out, and shutdown clear it; no artwork is cached
-on disk. Each HTTP response is limited to 8 MiB.
+An in-memory LRU artwork cache holds at most 128 entries / 32 MiB and uses a
+five-minute **cache-wide expiry window**, checked on lookup. The first lookup
+after the deadline clears the cache and starts a new window; an image added near
+the deadline can therefore expire sooner than five minutes after insertion.
+This is not a per-image minimum lifetime. Per-image expiry is deferred to
+[the caching follow-up](https://github.com/camcast3/cindara/issues/10).
+The cache is isolated to the exact authenticated session (including its token).
+Account changes, sign-out, and shutdown clear it; no artwork is cached on disk.
+Each HTTP response is limited to 8 MiB.
 Continue Watching combines Jellyfin resume and next-up results into at most 20
 cards, with only one episode per series. The most recently played resume episode
 takes priority; below 90% watched it resumes, while at or above 90% it advances

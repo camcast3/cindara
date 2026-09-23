@@ -267,8 +267,11 @@ does not dispose the previous gallery before the replacement is ready. Ending
 authentication, switching accounts/servers, or exiting the app disposes and
 clears the old gallery; merely returning from the preview to the same account
 retains it until replacement or authentication ends. The session-scoped in-memory
-image LRU is capped at 128 entries / 32 MiB with a five-minute lifetime and is
-discarded on authentication boundaries. HTTP responses are capped at 8 MiB.
+image LRU is capped at 128 entries / 32 MiB with a five-minute cache-wide expiry
+window. A lookup after its deadline clears all entries and starts a new window,
+so recently inserted images may expire sooner; there is no per-image minimum
+lifetime. Per-image expiry is deferred to #10. Authentication boundaries also
+discard the cache. HTTP responses are capped at 8 MiB.
 
 ### Library
 
