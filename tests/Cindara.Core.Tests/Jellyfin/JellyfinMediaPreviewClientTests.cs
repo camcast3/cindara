@@ -456,6 +456,52 @@ public sealed class JellyfinMediaPreviewClientTests
     }
 
     [Fact]
+    public async Task NullNextUpEntryIsATypedErrorAndCancelsOtherHomeRequests()
+    {
+        var failure = NewSignal();
+        using var handler = new AsyncPreviewHandler(async (request, token) =>
+        {
+            if (request.Uri.AbsolutePath.EndsWith("/NextUp", StringComparison.Ordinal))
+            {
+                await failure.Task.WaitAsync(token);
+                return JsonResponse("""{"Items":[null]}""");
+            }
+
+            await Task.Delay(Timeout.Infinite, token);
+            throw new InvalidOperationException("Expected sibling cancellation.");
+        });
+        using var client = CreateClient(handler);
+        var loading = client.GetHomeAsync(Session);
+        await handler.WaitForAsync(requests => requests.Length == 3);
+        failure.SetResult();
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => loading.WaitAsync(TestTimeout));
+        Assert.Equal(MediaPreviewError.InvalidResponse, exception.Error);
+        Assert.Equal(0, handler.ActiveRequests);
+        Assert.DoesNotContain(handler.Requests, IsImage);
+    }
+
+    [Theory]
+    [InlineData("/Items/Resume", """{"Items":[null]}""")]
+    [InlineData("/NextUp", """{"Items":[null]}""")]
+    [InlineData("/Views", """{"Items":[null]}""")]
+    [InlineData("/Items/Latest", "[null]")]
+    [InlineData("/Items/Resume", """{"Items":null}""")]
+    [InlineData("/NextUp", "null")]
+    [InlineData("/Views", "{}")]
+    [InlineData("/Items/Latest", "null")]
+    public async Task NullHomeItemCollectionsAreRejectedBeforeFiltering(string suffix, string json)
+    {
+        using var handler = new AsyncPreviewHandler((request, _) => Task.FromResult(
+            request.Uri.AbsolutePath.EndsWith(suffix, StringComparison.Ordinal)
+                ? JsonResponse(json)
+                : MetadataResponse(request, """{"Items":[]}""", "[]")));
+        using var client = CreateClient(handler);
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetHomeAsync(Session));
+        Assert.Equal(MediaPreviewError.InvalidResponse, exception.Error);
+        Assert.Equal(0, handler.ActiveRequests);
+    }
+
+    [Fact]
     public async Task GetHomeAsyncReportsMalformedMetadataAndCancelsItsSibling()
     {
         var failure = NewSignal();

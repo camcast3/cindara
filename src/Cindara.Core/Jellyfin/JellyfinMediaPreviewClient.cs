@@ -424,18 +424,30 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             relativeUri,
             operation)
             .ConfigureAwait(false);
-        return result?.Items ?? throw InvalidResponse(new JsonException("Missing media items."));
+        return RequireItems(load, result?.Items);
     }
 
     private async Task<IReadOnlyList<JellyfinItem>> GetItemsAsync(
         PreviewLoad load,
         string relativeUri,
         string operation) =>
-        await GetAsync<JellyfinItem[]>(
+        RequireItems(load, await GetAsync<JellyfinItem[]>(
             load,
             relativeUri,
             operation)
-            .ConfigureAwait(false) ?? throw InvalidResponse(new JsonException("Missing latest media."));
+            .ConfigureAwait(false));
+
+    private static IReadOnlyList<JellyfinItem> RequireItems(PreviewLoad load, IReadOnlyList<JellyfinItem>? items)
+    {
+        if (items is null || items.Any(item => item is null))
+        {
+            // Validation after deserialization must also stop this load's sibling requests.
+            load.Cancel();
+            throw InvalidResponse(new JsonException("Missing or null media items."));
+        }
+
+        return items;
+    }
 
     private Task<T?> GetAsync<T>(
         PreviewLoad load,
@@ -658,6 +670,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         public MediaImageCache Cache { get; } = cache;
 
         public ConcurrentDictionary<string, Lazy<Task<byte[]?>>> Images { get; } = new(StringComparer.Ordinal);
+        public void Cancel() => cancellation.Cancel();
 
         public async Task<T> RunRequestAsync<T>(Func<CancellationToken, Task<T>> operation)
         {

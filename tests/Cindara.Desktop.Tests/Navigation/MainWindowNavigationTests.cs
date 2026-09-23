@@ -28,6 +28,31 @@ public sealed class MainWindowNavigationTests
 {
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads"];
 
+    [Fact]
+    public Task NullNextUpResponseKeepsSignInAndRecoversThroughHomeRetry() => TestAppBuilder.Run(async () =>
+    {
+        using var handler = new RepairableArtworkHandler(CreateReviewArtwork()) { NullNextUp = true };
+        using var client = new JellyfinMediaPreviewClient(handler,
+            new JellyfinClientIdentity("Cindara", "UI tests", "device", "1.0"));
+        using var fixture = new ShellFixture(mediaClient: client);
+        fixture.SignIn(waitForHome: false);
+        await fixture.Model.OpenHomeCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.True(fixture.Model.IsAuthenticatedVisible);
+        Assert.False(fixture.Model.IsBusy);
+        Assert.False(fixture.Model.IsDesignGalleryVisible);
+        Assert.Equal(Loc.Get("Error.Preview.InvalidResponse"), fixture.Model.StatusMessage);
+        Assert.Equal("RetryHomeButton", Focused(fixture.Window).Name);
+
+        handler.NullNextUp = false;
+        fixture.Click(fixture.Shell.FindControl<Button>("RetryHomeButton")!);
+        await fixture.Model.OpenHomeCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.True(fixture.Model.IsDesignGalleryVisible);
+        Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext);
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -88,6 +113,7 @@ public sealed class MainWindowNavigationTests
     private sealed class RepairableArtworkHandler(byte[] validArtwork) : HttpMessageHandler
     {
         public bool Corrupt { get; set; }
+        public bool NullNextUp { get; set; }
         public System.Collections.Concurrent.ConcurrentDictionary<string, int> ImageRequests { get; } = new(StringComparer.Ordinal);
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -105,7 +131,7 @@ public sealed class MainWindowNavigationTests
             var json = path switch
             {
                 "/Users/first/Items/Resume" => """{"Items":[{"Id":"resume","Name":"Resumable movie","Type":"Movie","ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":50}}]}""",
-                "/Shows/NextUp" => """{"Items":[]}""",
+                "/Shows/NextUp" => NullNextUp ? """{"Items":[null]}""" : """{"Items":[]}""",
                 "/Users/first/Views" => """{"Items":[{"Id":"tv","Name":"TV","CollectionType":"tvshows"}]}""",
                 "/Users/first/Items/Latest" => "[]",
                 "/Users/first/Items" => """{"Items":[{"Id":"library-item","Name":"Library item","Type":"Series","ImageTags":{"Primary":"tag"}}],"TotalRecordCount":1}""",
