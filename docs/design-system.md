@@ -230,6 +230,10 @@ This client-side display rule does not change server playback progress.
 The row is ordered by each series' latest playback, newest first, with resumed
 and next episodes mixed together. Movies use their own last-played timestamp;
 missing timestamps sort last and ties retain server order.
+Activity timestamps are batched from up to 200 recent episode records when
+multiple series are candidates, with exact lookups only for missing series.
+This avoids a request per series in the common case without dropping candidates
+before the newest-first sort. A one-series load skips the extra batch request.
 Recently-added rows use TV, Movies, Anime order. Anime libraries are distinguished by
 their name because Jellyfin normally reports them as `tvshows`. Separate
 libraries within each group retain the server's order and are never merged.

@@ -87,6 +87,11 @@ The whole row is ordered newest-first by the last playback anywhere in each
 series (including completed episodes and rewatches), not by the unplayed next
 episode or by whether a card is resumable. Movies use their own last-played
 timestamp. Equal timestamps keep server order; missing timestamps sort last.
+For two or more candidate series, one bounded request reads the 200 most recently
+played episode records and supplies timestamps for matching series. Only series
+absent from that activity window need an exact per-series lookup; one-series
+loads use that lookup directly. All lookups share the existing six-request cap
+and 30-second Home deadline. The candidate set is not trimmed before ranking.
 **Cancel loading** or Back/Escape cancels the request; failures retain sign-in and
 offer Retry (except a rejected session, which returns to sign-in). An unsuccessful
 page change keeps the previous page and retries the failed offset. Empty libraries

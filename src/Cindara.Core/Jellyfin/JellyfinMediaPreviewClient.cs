@@ -10,6 +10,7 @@ namespace Cindara.Core.Jellyfin;
 public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, IDisposable
 {
     private const int ItemLimit = 20;
+    private const int ActivityBatchLimit = 200;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient _httpClient;
     private readonly JellyfinClientIdentity _clientIdentity;
@@ -223,13 +224,19 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             + "&EnableUserData=true&EnableResumable=true&EnableRewatching=false&DisableFirstEpisode=true",
             "next-up media");
         await Task.WhenAll(resumeTask, nextUpTask).ConfigureAwait(false);
+        var resume = await resumeTask.ConfigureAwait(false);
+        var nextUp = await nextUpTask.ConfigureAwait(false);
+        if (resume.Count > ItemLimit || nextUp.Count > ItemLimit)
+        {
+            throw InvalidResponse(new JsonException("Continue Watching responses exceed the requested limit."));
+        }
 
         // Resume is authoritative for a show's current episode; never substitute an older
         // partially watched episode when the most recently played one has reached the cutoff.
-        var candidates = (await resumeTask.ConfigureAwait(false))
+        var candidates = resume
             .Where(item => item.Type is "Movie" or "Episode")
             .OrderByDescending(item => item.UserData?.LastPlayedDate)
-            .Concat((await nextUpTask.ConfigureAwait(false)).Where(item => item.Type == "Episode"))
+            .Concat(nextUp.Where(item => item.Type == "Episode"))
             .Where(item => !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.Name))
             .DistinctBy(item => item.Type == "Episode" && !string.IsNullOrWhiteSpace(item.SeriesId)
                 ? ("series", item.SeriesId) : ("item", item.Id))
@@ -240,22 +247,66 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 : source.Type == "Episode" && !string.IsNullOrWhiteSpace(source.SeriesId)
                     ? await GetFollowingEpisodeAsync(load, source).ConfigureAwait(false)
                     : null;
-            var lastPlayed = item is null ? null : await GetLastPlaybackAsync(load, source).ConfigureAwait(false);
-            return (Item: item, LastPlayed: lastPlayed);
+            return (Item: item, Source: source);
         })).ConfigureAwait(false);
-        var items = resolved.OrderByDescending(result => result.LastPlayed)
+        var playable = resolved.Where(result => result.Item is not null).ToArray();
+        var seriesIds = playable.Select(result => result.Source)
+            .Where(source => source.Type == "Episode" && !string.IsNullOrWhiteSpace(source.SeriesId))
+            .Select(source => source.SeriesId!).ToHashSet(StringComparer.Ordinal);
+        var recentActivity = await GetRecentActivityAsync(load, seriesIds).ConfigureAwait(false);
+        var ranked = await Task.WhenAll(playable.Select(async result =>
+            (result.Item, LastPlayed: await GetLastPlaybackAsync(load, result.Source, recentActivity).ConfigureAwait(false))))
+            .ConfigureAwait(false);
+        var items = ranked.OrderByDescending(result => result.LastPlayed)
             .Select(result => result.Item).OfType<JellyfinItem>().DistinctBy(item => item.Id).Take(ItemLimit).ToArray();
         var previews = await PopulateArtworkAsync(load, items, landscape: true).ConfigureAwait(false);
         return (items, previews);
     }
 
-    private async Task<DateTimeOffset?> GetLastPlaybackAsync(PreviewLoad load, JellyfinItem source)
+    private async Task<Dictionary<string, DateTimeOffset>> GetRecentActivityAsync(PreviewLoad load, HashSet<string> seriesIds)
+    {
+        var dates = new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
+        if (seriesIds.Count < 2)
+        {
+            return dates;
+        }
+
+        var activity = await GetWrappedItemsAsync(load,
+            $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Items"
+            + $"?Recursive=true&IncludeItemTypes=Episode&SortBy=DatePlayed&SortOrder=Descending&Limit={ActivityBatchLimit}"
+            + "&EnableUserData=true&EnableImages=false&EnableTotalRecordCount=false&ExcludeLocationTypes=Virtual",
+            "recent series playback activity").ConfigureAwait(false);
+        if (activity.Count > ActivityBatchLimit || activity.Any(item => item is null || item.Type != "Episode"
+            || string.IsNullOrWhiteSpace(item.SeriesId)))
+        {
+            throw InvalidResponse(new JsonException("Invalid recent series playback activity."));
+        }
+
+        foreach (var item in activity)
+        {
+            if (seriesIds.Contains(item.SeriesId!) && item.UserData?.LastPlayedDate is { } date
+                && (!dates.TryGetValue(item.SeriesId!, out var current) || date > current))
+            {
+                dates[item.SeriesId!] = date;
+            }
+        }
+
+        return dates;
+    }
+
+    private async Task<DateTimeOffset?> GetLastPlaybackAsync(
+        PreviewLoad load, JellyfinItem source, Dictionary<string, DateTimeOffset> recentActivity)
     {
         var lastPlayed = source.UserData?.LastPlayedDate;
         if (source.Type == "Episode" && !string.IsNullOrWhiteSpace(source.SeriesId))
         {
+            if (recentActivity.TryGetValue(source.SeriesId, out var activityDate))
+            {
+                return lastPlayed is null || activityDate > lastPlayed ? activityDate : lastPlayed;
+            }
+
             // Next-up episodes have not been played yet. Rank the series using its
-            // latest playback, including completed episodes, specials, and rewatches.
+            // latest playback when it is absent from the bounded activity batch.
             var recent = await GetWrappedItemsAsync(load,
                 $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Items"
                 + $"?ParentId={Uri.EscapeDataString(source.SeriesId)}&Recursive=true&IncludeItemTypes=Episode"

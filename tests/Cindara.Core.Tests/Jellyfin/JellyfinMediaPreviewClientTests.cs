@@ -506,6 +506,12 @@ public sealed class JellyfinMediaPreviewClientTests
         });
         using var handler = new AsyncPreviewHandler(async (request, token) =>
         {
+            if (!advancing && request.Uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal)
+                && !request.Uri.Query.Contains("ParentId=", StringComparison.Ordinal))
+            {
+                return JsonResponse("""{"Items":[]}""");
+            }
+
             if (!request.Uri.AbsolutePath.EndsWith(advancing ? "/Episodes" : "/Items", StringComparison.Ordinal))
             {
                 return MetadataResponse(request, episodes, "[]");
@@ -517,7 +523,8 @@ public sealed class JellyfinMediaPreviewClientTests
         using var client = CreateClient(handler, clock);
         var loading = client.GetHomeAsync(Session, cancellation.Token);
         await handler.WaitForAsync(requests => requests.Count(request =>
-            request.Uri.AbsolutePath.EndsWith(advancing ? "/Episodes" : "/Items", StringComparison.Ordinal)) == 6);
+            request.Uri.AbsolutePath.EndsWith(advancing ? "/Episodes" : "/Items", StringComparison.Ordinal)
+            && (advancing || request.Uri.Query.Contains("ParentId=", StringComparison.Ordinal))) == 6);
         Assert.Equal(6, handler.MaximumRequests);
         if (deadline)
         {
@@ -533,6 +540,109 @@ public sealed class JellyfinMediaPreviewClientTests
 
         Assert.Equal(0, handler.ActiveRequests);
         Assert.DoesNotContain(handler.Requests, IsImage);
+    }
+
+    [Fact]
+    public async Task FortySeriesHistoryUsesOneGatedBatchRatherThanFortyRoundTrips()
+    {
+        var batchStarted = NewSignal();
+        var release = NewSignal();
+        var resume = JsonSerializer.Serialize(new
+        {
+            Items = Enumerable.Range(0, 20).Select(index => new
+            {
+                Id = $"resume-{index}",
+                Name = $"Resume {index}",
+                Type = "Episode",
+                SeriesId = $"series-{index}",
+                UserData = new { PlayedPercentage = 20 },
+            })
+        });
+        var nextUp = JsonSerializer.Serialize(new
+        {
+            Items = Enumerable.Range(20, 20).Select(index => new
+            {
+                Id = $"next-{index}",
+                Name = $"Next {index}",
+                Type = "Episode",
+                SeriesId = $"series-{index}",
+            })
+        });
+        using var handler = new AsyncPreviewHandler(async (request, token) =>
+        {
+            var path = request.Uri.AbsolutePath;
+            if (path.EndsWith("/Items", StringComparison.Ordinal))
+            {
+                Assert.DoesNotContain("ParentId=", request.Uri.Query, StringComparison.Ordinal);
+                batchStarted.SetResult();
+                await release.Task.WaitAsync(token);
+                return JsonResponse(JsonSerializer.Serialize(new
+                {
+                    Items = Enumerable.Range(0, 40).Reverse().Select(index => new
+                    {
+                        Type = "Episode",
+                        SeriesId = $"series-{index}",
+                        UserData = new { LastPlayedDate = DateTimeOffset.UnixEpoch.AddMinutes(index) },
+                    })
+                }));
+            }
+
+            if (path.EndsWith("/Items/Resume", StringComparison.Ordinal)) { return JsonResponse(resume); }
+            if (path.EndsWith("/NextUp", StringComparison.Ordinal)) { return JsonResponse(nextUp); }
+            if (path.EndsWith("/Views", StringComparison.Ordinal)) { return JsonResponse("""{"Items":[]}"""); }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        using var client = CreateClient(handler);
+        var loading = client.GetHomeAsync(Session);
+        await batchStarted.Task.WaitAsync(TestTimeout);
+        Assert.False(loading.IsCompleted);
+        Assert.Equal(1, handler.ActiveRequests);
+        Assert.Single(handler.Requests, request => request.Uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal));
+        release.SetResult();
+        var home = await loading.WaitAsync(TestTimeout);
+        Assert.Equal("next-39", home.ContinueWatching[0].Id);
+        Assert.Equal(20, home.ContinueWatching.Count);
+        Assert.Equal(0, handler.ActiveRequests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ActivityBatchPreservesCallerCancellationAndOverallDeadline(bool deadline)
+    {
+        using var clock = new ManualDeadlineTimeProvider();
+        using var cancellation = new CancellationTokenSource();
+        var started = NewSignal();
+        using var handler = new AsyncPreviewHandler(async (request, token) =>
+        {
+            if (request.Uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal))
+            {
+                started.SetResult();
+                await Task.Delay(Timeout.Infinite, token);
+                throw new InvalidOperationException("Expected cancellation.");
+            }
+
+            return MetadataResponse(request,
+                """{"Items":[{"Id":"a","Name":"A","Type":"Episode","SeriesId":"a"},{"Id":"b","Name":"B","Type":"Episode","SeriesId":"b"}]}""",
+                "[]");
+        });
+        using var client = CreateClient(handler, clock);
+        var loading = client.GetHomeAsync(Session, cancellation.Token);
+        await started.Task.WaitAsync(TestTimeout);
+        if (deadline)
+        {
+            clock.Expire();
+            var error = await Assert.ThrowsAsync<MediaPreviewException>(() => loading.WaitAsync(TestTimeout));
+            Assert.Equal(MediaPreviewError.TimedOut, error.Error);
+        }
+        else
+        {
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => loading.WaitAsync(TestTimeout));
+        }
+
+        Assert.Equal(0, handler.ActiveRequests);
+        Assert.Single(handler.Requests, request => request.Uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal));
     }
 
     [Fact]

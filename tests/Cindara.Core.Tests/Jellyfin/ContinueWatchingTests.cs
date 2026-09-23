@@ -29,13 +29,12 @@ public sealed class ContinueWatchingTests
                 Episode("no-history", "e", 0),
             ])
         {
-            History = uri => uri.Query.Contains("ParentId=b&", StringComparison.Ordinal)
-                ? [Episode("last-watched-b", "b", 100, played: true, lastPlayed: "2026-09-22T15:00:00Z")]
-                : uri.Query.Contains("ParentId=c&", StringComparison.Ordinal)
-                    ? [Episode("rewatched-special-c", "c", 100, played: true, lastPlayed: "2026-09-22T16:00:00Z")]
-                    : uri.Query.Contains("ParentId=d&", StringComparison.Ordinal)
-                        ? [Episode("last-watched-d", "d", 100, played: true, lastPlayed: "2026-09-21T12:00:00Z")]
-                        : [],
+            Activity =
+            [
+                Episode("rewatched-special-c", "c", 100, played: true, lastPlayed: "2026-09-22T16:00:00Z"),
+                Episode("last-watched-b", "b", 100, played: true, lastPlayed: "2026-09-22T15:00:00Z"),
+                Episode("last-watched-d", "d", 100, played: true, lastPlayed: "2026-09-21T12:00:00Z"),
+            ],
         };
         using var client = Client(handler);
 
@@ -45,15 +44,159 @@ public sealed class ContinueWatchingTests
             home.ContinueWatching.Select(item => item.Id));
         Assert.Equal("resume-c", home.Featured?.Id);
         var historyRequests = handler.Requests.Where(uri => uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(5, historyRequests.Length);
+        Assert.Equal(3, historyRequests.Length);
+        Assert.Single(historyRequests, uri => uri.Query.Contains("Limit=200&", StringComparison.Ordinal));
+        Assert.Equal(2, historyRequests.Count(uri => uri.Query.Contains("Limit=1&", StringComparison.Ordinal)));
         Assert.All(historyRequests, uri =>
         {
             Assert.Contains("SortBy=DatePlayed&SortOrder=Descending", uri.Query, StringComparison.Ordinal);
-            Assert.Contains("Limit=1", uri.Query, StringComparison.Ordinal);
             Assert.Contains("IncludeItemTypes=Episode", uri.Query, StringComparison.Ordinal);
             Assert.DoesNotContain("IsPlayed=", uri.Query, StringComparison.Ordinal);
             Assert.DoesNotContain("Season=", uri.Query, StringComparison.Ordinal);
         });
+    }
+
+    [Fact]
+    public async Task FortyCandidateSeriesUseOneActivityBatchAndRankBeforeApplyingTheDisplayLimit()
+    {
+        var watched = DateTimeOffset.Parse("2026-09-23T12:00:00Z", System.Globalization.CultureInfo.InvariantCulture);
+        using var handler = new Handler(
+            Enumerable.Range(0, 20).Select(index => Episode($"resume-{index}", $"series-{index}", 25)).ToArray(),
+            Enumerable.Range(20, 20).Select(index => Episode($"next-{index}", $"series-{index}", 0)).ToArray())
+        {
+            Activity = Enumerable.Range(0, 40).Reverse()
+                .Select(index => Episode($"watched-{index}", $"series-{index}", 100, played: true,
+                    lastPlayed: watched.AddMinutes(index).ToString("O"))).ToArray(),
+            History = _ => throw new InvalidOperationException("The batch should cover all candidate series."),
+        };
+        using var client = Client(handler);
+
+        var home = await client.GetHomeAsync(Session);
+
+        Assert.Equal(Enumerable.Range(20, 20).Reverse().Select(index => $"next-{index}"),
+            home.ContinueWatching.Select(item => item.Id));
+        var activity = Assert.Single(handler.Requests, uri => uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal));
+        Assert.Contains("Limit=200&", activity.Query, StringComparison.Ordinal);
+        Assert.DoesNotContain("ParentId=", activity.Query, StringComparison.Ordinal);
+        Assert.Contains("EnableImages=false", activity.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FullActivityBatchFallsBackOnlyForSeriesOutsideTheWindow()
+    {
+        using var handler = new Handler([Episode("older-resume", "older", 25)], [Episode("recent-next", "recent", 0)])
+        {
+            Activity = Enumerable.Range(0, 200).Select(index => Episode($"history-{index}", "recent", 100,
+                lastPlayed: "2026-09-23T12:00:00Z")).ToArray(),
+            History = _ => [Episode("older-played", "older", 100, lastPlayed: "2026-09-01T12:00:00Z")],
+        };
+        using var client = Client(handler);
+        Assert.Equal(["recent-next", "older-resume"],
+            (await client.GetHomeAsync(Session)).ContinueWatching.Select(item => item.Id));
+        Assert.Equal(2, handler.Requests.Count(uri => uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal)));
+        Assert.DoesNotContain(handler.Requests, uri => uri.Query.Contains("ParentId=recent&", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task OneSeriesDoesNotPayForAnExtraBatchRequest()
+    {
+        using var handler = new Handler([], [Episode("next", "only", 0)]);
+        using var client = Client(handler);
+        await client.GetHomeAsync(Session);
+        var request = Assert.Single(handler.Requests, uri => uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal));
+        Assert.Contains("ParentId=only&", request.Query, StringComparison.Ordinal);
+        Assert.Contains("Limit=1&", request.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OversizedActivityBatchIsAControlledError()
+    {
+        using var handler = new Handler([Episode("a", "a", 25)], [Episode("b", "b", 0)])
+        {
+            Activity = Enumerable.Range(0, 201).Select(index => Episode($"history-{index}", "a", 100)).ToArray(),
+        };
+        using var client = Client(handler);
+        var error = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetHomeAsync(Session));
+        Assert.Equal(MediaPreviewError.InvalidResponse, error.Error);
+        Assert.DoesNotContain(handler.Requests, uri => uri.Query.Contains("ParentId=", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ActivityBatchMissesUseExactLookupsWithoutDroppingOlderOrUnplayedSeries()
+    {
+        using var handler = new Handler([Episode("resume", "recent", 25)],
+            [Episode("next-older", "older", 0), Episode("unknown", "unknown", 0)])
+        {
+            Activity = [Episode("played", "recent", 100, lastPlayed: "2026-09-23T12:00:00Z")],
+            History = uri => uri.Query.Contains("ParentId=older&", StringComparison.Ordinal)
+                ? [Episode("previous-older", "older", 100, lastPlayed: "2026-09-21T12:00:00Z")] : [],
+        };
+        using var client = Client(handler);
+        Assert.Equal(["resume", "next-older", "unknown"],
+            (await client.GetHomeAsync(Session)).ContinueWatching.Select(item => item.Id));
+        Assert.DoesNotContain(handler.Requests, uri => uri.Query.Contains("ParentId=recent&", StringComparison.Ordinal));
+        Assert.Contains(handler.Requests, uri => uri.Query.Contains("ParentId=older&", StringComparison.Ordinal));
+        Assert.Contains(handler.Requests, uri => uri.Query.Contains("ParentId=unknown&", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ActivityBatchUsesLatestSpecialsRewatchesAndSourceTimestampsWithStableTies()
+    {
+        using var handler = new Handler(
+            [Episode("current-a", "a", 25, lastPlayed: "2026-09-23T13:00:00Z")],
+            [Episode("next-b", "b", 0), Episode("next-c", "c", 0)])
+        {
+            Activity =
+            [
+                Episode("latest-special-b", "b", 50, lastPlayed: "2026-09-23T13:00:00Z", season: 0),
+                Episode("rewatch-c", "c", 100, played: true, lastPlayed: "2026-09-23T13:00:00Z"),
+                Episode("previous-a", "a", 100, lastPlayed: "2026-09-23T12:00:00Z"),
+                Episode("older-b", "b", 100, lastPlayed: "2026-09-22T12:00:00Z"),
+                Episode("unrelated", "different", 100, lastPlayed: "2026-09-21T12:00:00Z"),
+            ],
+            History = _ => throw new InvalidOperationException("No fallback expected."),
+        };
+        using var client = Client(handler);
+        Assert.Equal(["current-a", "next-b", "next-c"],
+            (await client.GetHomeAsync(Session)).ContinueWatching.Select(item => item.Id));
+    }
+
+    [Fact]
+    public async Task NoDateInActivityBatchStillPerformsAnExactLookup()
+    {
+        using var handler = new Handler([Episode("a", "a", 20)], [Episode("b", "b", 0)])
+        {
+            Activity = [Episode("unplayed-a", "a", 0), Episode("played-b", "b", 100, lastPlayed: "2026-09-22T12:00:00Z")],
+            History = _ => [Episode("played-a", "a", 100, lastPlayed: "2026-09-23T12:00:00Z")],
+        };
+        using var client = Client(handler);
+        Assert.Equal(["a", "b"], (await client.GetHomeAsync(Session)).ContinueWatching.Select(item => item.Id));
+        Assert.Single(handler.Requests, uri => uri.Query.Contains("ParentId=a&", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OversizedCandidateResponseIsRejectedRatherThanCreatingUnboundedHistoryWork(bool resume)
+    {
+        var items = Enumerable.Range(0, 21).Select(index => Episode($"item-{index}", $"series-{index}", 20)).ToArray();
+        using var handler = new Handler(resume ? items : [], resume ? [] : items);
+        using var client = Client(handler);
+        var error = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetHomeAsync(Session));
+        Assert.Equal(MediaPreviewError.InvalidResponse, error.Error);
+        Assert.DoesNotContain(handler.Requests, uri => uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, MediaPreviewError.AccessDenied)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, MediaPreviewError.UnexpectedStatus)]
+    public async Task FailedActivityBatchIsExplicitInsteadOfSilentlyChangingOrdering(HttpStatusCode status, MediaPreviewError expected)
+    {
+        using var handler = new Handler([Episode("a", "a", 25)], [Episode("b", "b", 0)]) { ActivityStatus = status };
+        using var client = Client(handler);
+        var error = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetHomeAsync(Session));
+        Assert.Equal(expected, error.Error);
+        Assert.DoesNotContain(handler.Requests, uri => uri.Query.Contains("ParentId=", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -337,6 +480,8 @@ public sealed class ContinueWatchingTests
     {
         public ConcurrentQueue<Uri> Requests { get; } = new();
         public HttpStatusCode FollowingStatus { get; init; } = HttpStatusCode.OK;
+        public HttpStatusCode ActivityStatus { get; init; } = HttpStatusCode.OK;
+        public object[] Activity { get; init; } = [];
         public Func<Uri, object[]> History { get; init; } = _ => [];
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -357,11 +502,15 @@ public sealed class ContinueWatchingTests
                 "/jellyfin/Users/viewer/Items/Resume" => resume,
                 "/jellyfin/Shows/NextUp" => nextUp,
                 "/jellyfin/Users/viewer/Views" => [],
-                "/jellyfin/Users/viewer/Items" => History(uri),
+                "/jellyfin/Users/viewer/Items" => uri.Query.Contains("ParentId=", StringComparison.Ordinal) ? History(uri) : Activity,
                 _ when uri.AbsolutePath.EndsWith("/Episodes", StringComparison.Ordinal) => following!(uri),
                 _ => throw new InvalidOperationException($"Unexpected request: {uri}"),
             };
             var status = uri.AbsolutePath.EndsWith("/Episodes", StringComparison.Ordinal) ? FollowingStatus : HttpStatusCode.OK;
+            if (uri.AbsolutePath.EndsWith("/Items", StringComparison.Ordinal) && !uri.Query.Contains("ParentId=", StringComparison.Ordinal))
+            {
+                status = ActivityStatus;
+            }
             return Task.FromResult(new HttpResponseMessage(status)
             {
                 Content = new StringContent(JsonSerializer.Serialize(new { Items = items }), Encoding.UTF8, "application/json"),
