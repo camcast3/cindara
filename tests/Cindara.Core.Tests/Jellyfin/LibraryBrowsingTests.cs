@@ -134,6 +134,29 @@ public sealed class LibraryBrowsingTests
     }
 
     [Fact]
+    public async Task LibraryShrinkingBelowRequestedOffsetIsAnErrorInsteadOfAnEmptyPage()
+    {
+        using var handler = new Handler((_, _) => Task.FromResult(Json(PageJson(0, 0, 47))));
+        using var client = Client(handler);
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() =>
+            client.GetLibraryPageAsync(Session, Library, 80));
+        Assert.Equal(MediaPreviewError.InvalidResponse, exception.Error);
+        Assert.Single(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData(40, 40)]
+    [InlineData(40, 0)]
+    [InlineData(80, 40)]
+    public async Task NonInitialEmptyPageAtOrBeyondTotalIsRejected(int start, int total)
+    {
+        using var handler = new Handler((_, _) => Task.FromResult(Json(PageJson(0, 0, total))));
+        using var client = Client(handler);
+        var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => client.GetLibraryPageAsync(Session, Library, start));
+        Assert.Equal(MediaPreviewError.InvalidResponse, exception.Error);
+    }
+
+    [Fact]
     public async Task EmptyLibraryHasExplicitZeroTotal()
     {
         using var handler = new Handler((_, _) => Task.FromResult(Json(PageJson(0, 0, 0))));

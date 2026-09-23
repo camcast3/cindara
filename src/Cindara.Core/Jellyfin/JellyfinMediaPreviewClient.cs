@@ -166,7 +166,8 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                     : library.CollectionType == "tvshows" ? "&IncludeItemTypes=Series" : string.Empty),
                 "library media").ConfigureAwait(false);
             if (result?.Items is not { } sources || result.TotalRecordCount is not { } total
-                || total < 0 || sources.Length > MediaLibraryPage.PageSize
+                || total < 0 || startIndex > 0 && startIndex >= total
+                || sources.Length > MediaLibraryPage.PageSize
                 || (sources.Length == 0 && startIndex < total)
                 || (sources.Length > 0 && (long)startIndex + sources.Length > total)
                 || sources.Any(item => item is null || string.IsNullOrWhiteSpace(item.Id) || string.IsNullOrWhiteSpace(item.Name)))

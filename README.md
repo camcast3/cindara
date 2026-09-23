@@ -94,7 +94,10 @@ loads use that lookup directly. All lookups share the existing six-request cap
 and 30-second Home deadline. The candidate set is not trimmed before ranking.
 **Cancel loading** or Back/Escape cancels the request; failures retain sign-in and
 offer Retry (except a rejected session, which returns to sign-in). An unsuccessful
-page change keeps the previous page and retries the failed offset. Empty libraries
+page change keeps the previous page and retries the failed offset. This includes
+a library shrinking so the requested page is now past its end; Previous page
+remains available to recover without replacing the last useful page with an empty
+result. Empty libraries
 and missing artwork have visible states. Returning
 from Settings reuses the current account's loaded Home instead of downloading
 it again. Account switching and sign-out clear that data.

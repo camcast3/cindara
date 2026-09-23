@@ -27,6 +27,62 @@ public sealed class LibraryBrowserViewModelTests
         "user", "Viewer", "token");
 
     [Fact]
+    public async Task RealPageValidationPreservesPreviousPageWhenLibraryShrinksAndPreviousCanRecover()
+    {
+        var requests = new List<int>();
+        using var handler = new ShrinkingLibraryHandler(start =>
+        {
+            requests.Add(start);
+            var total = requests.Count <= 2 ? 87 : 47;
+            var count = Math.Clamp(total - start, 0, MediaLibraryPage.PageSize);
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                Items = Enumerable.Range(start, count).Select(index => new { Id = $"item-{index}", Name = $"Item {index}", Type = "Movie" }),
+                TotalRecordCount = total,
+            });
+        });
+        using var client = new JellyfinMediaPreviewClient(handler,
+            new JellyfinClientIdentity("Cindara", "Tests", "device", "1.0"));
+        using var model = new LibraryBrowserViewModel(client, Session, [Library], _ => Task.CompletedTask);
+        await model.OpenLibraryCommand.ExecuteAsync(Library);
+        await model.LoadPageCommand.ExecuteAsync(40);
+        var previous = model.Items;
+        var description = model.PageDescription;
+
+        await model.LoadPageCommand.ExecuteAsync(80);
+
+        Assert.Same(previous, model.Items);
+        Assert.Equal(description, model.PageDescription);
+        Assert.Equal(40, model.Items.Count);
+        Assert.Equal("item-40", model.Items[0].Id);
+        Assert.True(model.CanRetry);
+        Assert.Equal(80, model.RetryIndex);
+        Assert.True(model.HasMessage);
+        Assert.False(model.IsLoading);
+        Assert.True(model.HasPreviousPage);
+
+        await model.LoadPageCommand.ExecuteAsync(model.PreviousIndex);
+
+        Assert.Equal("item-0", model.Items[0].Id);
+        Assert.False(model.CanRetry);
+        Assert.False(model.HasMessage);
+        Assert.Equal([0, 40, 80, 0], requests);
+    }
+
+    private sealed class ShrinkingLibraryHandler(Func<int, string> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri!.Query);
+            var start = int.Parse(query["StartIndex"]!, System.Globalization.CultureInfo.InvariantCulture);
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(respond(start), System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
+    [Fact]
     public async Task PagesReplaceRatherThanAccumulateAndReopeningPreservesTheCurrentPage()
     {
         var client = new Client();
