@@ -277,7 +277,7 @@ public sealed class JellyfinMediaPreviewClientTests
         Assert.Equal(2, handler.Requests.Count(IsImage));
         var continuing = home.ContinueWatching;
         var latest = Assert.Single(home.RecentlyAddedLibraries).Items;
-        Assert.Same(continuing[0].Backdrop, continuing[1].Backdrop);
+        Assert.Single(continuing);
         Assert.Same(continuing[0].Backdrop, latest[0].Backdrop);
         Assert.Same(latest[0].Backdrop, latest[1].Backdrop);
         Assert.Same(latest[0].Artwork, latest[1].Artwork);
@@ -485,6 +485,57 @@ public sealed class JellyfinMediaPreviewClientTests
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(5);
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ContinueWatchingMetadataUsesTheSharedLimitAndDrainsOnCancellation(bool deadline, bool advancing)
+    {
+        using var clock = new ManualDeadlineTimeProvider();
+        using var cancellation = new CancellationTokenSource();
+        var episodes = JsonSerializer.Serialize(new
+        {
+            Items = Enumerable.Range(0, 8).Select(index => new
+            {
+                Id = $"current-{index}",
+                Name = $"Current {index}",
+                Type = "Episode",
+                SeriesId = $"series-{index}",
+                UserData = new { PlayedPercentage = advancing ? 95 : 50 },
+            }),
+        });
+        using var handler = new AsyncPreviewHandler(async (request, token) =>
+        {
+            if (!request.Uri.AbsolutePath.EndsWith(advancing ? "/Episodes" : "/Items", StringComparison.Ordinal))
+            {
+                return MetadataResponse(request, episodes, "[]");
+            }
+
+            await Task.Delay(Timeout.Infinite, token);
+            throw new InvalidOperationException("Advancement should be canceled.");
+        });
+        using var client = CreateClient(handler, clock);
+        var loading = client.GetHomeAsync(Session, cancellation.Token);
+        await handler.WaitForAsync(requests => requests.Count(request =>
+            request.Uri.AbsolutePath.EndsWith(advancing ? "/Episodes" : "/Items", StringComparison.Ordinal)) == 6);
+        Assert.Equal(6, handler.MaximumRequests);
+        if (deadline)
+        {
+            clock.Expire();
+            var exception = await Assert.ThrowsAsync<MediaPreviewException>(() => loading.WaitAsync(TestTimeout));
+            Assert.Equal(MediaPreviewError.TimedOut, exception.Error);
+        }
+        else
+        {
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => loading.WaitAsync(TestTimeout));
+        }
+
+        Assert.Equal(0, handler.ActiveRequests);
+        Assert.DoesNotContain(handler.Requests, IsImage);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task LibraryPageDeadlineDrainsRequests(bool duringArtwork)
@@ -557,6 +608,11 @@ public sealed class JellyfinMediaPreviewClientTests
     private static HttpResponseMessage MetadataResponse(CapturedRequest request, string resume, string latest)
     {
         var path = request.Uri.AbsolutePath;
+        if (path.EndsWith("/Items", StringComparison.Ordinal))
+        {
+            return JsonResponse("""{"Items":[]}""");
+        }
+
         if (path.EndsWith("/Shows/NextUp", StringComparison.Ordinal))
         {
             return JsonResponse("""{"Items":[]}""");
@@ -719,6 +775,11 @@ public sealed class JellyfinMediaPreviewClientTests
                 request.Headers.GetValues("X-Emby-Token").Single()));
 
             var path = request.RequestUri.AbsolutePath;
+            if (path.EndsWith("/Items", StringComparison.Ordinal))
+            {
+                return Json("""{"Items":[]}""");
+            }
+
             if (path.EndsWith("/Shows/NextUp", StringComparison.Ordinal))
             {
                 return Json("""{"Items":[]}""");

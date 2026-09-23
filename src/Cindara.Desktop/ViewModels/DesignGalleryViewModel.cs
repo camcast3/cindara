@@ -15,14 +15,12 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
         MediaPreviewCardViewModel? featured,
         IReadOnlyList<MediaPreviewCardViewModel> continueWatching,
         IReadOnlyList<MediaPreviewRailViewModel> recentlyAddedLibraries,
-        IReadOnlyList<MediaPreviewCardViewModel> nextUp,
         IReadOnlyList<MediaLibrary> libraries)
     {
         _initialFeatured = featured;
         _featured = featured;
         ContinueWatching = continueWatching;
         RecentlyAddedLibraries = recentlyAddedLibraries;
-        NextUp = nextUp;
         Libraries = libraries;
     }
 
@@ -37,10 +35,8 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
     public IReadOnlyList<MediaPreviewRailViewModel> RecentlyAddedLibraries { get; }
 
     public bool HasContinueWatching => ContinueWatching.Count > 0;
-    public IReadOnlyList<MediaPreviewCardViewModel> NextUp { get; }
     public IReadOnlyList<MediaLibrary> Libraries { get; }
-    public bool HasNextUp => NextUp.Count > 0;
-    public bool IsEmpty => !HasContinueWatching && !HasNextUp && RecentlyAddedLibraries.All(rail => rail.Items.Count == 0);
+    public bool IsEmpty => !HasContinueWatching && RecentlyAddedLibraries.All(rail => rail.Items.Count == 0);
 
     public void SelectFeatured(MediaPreviewCardViewModel item)
     {
@@ -73,7 +69,6 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
                         ? Loc.Format("Format.RecentlyAdded", libraryName)
                         : rail.Title,
                     rail.Items.Select(CreateCard).ToArray())).ToArray(),
-                home.NextUp.Select(CreateCard).ToArray(),
                 home.Libraries);
             completed = true;
             return gallery;
@@ -100,11 +95,6 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
         _disposed = true;
         _initialFeatured?.Dispose();
         foreach (var item in ContinueWatching)
-        {
-            item.Dispose();
-        }
-
-        foreach (var item in NextUp)
         {
             item.Dispose();
         }

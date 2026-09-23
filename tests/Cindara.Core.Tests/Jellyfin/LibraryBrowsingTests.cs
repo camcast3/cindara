@@ -25,6 +25,7 @@ public sealed class LibraryBrowsingTests
                 "/jellyfin/Users/user/Views" => """{"Items":[{"Id":"music","Name":"Music","CollectionType":"music"},{"Id":"movies","Name":"Movies","CollectionType":"movies"}]}""",
                 "/jellyfin/Shows/NextUp" => """{"Items":[{"Id":"episode","Name":"Next episode","Type":"Episode","SeriesName":"A show"}]}""",
                 "/jellyfin/Users/user/Items/Resume" => """{"Items":[]}""",
+                "/jellyfin/Users/user/Items" => """{"Items":[]}""",
                 "/jellyfin/Users/user/Items/Latest" => "[]",
                 _ => "{}",
             }, path.Contains("/Images/", StringComparison.Ordinal) ? HttpStatusCode.NotFound : HttpStatusCode.OK));
@@ -33,7 +34,7 @@ public sealed class LibraryBrowsingTests
 
         var home = await client.GetHomeAsync(Session);
 
-        Assert.Equal("episode", Assert.Single(home.NextUp).Id);
+        Assert.Equal("episode", Assert.Single(home.ContinueWatching).Id);
         Assert.Equal("episode", home.Featured?.Id);
         Assert.Equal(2, home.Libraries.Count);
         Assert.Contains(home.Libraries, library => library.CollectionType == "music");

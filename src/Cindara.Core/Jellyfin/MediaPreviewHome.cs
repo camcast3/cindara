@@ -5,6 +5,5 @@ public sealed record MediaPreviewHome(
     IReadOnlyList<MediaPreviewItem> ContinueWatching,
     IReadOnlyList<MediaPreviewRail> RecentlyAddedLibraries)
 {
-    public IReadOnlyList<MediaPreviewItem> NextUp { get; init; } = [];
     public IReadOnlyList<MediaLibrary> Libraries { get; init; } = [];
 }

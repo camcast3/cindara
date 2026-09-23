@@ -99,7 +99,6 @@
   <data name="Home.Retry" xml:space="preserve"><value>Retry loading Home</value></data>
   <data name="Action.CancelLoading" xml:space="preserve"><value>Cancel loading</value></data>
   <data name="Action.Exit" xml:space="preserve"><value>Exit</value></data>
-  <data name="Home.NextUp" xml:space="preserve"><value>Next Up</value></data>
   <data name="Home.Empty" xml:space="preserve"><value>No media in your Home rows yet. Choose a library to browse.</value></data>
   <data name="Library.NoLibraries" xml:space="preserve"><value>No libraries are visible to this account. Check library access with your server administrator.</value></data>
   <data name="Library.Loading" xml:space="preserve"><value>Loading library...</value></data>

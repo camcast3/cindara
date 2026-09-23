@@ -212,7 +212,14 @@ The preview has a single Home navigation action in the sidebar. Settings opens
 the three-action settings panel; returning Home preserves the
 loaded media and focused card. The top tab bar has been removed pending a
 product decision about its purpose.
-Continue Watching stays first, followed by Next Up and library entry points.
+Continue Watching stays first and combines resume and next-up episodes into one
+row, followed by library entry points. Each series appears at most once: the most
+recent resume episode below 90% watched wins, otherwise the next unplayed episode
+in Jellyfin's order is shown. Movies at or above 90% watched are omitted.
+This client-side display rule does not change server playback progress.
+The row is ordered by each series' latest playback, newest first, with resumed
+and next episodes mixed together. Movies use their own last-played timestamp;
+missing timestamps sort last and ties retain server order.
 Recently-added rows use TV, Movies, Anime order. Anime libraries are distinguished by
 their name because Jellyfin normally reports them as `tvshows`. Separate
 libraries within each group retain the server's order and are never merged.

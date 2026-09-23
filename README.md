@@ -14,7 +14,7 @@ Windows, or Keychain on macOS; rejected tokens remove only the affected
 account and return it to sign-in.
 
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
-Settings. Home includes Continue Watching, Next Up, latest additions, and the
+Settings. Home includes a single Continue Watching row, latest additions, and the
 account's visible libraries. Libraries open alphabetically sorted, 40-item
 poster pages with explicit Previous/Next controls rather than loading the
 entire collection. Selecting a card opens a read-only summary; Back restores
@@ -52,6 +52,18 @@ An in-memory LRU artwork cache holds at most 128 entries / 32 MiB, expires after
 five minutes, and is isolated to the exact authenticated session (including its
 token). Account changes, sign-out, and shutdown clear it; no artwork is cached
 on disk. Each HTTP response is limited to 8 MiB.
+Continue Watching combines Jellyfin resume and next-up results into at most 20
+cards, with only one episode per series. The most recently played resume episode
+takes priority; below 90% watched it resumes, while at or above 90% it advances
+to the following unplayed episode in Jellyfin's episode order. Completed movies
+are omitted. The rule uses existing Jellyfin APIs, requires no plugin, and does
+not mark anything watched or alter server progress. Unstarted shows are not
+suggested by the next-up query. Only movies and episodes qualify; series and season
+containers are excluded. Selection happens before artwork is downloaded.
+The whole row is ordered newest-first by the last playback anywhere in each
+series (including completed episodes and rewatches), not by the unplayed next
+episode or by whether a card is resumable. Movies use their own last-played
+timestamp. Equal timestamps keep server order; missing timestamps sort last.
 **Cancel loading** or Back/Escape cancels the request; failures retain sign-in and
 offer Retry (except a rejected session, which returns to sign-in). An unsuccessful
 page change keeps the previous page and retries the failed offset. Empty libraries

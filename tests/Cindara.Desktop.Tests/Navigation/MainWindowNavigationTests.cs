@@ -31,6 +31,141 @@ public sealed class MainWindowNavigationTests
     [InlineData("en", 1920)]
     [InlineData("en", 3840)]
     [InlineData("qps-plocm", 1920)]
+    public Task UnifiedContinueWatchingWalkthroughUsesRealApiSelectionAndRestoresFocus(string cultureName, int width) =>
+        TestAppBuilder.Run(async () =>
+        {
+            using var culture = new CultureScope(cultureName);
+            using var handler = new ContinueWatchingUiHandler(CreateReviewArtwork());
+            using var client = new JellyfinMediaPreviewClient(handler,
+                new JellyfinClientIdentity("Cindara", "UI tests", "device", "1.0"));
+            using var fixture = new ShellFixture(preferences: new PresentationPreferences(ReducedMotion: true), mediaClient: client);
+            fixture.Window.WindowState = WindowState.Normal;
+            fixture.Window.Width = width;
+            fixture.Window.Height = width * 9 / 16;
+            fixture.SignIn(waitForHome: false);
+            await fixture.Model.OpenHomeCommand.ExecutionTask!;
+            fixture.Flush();
+
+            var gallery = fixture.Gallery;
+            var row = gallery.FindControl<ItemsControl>("ContinueWatchingRow")!;
+            var cards = row.GetVisualDescendants().OfType<Button>().ToArray();
+            var items = cards.Select(card => Assert.IsType<MediaPreviewCardViewModel>(card.DataContext)).ToArray();
+            Assert.Equal(["sky-11", "north-6", "moon", "river-1", "harbor-1", "orbit-1", "garden-1", "summit-1"],
+                items.Select(item => item.Id));
+            Assert.Equal(42, items[1].PlaybackProgress);
+            Assert.False(items[0].HasPlaybackProgress);
+            Assert.All(items, item => Assert.True(item.HasArtwork));
+            Assert.Single(gallery.GetVisualDescendants().OfType<TextBlock>(),
+                block => block.Text == Loc.Get("Gallery.ContinueWatching"));
+            Assert.DoesNotContain(gallery.GetVisualDescendants().OfType<TextBlock>(), block => block.Text == "Next Up");
+            Assert.Same(cards[0], Focused(fixture.Window));
+            AssertInsideWindow(fixture.Window, cards[0]);
+            Capture(fixture.Window, $"continue-watching-{cultureName}-{width}");
+
+            var rtl = cultureName == "qps-plocm";
+            fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+            Assert.Same(cards[1], Focused(fixture.Window));
+            Assert.Equal("Northstar", fixture.Model.DesignGallery!.Featured!.HeroName);
+            for (var index = 2; index < cards.Length; index++)
+            {
+                fixture.Key(rtl ? Key.Left : Key.Right);
+                Assert.Same(cards[index], Focused(fixture.Window));
+            }
+
+            AssertInsideWindow(fixture.Window, cards[^1]);
+            var scroll = row.GetVisualAncestors().OfType<ScrollViewer>().First();
+            Assert.True(scroll.Offset.X > 0);
+            var offset = scroll.Offset;
+            Capture(fixture.Window, $"continue-watching-scrolled-{cultureName}-{width}");
+            fixture.Key(Key.Enter);
+            Assert.True(fixture.IsModalVisible);
+            fixture.Key(Key.Escape);
+            Assert.Same(cards[^1], Focused(fixture.Window));
+            Assert.Equal(offset, scroll.Offset);
+            fixture.OpenSettings();
+            fixture.Click(fixture.Shell.FindControl<Button>("BackHomeButton")!);
+            Assert.Same(cards[^1], Focused(fixture.Window));
+            Assert.Equal(offset, scroll.Offset);
+            fixture.Input.Press(ControllerAction.Back);
+            Assert.Equal("SidebarHomeButton", Focused(fixture.Window).Name);
+            fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+            Assert.Same(cards[^1], Focused(fixture.Window));
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            Assert.IsType<MediaLibrary>(Focused(fixture.Window).DataContext);
+        });
+
+    private static byte[] CreateReviewArtwork()
+    {
+        using var bitmap = new RenderTargetBitmap(new PixelSize(720, 405));
+        using (var drawing = bitmap.CreateDrawingContext())
+        {
+            drawing.FillRectangle(new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#18394F")), new Rect(0, 0, 720, 405));
+            drawing.FillRectangle(new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#367A88")), new Rect(0, 240, 720, 165));
+            drawing.DrawEllipse(new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#E3BE76")), null, new Point(535, 100), 48, 48);
+            drawing.DrawText(new Avalonia.Media.FormattedText("Cindara UI review",
+                System.Globalization.CultureInfo.InvariantCulture, Avalonia.Media.FlowDirection.LeftToRight,
+                Avalonia.Media.Typeface.Default, 30, Avalonia.Media.Brushes.White), new Point(32, 320));
+        }
+
+        using var stream = new MemoryStream();
+        bitmap.Save(stream, PngBitmapEncoderOptions.Default);
+        return stream.ToArray();
+    }
+
+    private sealed class ContinueWatchingUiHandler(byte[] artwork) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            Assert.Equal("test-token", request.Headers.GetValues("X-Emby-Token").Single());
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.Contains("/Images/", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new ByteArrayContent(artwork) });
+            }
+
+            const string north = """{"Id":"north-6","Name":"Signals from Home","Type":"Episode","SeriesId":"north","SeriesName":"Northstar","ParentIndexNumber":1,"IndexNumber":6,"ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":42}}""";
+            const string sky = """{"Id":"sky-10","Name":"The Crossing","Type":"Episode","SeriesId":"sky","SeriesName":"Skyward","ParentIndexNumber":1,"IndexNumber":10,"ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":95}}""";
+            var json = path switch
+            {
+                "/Users/first/Items/Resume" => $$$"""
+                    {"Items":[{{{north}}},{{{sky}}},
+                    {"Id":"sky-9","Name":"Old episode","Type":"Episode","SeriesId":"sky","UserData":{"PlayedPercentage":30}},
+                    {"Id":"river-season","Name":"Season 1","Type":"Season","SeriesId":"river","SeriesName":"Riverbend","UserData":{"PlayedPercentage":20}},
+                    {"Id":"moon","Name":"Moon Garden","Type":"Movie","ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":58}}]}
+                    """,
+                "/Shows/NextUp" => $$$"""
+                    {"Items":[{{{north}}},{{{sky}}},
+                    {"Id":"river-1","Name":"First Light","Type":"Episode","SeriesId":"river","SeriesName":"Riverbend","ImageTags":{"Primary":"tag"}},
+                    {"Id":"harbor-1","Name":"The Arrival","Type":"Episode","SeriesId":"harbor","SeriesName":"Harbor Lights","ImageTags":{"Primary":"tag"}},
+                    {"Id":"orbit-1","Name":"New Horizons","Type":"Episode","SeriesId":"orbit","SeriesName":"Orbit","ImageTags":{"Primary":"tag"}},
+                    {"Id":"garden-1","Name":"A New Season","Type":"Episode","SeriesId":"garden","SeriesName":"Wild Gardens","ImageTags":{"Primary":"tag"}},
+                    {"Id":"summit-1","Name":"The Ascent","Type":"Episode","SeriesId":"summit","SeriesName":"Summit","ImageTags":{"Primary":"tag"}}]}
+                    """,
+                "/Shows/sky/Episodes" => """
+                    {"Items":[{"Id":"sky-11","Name":"Beyond the Clouds","Type":"Episode","SeriesId":"sky","SeriesName":"Skyward",
+                    "ParentIndexNumber":1,"IndexNumber":11,"ImageTags":{"Primary":"tag"},"UserData":{"PlayedPercentage":0}}]}
+                    """,
+                "/Users/first/Views" => """{"Items":[{"Id":"tv","Name":"TV","CollectionType":"tvshows"}]}""",
+                "/Users/first/Items" when request.RequestUri.Query.Contains("ParentId=sky&", StringComparison.Ordinal) =>
+                    """{"Items":[{"UserData":{"LastPlayedDate":"2026-09-22T15:00:00Z"}}]}""",
+                "/Users/first/Items" when request.RequestUri.Query.Contains("ParentId=north&", StringComparison.Ordinal) =>
+                    """{"Items":[{"UserData":{"LastPlayedDate":"2026-09-21T15:00:00Z"}}]}""",
+                "/Users/first/Items" => """{"Items":[]}""",
+                "/Users/first/Items/Latest" => $"[{north}]",
+                _ => throw new InvalidOperationException($"Unexpected UI test endpoint: {path}"),
+            };
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
+    [Theory]
+    [InlineData("en", 1920)]
+    [InlineData("en", 3840)]
+    [InlineData("qps-plocm", 1920)]
     public Task LibrariesPageThroughMediaAndRestoreFocusAndScrollFromSummaryAndHome(string cultureName, int width) =>
         TestAppBuilder.Run(async () =>
         {
@@ -720,9 +855,9 @@ public sealed class MainWindowNavigationTests
     private sealed class ShellFixture : IDisposable
     {
         public ShellFixture(bool savedAccounts = true, PresentationPreferences? preferences = null,
-            LocalDiagnostics? diagnostics = null)
+            LocalDiagnostics? diagnostics = null, IJellyfinMediaPreviewClient? mediaClient = null)
         {
-            Model = new MainViewModel(new ServerClient(), new AuthenticationService(savedAccounts), Preview);
+            Model = new MainViewModel(new ServerClient(), new AuthenticationService(savedAccounts), mediaClient ?? Preview);
             Window = new TestMainWindow(Input, preferences, diagnostics) { DataContext = Model };
             Window.Show();
             Window.Activate();
@@ -882,10 +1017,11 @@ public sealed class MainWindowNavigationTests
             var overview = LongDescription
                 ? string.Concat(Enumerable.Repeat("A long readable media description. ", 100)) : "Your media description.";
             var item = new MediaPreviewItem("movie", "First movie", "2026", "Movie", null, null, overview, "1h 5m", 40);
-            return new MediaPreviewHome(item, [item], [new MediaPreviewRail("movies", "Movies", [item])])
+            return new MediaPreviewHome(item,
+                WithLibraries ? [item, item with { Id = "next-up", Name = "Next episode", MediaType = "Episode" }] : [item],
+                [new MediaPreviewRail("movies", "Movies", [item])])
             {
                 Libraries = WithLibraries ? [new MediaLibrary("movies", "Movies", "movies")] : [],
-                NextUp = WithLibraries ? [item with { Id = "next-up", Name = "Next episode", MediaType = "Episode" }] : [],
             };
         }
     }

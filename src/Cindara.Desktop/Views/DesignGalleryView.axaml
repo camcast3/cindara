@@ -203,7 +203,7 @@
                         <TextBlock Classes="heading" Text="{loc:Tr Gallery.ContinueWatching}" />
                         <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                       VerticalScrollBarVisibility="Disabled">
-                            <ItemsControl Classes="media-row" ItemsSource="{Binding ContinueWatching}">
+                            <ItemsControl x:Name="ContinueWatchingRow" Classes="media-row" ItemsSource="{Binding ContinueWatching}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal"
@@ -255,36 +255,6 @@
                         </ScrollViewer>
                     </StackPanel>
 
-                    <StackPanel Classes="media-rail" IsVisible="{Binding HasNextUp}" Spacing="10">
-                        <TextBlock Classes="heading" Text="{loc:Tr Home.NextUp}" />
-                        <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
-                            <ItemsControl Classes="media-row" ItemsSource="{Binding NextUp}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Gallery.ItemSpacing}" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
-                                        <StackPanel Width="{DynamicResource Gallery.ContinueWidth}" Spacing="5" Margin="0,0,0,6">
-                                            <Button Width="{DynamicResource Gallery.ContinueWidth}" Height="{DynamicResource Gallery.ContinueHeight}"
-                                                    Classes="card continue-card" AutomationProperties.Name="{Binding Name}"
-                                                    AutomationProperties.HelpText="{Binding Subtitle}"
-                                                    Click="OnCardClicked" GotFocus="OnMediaCardFocused">
-                                                <Grid>
-                                                    <TextBlock Text="{loc:Tr Library.ArtworkUnavailable}" IsVisible="{Binding !HasArtwork}"
-                                                               TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
-                                                </Grid>
-                                            </Button>
-                                            <TextBlock FontSize="{DynamicResource Gallery.CardTitleSize}" Text="{Binding Name}" TextWrapping="Wrap" />
-                                            <TextBlock Classes="caption" FontSize="{DynamicResource Gallery.CardCaptionSize}" Text="{Binding Subtitle}" TextWrapping="Wrap" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </StackPanel>
                     <StackPanel Classes="media-rail" Spacing="10">
                         <TextBlock Classes="heading" Text="{loc:Tr Nav.Libraries}" />
                         <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">

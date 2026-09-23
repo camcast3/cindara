@@ -87,20 +87,18 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
         try
         {
-            var resumeTask = GetResumeAsync(load);
-            var nextUpTask = GetNextUpAsync(load);
+            var continuingTask = GetContinueWatchingAsync(load);
             var librariesTask = GetLibraryRailsAsync(load);
-            await Task.WhenAll(resumeTask, nextUpTask, librariesTask).ConfigureAwait(false);
+            await Task.WhenAll(continuingTask, librariesTask).ConfigureAwait(false);
 
-            var (resumeItems, resume) = await resumeTask.ConfigureAwait(false);
+            var (continuingSources, continuing) = await continuingTask.ConfigureAwait(false);
             var (views, libraries) = await librariesTask.ConfigureAwait(false);
-            var nextUp = await nextUpTask.ConfigureAwait(false);
-            var featured = resume.Count > 0
-                ? resume[0]
-                : nextUp.Count > 0 ? nextUp[0] : libraries.SelectMany(rail => rail.Items).FirstOrDefault();
+            var featured = continuing.Count > 0
+                ? continuing[0]
+                : libraries.SelectMany(rail => rail.Items).FirstOrDefault();
             if (featured is not null)
             {
-                var featuredSource = resumeItems.FirstOrDefault(item => item.Id == featured.Id);
+                var featuredSource = continuingSources.FirstOrDefault(item => item.Id == featured.Id);
                 var backdrop = featured.Backdrop;
                 if (backdrop is null)
                 {
@@ -124,10 +122,9 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             deadline.Token.ThrowIfCancellationRequested();
             return new MediaPreviewHome(
                 Featured: featured,
-                ContinueWatching: resume,
+                ContinueWatching: continuing,
                 RecentlyAddedLibraries: libraries)
             {
-                NextUp = nextUp,
                 Libraries = views,
             };
         }
@@ -194,23 +191,115 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         }
     }
 
-    private async Task<IReadOnlyList<MediaPreviewItem>> GetNextUpAsync(PreviewLoad load)
-    {
-        var items = await GetWrappedItemsAsync(load,
-            $"Shows/NextUp?UserId={Uri.EscapeDataString(load.Session.UserId)}&Limit={ItemLimit}&Fields={ItemFields}",
-            "next-up media").ConfigureAwait(false);
-        return await PopulateArtworkAsync(load, items.Take(ItemLimit).ToArray(), landscape: true).ConfigureAwait(false);
-    }
     private async Task<(IReadOnlyList<JellyfinItem> Sources, IReadOnlyList<MediaPreviewItem> Items)>
-        GetResumeAsync(PreviewLoad load)
+        GetContinueWatchingAsync(PreviewLoad load)
     {
-        var items = await GetWrappedItemsAsync(
+        var resumeTask = GetWrappedItemsAsync(
             load,
             $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Items/Resume"
-            + $"?Limit={ItemLimit}&Recursive=true&Fields={ItemFields}",
-            "continue-watching media").ConfigureAwait(false);
-        var previews = await PopulateArtworkAsync(load, items.Take(ItemLimit).ToArray(), landscape: true).ConfigureAwait(false);
+            + $"?Limit={ItemLimit}&Recursive=true&EnableUserData=true&IncludeItemTypes=Movie,Episode&Fields={ItemFields}",
+            "continue-watching media");
+        var nextUpTask = GetWrappedItemsAsync(load,
+            $"Shows/NextUp?UserId={Uri.EscapeDataString(load.Session.UserId)}&Limit={ItemLimit}&Fields={ItemFields}"
+            + "&EnableUserData=true&EnableResumable=true&EnableRewatching=false&DisableFirstEpisode=true",
+            "next-up media");
+        await Task.WhenAll(resumeTask, nextUpTask).ConfigureAwait(false);
+
+        // Resume is authoritative for a show's current episode; never substitute an older
+        // partially watched episode when the most recently played one has reached the cutoff.
+        var candidates = (await resumeTask.ConfigureAwait(false))
+            .Where(item => item.Type is "Movie" or "Episode")
+            .OrderByDescending(item => item.UserData?.LastPlayedDate)
+            .Concat((await nextUpTask.ConfigureAwait(false)).Where(item => item.Type == "Episode"))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.Name))
+            .DistinctBy(item => item.Type == "Episode" && !string.IsNullOrWhiteSpace(item.SeriesId)
+                ? ("series", item.SeriesId) : ("item", item.Id))
+            .ToArray();
+        var resolved = await Task.WhenAll(candidates.Select(async source =>
+        {
+            var item = IsContinueCandidate(source) ? source
+                : source.Type == "Episode" && !string.IsNullOrWhiteSpace(source.SeriesId)
+                    ? await GetFollowingEpisodeAsync(load, source).ConfigureAwait(false)
+                    : null;
+            var lastPlayed = item is null ? null : await GetLastPlaybackAsync(load, source).ConfigureAwait(false);
+            return (Item: item, LastPlayed: lastPlayed);
+        })).ConfigureAwait(false);
+        var items = resolved.OrderByDescending(result => result.LastPlayed)
+            .Select(result => result.Item).OfType<JellyfinItem>().DistinctBy(item => item.Id).Take(ItemLimit).ToArray();
+        var previews = await PopulateArtworkAsync(load, items, landscape: true).ConfigureAwait(false);
         return (items, previews);
+    }
+
+    private async Task<DateTimeOffset?> GetLastPlaybackAsync(PreviewLoad load, JellyfinItem source)
+    {
+        var lastPlayed = source.UserData?.LastPlayedDate;
+        if (source.Type == "Episode" && !string.IsNullOrWhiteSpace(source.SeriesId))
+        {
+            // Next-up episodes have not been played yet. Rank the series using its
+            // latest playback, including completed episodes, specials, and rewatches.
+            var recent = await GetWrappedItemsAsync(load,
+                $"Users/{Uri.EscapeDataString(load.Session.UserId)}/Items"
+                + $"?ParentId={Uri.EscapeDataString(source.SeriesId)}&Recursive=true&IncludeItemTypes=Episode"
+                + "&SortBy=DatePlayed&SortOrder=Descending&Limit=1&EnableUserData=true&EnableImages=false&EnableTotalRecordCount=false",
+                "series playback activity").ConfigureAwait(false);
+            if (recent.Count > 0 && recent[0] is null)
+            {
+                throw InvalidResponse(new JsonException("Invalid series playback activity."));
+            }
+
+            if (recent.Count > 0 && recent[0].UserData?.LastPlayedDate is { } seriesLastPlayed
+                && (lastPlayed is null || seriesLastPlayed > lastPlayed))
+            {
+                lastPlayed = seriesLastPlayed;
+            }
+        }
+
+        return lastPlayed;
+    }
+
+    private static double? GetPlayedPercentage(JellyfinItem item) =>
+        item.UserData?.PlayedPercentage
+        ?? (item.RunTimeTicks is > 0 && item.UserData?.PlaybackPositionTicks is { } position
+            ? (double)position / item.RunTimeTicks.Value * 100 : null);
+
+    private static bool IsContinueCandidate(JellyfinItem item) =>
+        item.UserData?.Played is not true && (GetPlayedPercentage(item) ?? 0) < 90;
+
+    private async Task<JellyfinItem?> GetFollowingEpisodeAsync(PreviewLoad load, JellyfinItem current)
+    {
+        var cursor = current.Id!;
+        var visited = new HashSet<string>(StringComparer.Ordinal) { cursor };
+        while (true)
+        {
+            // Jellyfin's StartItemId is inclusive. StartIndex=1 skips the current
+            // episode while preserving the server's episode/specials ordering.
+            var episodes = await GetWrappedItemsAsync(load,
+                $"Shows/{Uri.EscapeDataString(current.SeriesId!)}/Episodes"
+                + $"?UserId={Uri.EscapeDataString(load.Session.UserId)}&StartItemId={Uri.EscapeDataString(cursor)}"
+                + $"&StartIndex=1&Limit={ItemLimit}&IsMissing=false&EnableUserData=true&Fields={ItemFields}",
+                "following episode").ConfigureAwait(false);
+            foreach (var episode in episodes)
+            {
+                if (episode is null || string.IsNullOrWhiteSpace(episode.Id) || string.IsNullOrWhiteSpace(episode.Name)
+                    || episode.SeriesId != current.SeriesId || episode.Type != "Episode"
+                    || !visited.Add(episode.Id))
+                {
+                    throw InvalidResponse(new JsonException("Invalid following episode."));
+                }
+
+                if (IsContinueCandidate(episode))
+                {
+                    return episode;
+                }
+
+                cursor = episode.Id;
+            }
+
+            if (episodes.Count < ItemLimit)
+            {
+                return null;
+            }
+        }
     }
 
     private async Task<(IReadOnlyList<MediaLibrary> Libraries, IReadOnlyList<MediaPreviewRail> Rails)> GetLibraryRailsAsync(PreviewLoad load)
@@ -345,7 +434,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 backdrop ?? artwork,
                 item.Overview,
                 string.Empty,
-                item.UserData?.PlayedPercentage is { } percentage
+                GetPlayedPercentage(item) is { } percentage
                     ? Math.Clamp(percentage, 0, 100)
                     : null,
                 HeroName: BuildName(item, preferSeriesTitle: true),
@@ -552,5 +641,9 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         Dictionary<string, string>? ImageTags,
         JellyfinUserData? UserData);
 
-    private sealed record JellyfinUserData(double? PlayedPercentage);
+    private sealed record JellyfinUserData(
+        double? PlayedPercentage,
+        long? PlaybackPositionTicks,
+        bool? Played,
+        DateTimeOffset? LastPlayedDate);
 }

@@ -8,6 +8,18 @@ public sealed class GalleryNavigationMarkupTests
     private static readonly XNamespace Names = "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Fact]
+    public void ContinueWatchingHasOneRowAndNoSeparateNextUpRow()
+    {
+        var gallery = LoadGallery();
+        Assert.Single(gallery.Descendants(Xaml + "ItemsControl"),
+            element => (string?)element.Attribute("ItemsSource") == "{Binding ContinueWatching}");
+        Assert.DoesNotContain(gallery.Descendants().Attributes(),
+            attribute => attribute.Value.Contains("NextUp", StringComparison.Ordinal));
+        Assert.Single(gallery.Descendants(Xaml + "TextBlock"),
+            element => (string?)element.Attribute("Text") == "{loc:Tr Gallery.ContinueWatching}");
+    }
+
+    [Fact]
     public void HomeHasOneNavigationActionAndNoSpeculativeTopTabs()
     {
         var gallery = LoadGallery();
@@ -26,7 +38,7 @@ public sealed class GalleryNavigationMarkupTests
             .Where(button => (string?)button.Attribute("Click") == "OnCardClicked")
             .ToArray();
 
-        Assert.Equal(3, cards.Length);
+        Assert.Equal(2, cards.Length);
         Assert.All(cards, card =>
         {
             Assert.Equal("{Binding Name}", (string?)card.Attribute("AutomationProperties.Name"));
