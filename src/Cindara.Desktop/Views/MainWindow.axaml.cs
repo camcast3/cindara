@@ -107,6 +107,8 @@ public partial class MainWindow : Window
         Shell.LibraryRequested += OnLibraryRequested;
         GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        GalleryView.NavigationWidthChanged += (_, _) => UpdateGalleryFooter();
+        UpdateGalleryFooter();
     }
 
     private void OpenLibraries()
@@ -582,6 +584,10 @@ public partial class MainWindow : Window
             ? Avalonia.Layout.HorizontalAlignment.Stretch
             : Avalonia.Layout.HorizontalAlignment.Right;
     }
+
+    private void UpdateGalleryFooter() =>
+        GalleryFooter.ColumnDefinitions = new ColumnDefinitions(
+            $"{GalleryView.NavigationWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)},*");
 
     private void OnChooseAccount(object? sender, RoutedEventArgs args)
     {

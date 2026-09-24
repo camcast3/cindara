@@ -342,9 +342,18 @@ public sealed class MainWindowNavigationTests
                 (double)gallery.Resources["Gallery.HeroHeight"]!, precision: 6);
             var heroPanel = gallery.FindControl<Grid>("HeroPanel")!;
             var heroText = gallery.FindControl<ScrollViewer>("HeroTextScroll")!;
+            var scale = (double)gallery.Resources["Gallery.HeroTitleSize"]! / 56;
             Assert.InRange(heroText.Bounds.Width, 320, heroPanel.Bounds.Width * 0.5);
             Assert.Equal(ScrollBarVisibility.Hidden, heroText.VerticalScrollBarVisibility);
             Assert.Null(Assert.IsType<Grid>(heroText.Content).Background);
+            Assert.Equal(Math.Max(72, 96 * scale),
+                (double)gallery.Resources["Gallery.NavigationWidth"]!, precision: 6);
+            Assert.Equal(22 * scale,
+                (double)gallery.Resources["Gallery.NavigationIconSize"]!, precision: 6);
+            Assert.Equal(24 * scale,
+                (double)gallery.Resources["Gallery.SectionHeadingSize"]!, precision: 6);
+            Assert.Equal(14 * scale,
+                (double)gallery.Resources["Gallery.CardTitleSize"]!, precision: 6);
             AssertInsideWindow(fixture.Window, continueCard);
             fixture.Input.Press(ControllerAction.NavigateDown);
             fixture.Flush();

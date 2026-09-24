@@ -99,7 +99,8 @@
             </Grid>
             <Grid x:Name="GallerySurface" IsVisible="{Binding IsDesignGalleryVisible}">
                 <views:DesignGalleryView x:Name="GalleryView" DataContext="{Binding DesignGallery}" />
-                <Grid VerticalAlignment="Bottom" ColumnDefinitions="96,*" IsHitTestVisible="False">
+                <Grid x:Name="GalleryFooter" VerticalAlignment="Bottom" ColumnDefinitions="96,*"
+                      IsHitTestVisible="False">
                     <Border Grid.Column="1" Background="{DynamicResource Cindara.Brush.Background}" Padding="24,8">
                         <StackPanel>
                             <TextBlock Classes="caption" Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />

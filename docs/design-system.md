@@ -154,6 +154,12 @@ complete poster. This preserves the approved 3440x1400 and 4K typography while
 shrinking long-title layouts on short/compact windows instead of clipping their
 subtitle and metadata. The 0.7 floor keeps small-window text legible; these
 intentional caps mean cards and hero text do not scale uniformly with one another.
+The same height-derived scale applies to all gallery text and icons: navigation
+symbols and labels, the monogram, section headings, media labels, captions, and
+empty-state copy. Navigation actions retain a 48-logical-pixel minimum target
+while the rail itself ranges from 72 logical pixels on compact windows to 192
+at the 4K logical profile. Artwork/card density continues to follow width so
+posters are not made sparse merely because typography must shrink.
 
 | Logical viewport | Card scale | Hero text scale | Hero height |
 | --- | --- | --- | --- |
