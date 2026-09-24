@@ -6,7 +6,7 @@
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.ShellView"
              x:DataType="vm:MainViewModel">
-    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="40">
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}">
         <ScrollViewer x:Name="PageScroll" Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
         <Grid>
             <StackPanel x:Name="HomePage" Spacing="24">
@@ -29,7 +29,8 @@
                 </Border>
             </StackPanel>
             <StackPanel x:Name="SettingsPage" IsVisible="False" Spacing="32"
-                        Width="600" HorizontalAlignment="Left">
+                        MaxWidth="{DynamicResource Cindara.Adaptive.FormMaxWidth}"
+                        HorizontalAlignment="Stretch">
                 <TextBlock Classes="display" Text="{loc:Tr Nav.Settings}" />
                 <Border Classes="settings-card">
                     <StackPanel x:Name="SettingsActions" Spacing="16">

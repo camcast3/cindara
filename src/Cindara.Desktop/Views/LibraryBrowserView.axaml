@@ -30,27 +30,32 @@
             <TextBlock Classes="secondary" Text="{loc:Tr Library.Empty}" IsVisible="{Binding IsEmpty}" />
             <TextBlock Classes="caption" Text="{Binding ArtworkMessage}" IsVisible="{Binding HasArtworkMessage}"
                        TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-            <StackPanel Orientation="Horizontal" Spacing="16">
+            <WrapPanel Orientation="Horizontal">
                 <Button x:Name="CancelLibraryLoading" Content="{loc:Tr Action.CancelLoading}"
+                        Margin="0,0,16,8"
                         Command="{Binding LoadPageCancelCommand}" IsVisible="{Binding IsLoading}" />
                 <Button x:Name="RetryLibraryLoading" Content="{loc:Tr Library.Retry}"
+                        Margin="0,0,16,8"
                         Command="{Binding LoadPageCommand}" CommandParameter="{Binding RetryIndex}"
                         IsVisible="{Binding CanRetry}" />
                 <Button x:Name="CancelLibraryArtwork" Content="{loc:Tr Library.CancelArtwork}"
+                        Margin="0,0,16,8"
                         Command="{Binding LoadArtworkCancelCommand}" IsVisible="{Binding LoadArtworkCommand.IsRunning}" />
                 <Button x:Name="RetryLibraryArtwork" Content="{loc:Tr Library.RetryArtwork}"
+                        Margin="0,0,16,8"
                         Command="{Binding LoadArtworkCommand}" IsVisible="{Binding CanRetryArtwork}" />
-            </StackPanel>
+            </WrapPanel>
         </StackPanel>
         <ScrollViewer x:Name="LibraryScroll" Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
             <ItemsControl x:Name="LibraryCards" ItemsSource="{Binding Items}" IsEnabled="{Binding !IsLoading}">
                 <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate><UniformGrid Columns="5" /></ItemsPanelTemplate>
+                    <ItemsPanelTemplate><UniformGrid x:Name="LibraryCardGrid" Columns="5" /></ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
-                        <StackPanel Margin="12" Spacing="8" Width="247.2" HorizontalAlignment="Center">
-                            <Button Classes="card" Height="372" HorizontalAlignment="Stretch"
+                        <StackPanel Margin="8" Spacing="8" Width="{DynamicResource Library.CardWidth}"
+                                    HorizontalAlignment="Center">
+                            <Button Classes="card" Height="{DynamicResource Library.CardHeight}" HorizontalAlignment="Stretch"
                                     AutomationProperties.Name="{Binding Name}"
                                     AutomationProperties.HelpText="{Binding Subtitle}"
                                     GotFocus="OnCardFocused" Click="OnCardClicked">
@@ -68,15 +73,17 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="24">
+        <WrapPanel Grid.Row="3" Orientation="Horizontal">
             <Button x:Name="PreviousLibraryPage" Content="{loc:Tr Library.Previous}"
+                    Margin="0,0,16,8"
                     IsEnabled="{Binding HasPreviousPage}" Command="{Binding LoadPageCommand}"
                     CommandParameter="{Binding PreviousIndex}" />
-            <TextBlock Text="{Binding PageDescription}" VerticalAlignment="Center"
+            <TextBlock Text="{Binding PageDescription}" VerticalAlignment="Center" Margin="0,0,16,8"
                        AutomationProperties.LiveSetting="Polite" />
             <Button x:Name="NextLibraryPage" Content="{loc:Tr Library.Next}"
+                    Margin="0,0,0,8"
                     IsEnabled="{Binding HasNextPage}" Command="{Binding LoadPageCommand}"
                     CommandParameter="{Binding NextIndex}" />
-        </StackPanel>
+        </WrapPanel>
     </Grid>
 </UserControl>

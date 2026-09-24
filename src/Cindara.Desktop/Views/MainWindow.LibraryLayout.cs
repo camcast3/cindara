@@ -55,7 +55,7 @@ public partial class MainWindow
         Control? focus = null;
         foreach (var choice in draft)
         {
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), ColumnSpacing = 12, Width = 1000 };
+            var row = new StackPanel { Spacing = 8 };
             var name = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
             name.Children.Add(new TextBlock { Text = choice.Library.Name, TextWrapping = TextWrapping.Wrap });
             name.Children.Add(new TextBlock
@@ -64,33 +64,35 @@ public partial class MainWindow
                 Classes = { "caption" },
             });
             row.Children.Add(name);
+            var actions = new WrapPanel();
+            row.Children.Add(actions);
             var toggle = ChoiceButton(Loc.Get(choice.Included ? "LibraryLayout.Hide" : "LibraryLayout.Show"),
                 $"library-{surface}-{choice.Library.Id}-toggle",
                 Loc.Format(choice.Included ? "LibraryLayout.HideFor" : "LibraryLayout.ShowFor", choice.Library.Name));
-            toggle.Width = 140;
+            toggle.MinWidth = 140;
+            toggle.Margin = new Avalonia.Thickness(0, 0, 12, 8);
             AutomationProperties.SetItemStatus(toggle, Loc.Get(choice.Included ? "LibraryLayout.Shown" : "LibraryLayout.Hidden"));
             toggle.Click += (_, _) =>
             {
                 choice.Included = !choice.Included;
                 ShowLibraryOrder(layout, surface, draft, choice.Library.Id);
             };
-            Grid.SetColumn(toggle, 1);
-            row.Children.Add(toggle);
+            actions.Children.Add(toggle);
             var index = draft.IndexOf(choice);
             var up = ChoiceButton(Loc.Get("LibraryLayout.Up"), $"library-{surface}-{choice.Library.Id}-up",
                 Loc.Format("LibraryLayout.UpFor", choice.Library.Name));
-            up.Width = 170;
+            up.MinWidth = 140;
+            up.Margin = new Avalonia.Thickness(0, 0, 12, 8);
             up.IsEnabled = index > 0;
             up.Click += (_, _) => Move(choice, -1, "up");
-            Grid.SetColumn(up, 2);
-            row.Children.Add(up);
+            actions.Children.Add(up);
             var down = ChoiceButton(Loc.Get("LibraryLayout.Down"), $"library-{surface}-{choice.Library.Id}-down",
                 Loc.Format("LibraryLayout.DownFor", choice.Library.Name));
-            down.Width = 170;
+            down.MinWidth = 140;
+            down.Margin = new Avalonia.Thickness(0, 0, 0, 8);
             down.IsEnabled = index < draft.Count - 1;
             down.Click += (_, _) => Move(choice, 1, "down");
-            Grid.SetColumn(down, 3);
-            row.Children.Add(down);
+            actions.Children.Add(down);
             ModalActions.Children.Add(row);
             if (choice.Library.Id == focusId)
             {

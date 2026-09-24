@@ -21,6 +21,10 @@ public partial class DesignGalleryView : UserControl
     private bool _rememberFocus;
     private DesignGalleryViewModel? _gallery;
 
+    public event EventHandler? NavigationWidthChanged;
+    public double NavigationWidth { get; private set; } = 96;
+    public double UiScale { get; private set; } = 1;
+
     public void SuspendFocusMemory() => _rememberFocus = false;
 
     public DesignGalleryView()
@@ -101,11 +105,36 @@ public partial class DesignGalleryView : UserControl
         var heroScale = profile.HeroScale;
         var textScale = _preferences.TextScale;
         var heroHeight = profile.HeroHeight;
+        var navigationWidth = profile.NavigationWidth;
         _heroHeight = heroHeight;
+        var layoutScaleChanged = Math.Abs(UiScale - heroScale) > 0.001;
+        UiScale = heroScale;
+        if (Math.Abs(NavigationWidth - navigationWidth) > 0.1 || layoutScaleChanged)
+        {
+            NavigationWidth = navigationWidth;
+            NavigationWidthChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        Resources["Gallery.NavigationWidth"] = navigationWidth;
+        Resources["Gallery.NavigationPadding"] = new Thickness(10 * heroScale, 24 * heroScale);
+        Resources["Gallery.LogoSize"] = 46 * heroScale;
+        Resources["Gallery.LogoRadius"] = new CornerRadius(23 * heroScale);
+        Resources["Gallery.LogoFontSize"] = 19 * heroScale * textScale;
+        Resources["Gallery.NavigationButtonSize"] = Math.Max(48, 52 * heroScale);
+        Resources["Gallery.NavigationIconSize"] = 22 * heroScale;
+        Resources["Gallery.NavigationSpacing"] = 12 * heroScale;
+        Resources["Gallery.ShortcutWidth"] = Math.Max(48, 74 * heroScale);
+        Resources["Gallery.ShortcutTextWidth"] = Math.Max(42, 68 * heroScale);
+        Resources["Gallery.NavigationTextSize"] = 14 * heroScale * textScale;
+        Resources["Gallery.SectionHeadingSize"] = 24 * heroScale * textScale;
+        Resources["Gallery.BodySize"] = 18 * heroScale * textScale;
+        Resources["Gallery.HeroPanelMargin"] = new Thickness(
+            52 * heroScale,
+            30 * heroScale,
+            40 * heroScale,
+            44 * heroScale);
         Resources["Gallery.HeroHeight"] = heroHeight;
-        Resources["Gallery.HeroContentWidth"] = Math.Min(
-            880 * heroScale,
-            size.Width * 0.6);
+        Resources["Gallery.HeroContentWidth"] = profile.HeroContentWidth;
         Resources["Gallery.HeroHeaderSize"] = 18 * heroScale * textScale;
         Resources["Gallery.HeroTitleSize"] = 56 * heroScale * textScale;
         Resources["Gallery.HeroTitleLineHeight"] = 64 * heroScale * textScale;
@@ -118,8 +147,8 @@ public partial class DesignGalleryView : UserControl
         Resources["Gallery.ContinueHeight"] = 195.6 * scale;
         Resources["Gallery.PosterWidth"] = 187.2 * scale;
         Resources["Gallery.PosterHeight"] = 280.8 * scale;
-        Resources["Gallery.CardTitleSize"] = 14 * scale * textScale;
-        Resources["Gallery.CardCaptionSize"] = 12 * scale * textScale;
+        Resources["Gallery.CardTitleSize"] = 14 * heroScale * textScale;
+        Resources["Gallery.CardCaptionSize"] = 12 * heroScale * textScale;
         Resources["Gallery.ItemSpacing"] = 16 * scale;
     }
 
