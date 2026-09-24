@@ -354,6 +354,8 @@ public sealed class MainWindowNavigationTests
                 (double)gallery.Resources["Gallery.SectionHeadingSize"]!, precision: 6);
             Assert.Equal(14 * scale,
                 (double)gallery.Resources["Gallery.CardTitleSize"]!, precision: 6);
+            Assert.Equal(14 * scale,
+                fixture.Window.FindControl<TextBlock>("GalleryReadHelp")!.FontSize, precision: 6);
             AssertInsideWindow(fixture.Window, continueCard);
             fixture.Input.Press(ControllerAction.NavigateDown);
             fixture.Flush();

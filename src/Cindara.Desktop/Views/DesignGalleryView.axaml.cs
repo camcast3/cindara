@@ -23,6 +23,7 @@ public partial class DesignGalleryView : UserControl
 
     public event EventHandler? NavigationWidthChanged;
     public double NavigationWidth { get; private set; } = 96;
+    public double UiScale { get; private set; } = 1;
 
     public void SuspendFocusMemory() => _rememberFocus = false;
 
@@ -106,7 +107,9 @@ public partial class DesignGalleryView : UserControl
         var heroHeight = profile.HeroHeight;
         var navigationWidth = profile.NavigationWidth;
         _heroHeight = heroHeight;
-        if (Math.Abs(NavigationWidth - navigationWidth) > 0.1)
+        var layoutScaleChanged = Math.Abs(UiScale - heroScale) > 0.001;
+        UiScale = heroScale;
+        if (Math.Abs(NavigationWidth - navigationWidth) > 0.1 || layoutScaleChanged)
         {
             NavigationWidth = navigationWidth;
             NavigationWidthChanged?.Invoke(this, EventArgs.Empty);

@@ -585,9 +585,14 @@ public partial class MainWindow : Window
             : Avalonia.Layout.HorizontalAlignment.Right;
     }
 
-    private void UpdateGalleryFooter() =>
+    private void UpdateGalleryFooter()
+    {
         GalleryFooter.ColumnDefinitions = new ColumnDefinitions(
             $"{GalleryView.NavigationWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)},*");
+        var fontSize = 14 * GalleryView.UiScale * Preferences.TextScale;
+        GalleryReadHelp.FontSize = fontSize;
+        GalleryControllerPrompts.FontSize = fontSize;
+    }
 
     private void OnChooseAccount(object? sender, RoutedEventArgs args)
     {

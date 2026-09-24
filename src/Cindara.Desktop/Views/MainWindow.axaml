@@ -103,8 +103,10 @@
                       IsHitTestVisible="False">
                     <Border Grid.Column="1" Background="{DynamicResource Cindara.Brush.Background}" Padding="24,8">
                         <StackPanel>
-                            <TextBlock Classes="caption" Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />
-                            <TextBlock Classes="caption" Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="GalleryReadHelp" Classes="caption"
+                                       Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="GalleryControllerPrompts" Classes="caption"
+                                       Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
                 </Grid>
