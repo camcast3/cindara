@@ -5,7 +5,8 @@ namespace Cindara.Desktop.Tests.DesignSystem;
 public sealed class GalleryViewportProfileTests
 {
     [Theory]
-    [InlineData(1280, 720, 1, 1, 299.2, 568.32)]
+    [InlineData(1280, 720, 1, 0.7, 299.2, 568.32)]
+    [InlineData(1280, 800, 1, 0.7314814814814815, 379.2, 568.32)]
     [InlineData(1920, 1080, 1.2, 1, 518.4, 875.52)]
     [InlineData(3440, 1400, 1.55, 1.2962962962962963, 672, 1140.7407407407406)]
     [InlineData(3840, 2160, 1.55, 2, 1036.8, 1760)]

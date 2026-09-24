@@ -147,14 +147,18 @@ policy used by the approved non-production gallery.
 `GalleryViewportProfile` deliberately preserves the density approved on the
 monitor and TV. Cards, their captions, and gutters use
 `clamp(logicalWidth / 1600, 1, 1.55)` to avoid oversized posters. Hero text,
-header text, and text spacing use `clamp(ViewportProfile.Scale, 1, 2)` for
-couch readability. Hero height is `clamp(logicalHeight * 0.48, 420, 1080)`.
-The minimum scale keeps small-window text legible; these intentional caps mean
-cards and hero text do not scale uniformly with one another.
+header text, and text spacing scale from the actual adaptive hero height:
+`clamp(heroHeight / 518.4, 0.7, 2)`. Hero height is constrained by both
+`clamp(logicalHeight * 0.48, 420, 1080)` and the space needed below it for a
+complete poster. This preserves the approved 3440x1400 and 4K typography while
+shrinking long-title layouts on short/compact windows instead of clipping their
+subtitle and metadata. The 0.7 floor keeps small-window text legible; these
+intentional caps mean cards and hero text do not scale uniformly with one another.
 
 | Logical viewport | Card scale | Hero text scale | Hero height |
 | --- | --- | --- | --- |
-| 1280x720 | 1 | 1 | 420 |
+| 1280x720 | 1 | 0.7 | 299.2 |
+| 1280x800 | 1 | 0.731 | 379.2 |
 | 1920x1080 | 1.2 | 1 | 518.4 |
 | 3440x1440 | 1.55 | 1.333 | 691.2 |
 | 3840x2160 | 1.55 | 2 | 1036.8 |
