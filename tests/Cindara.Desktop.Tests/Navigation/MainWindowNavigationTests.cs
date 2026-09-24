@@ -913,7 +913,8 @@ public sealed class MainWindowNavigationTests
         {
             fixture.Click(fixture.Shell.FindControl<Button>($"{destination}Navigation")!);
             Assert.Equal(destination, fixture.Shell.Destination);
-            Assert.Equal($"{destination}Navigation", Focused(fixture.Window).Name);
+            Assert.Equal(destination == "Search" ? "SearchTextBox" : $"{destination}Navigation",
+                Focused(fixture.Window).Name);
             Assert.Null(fixture.Shell.FindControl<Button>("ReturnHomeButton"));
         }
 
@@ -932,6 +933,8 @@ public sealed class MainWindowNavigationTests
         var view = fixture.Shell.SearchView;
         var query = view.FindControl<TextBox>("SearchTextBox")!;
         Assert.Equal("Search", fixture.Shell.Destination);
+        Assert.True(view.IsEffectivelyVisible);
+        Assert.False(fixture.Shell.FindControl<StackPanel>("PlaceholderPage")!.IsEffectivelyVisible);
         Assert.Same(query, Focused(fixture.Window));
         Assert.Equal(Loc.Get("Search.Name"), AutomationProperties.GetName(query));
         Assert.Equal(Loc.Get("Search.Help"), AutomationProperties.GetHelpText(query));

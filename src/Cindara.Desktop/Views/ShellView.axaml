@@ -55,19 +55,19 @@
             <Grid IsVisible="{Binding HasLibraryBrowser}">
                 <views:LibraryBrowserView x:Name="LibraryView" DataContext="{Binding LibraryBrowser}" />
             </Grid>
-            <Grid x:Name="SearchPage" Grid.Column="1" IsVisible="False">
-                <Grid IsVisible="{Binding HasSearchBrowser}">
-                    <views:SearchBrowserView x:Name="SearchView" DataContext="{Binding SearchBrowser}" />
-                </Grid>
-                <StackPanel Spacing="24" IsVisible="{Binding !HasSearchBrowser}">
-                    <TextBlock Classes="display" Text="{loc:Tr Nav.Search}" />
-                    <TextBlock Text="{loc:Tr Search.Unavailable}" TextWrapping="Wrap" />
-                </StackPanel>
-            </Grid>
             <StackPanel x:Name="LibrariesUnavailable" Spacing="24" IsVisible="{Binding !HasLibraryBrowser}">
                 <TextBlock Classes="display" Text="{loc:Tr Nav.Libraries}" />
                 <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" />
                 <Button Content="{loc:Tr Home.Retry}" Command="{Binding OpenHomeCommand}" />
+            </StackPanel>
+        </Grid>
+        <Grid x:Name="SearchPage" Grid.Column="1" IsVisible="False">
+            <Grid IsVisible="{Binding HasSearchBrowser}">
+                <views:SearchBrowserView x:Name="SearchView" DataContext="{Binding SearchBrowser}" />
+            </Grid>
+            <StackPanel Spacing="24" IsVisible="{Binding !HasSearchBrowser}">
+                <TextBlock Classes="display" Text="{loc:Tr Nav.Search}" />
+                <TextBlock Text="{loc:Tr Search.Unavailable}" TextWrapping="Wrap" />
             </StackPanel>
         </Grid>
         <Border x:Name="NavigationRail" Width="88" HorizontalAlignment="Left"
