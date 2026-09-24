@@ -103,9 +103,7 @@ public partial class DesignGalleryView : UserControl
         var heroHeight = profile.HeroHeight;
         _heroHeight = heroHeight;
         Resources["Gallery.HeroHeight"] = heroHeight;
-        Resources["Gallery.HeroContentWidth"] = Math.Min(
-            880 * heroScale,
-            size.Width * 0.6);
+        Resources["Gallery.HeroContentWidth"] = profile.HeroContentWidth;
         Resources["Gallery.HeroHeaderSize"] = 18 * heroScale * textScale;
         Resources["Gallery.HeroTitleSize"] = 56 * heroScale * textScale;
         Resources["Gallery.HeroTitleLineHeight"] = 64 * heroScale * textScale;

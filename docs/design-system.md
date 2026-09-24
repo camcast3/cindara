@@ -216,7 +216,12 @@ opacity masks relative to the artwork's visible bounds, not the entire window,
 with fully transparent left and bottom edges over an opaque background. This
 prevents seams and keeps scrolled cards from bleeding through the hero.
 
-Preview hero text starts at the upper left without a top tab bar.
+Preview hero text starts at the upper left without a top tab bar. Its scroll
+viewport is a responsive left column: at most 48% of the post-navigation content
+width and capped by the existing scaled 880-pixel reading measure. It remains
+transparent so the artwork's opacity masks provide the transition instead of an
+opaque rectangle. The hidden vertical scrollbar still supports wheel,
+Page Up/Page Down, and controller scrolling without drawing over the artwork.
 Title, subtitle, metadata, description, and their spacing scale together
 from 1080p to 4K; long text wraps inside a scrollable hero rather than overlapping
 the rails. Page Up/Page Down scroll the description. Poster and landscape cards have no border at rest.

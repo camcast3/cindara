@@ -159,14 +159,16 @@
                     </Border>
 
                     <Grid Margin="52,30,40,44">
-                        <ScrollViewer x:Name="HeroTextScroll" HorizontalScrollBarVisibility="Disabled"
+                        <ScrollViewer x:Name="HeroTextScroll"
+                                      Width="{DynamicResource Gallery.HeroContentWidth}"
+                                      HorizontalAlignment="Left"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Hidden"
                                       AutomationProperties.HelpText="{loc:Tr Gallery.ReadHelp}">
                         <Grid
-                              Width="{DynamicResource Gallery.HeroContentWidth}"
                               Margin="{DynamicResource Gallery.HeroTextMargin}"
                               HorizontalAlignment="Left"
-                              RowDefinitions="Auto,Auto,Auto,Auto,Auto"
-                              Background="{DynamicResource Cindara.Brush.Background}">
+                              RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                             <TextBlock Text="{Binding LibraryLayoutWarning}"
                                        IsVisible="{Binding HasLibraryLayoutWarning}" TextWrapping="Wrap"
                                        FontSize="{DynamicResource Gallery.HeroBodySize}"

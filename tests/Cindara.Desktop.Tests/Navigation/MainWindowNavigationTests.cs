@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
@@ -313,7 +314,7 @@ public sealed class MainWindowNavigationTests
     [Theory]
     [InlineData(1280, 720, 299.2)]
     [InlineData(1920, 1080, 518.4)]
-    [InlineData(3440, 1440, 691.2)]
+    [InlineData(3440, 1400, 672)]
     [InlineData(3840, 2160, 1036.8)]
     public Task HomeCardsAreTwentyPercentLargerAndFitTheViewport(int width, int height, double expectedHeroHeight) =>
         TestAppBuilder.Run(() =>
@@ -339,6 +340,11 @@ public sealed class MainWindowNavigationTests
             Assert.Equal(280.8 * originalScale, (double)gallery.Resources["Gallery.PosterHeight"]!, precision: 6);
             Assert.Equal(expectedHeroHeight,
                 (double)gallery.Resources["Gallery.HeroHeight"]!, precision: 6);
+            var heroPanel = gallery.FindControl<Grid>("HeroPanel")!;
+            var heroText = gallery.FindControl<ScrollViewer>("HeroTextScroll")!;
+            Assert.InRange(heroText.Bounds.Width, 320, heroPanel.Bounds.Width * 0.5);
+            Assert.Equal(ScrollBarVisibility.Hidden, heroText.VerticalScrollBarVisibility);
+            Assert.Null(Assert.IsType<Grid>(heroText.Content).Background);
             AssertInsideWindow(fixture.Window, continueCard);
             fixture.Input.Press(ControllerAction.NavigateDown);
             fixture.Flush();
@@ -1107,6 +1113,7 @@ public sealed class MainWindowNavigationTests
     [InlineData(1280, 800)]
     [InlineData(1366, 768)]
     [InlineData(1920, 1080)]
+    [InlineData(3440, 1400)]
     [InlineData(3840, 2160)]
     public Task HomeSettingsAndDialogsFitRepresentativeViewports(int width, int height) => TestAppBuilder.Run(() =>
     {
