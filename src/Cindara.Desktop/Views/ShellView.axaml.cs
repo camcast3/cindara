@@ -157,7 +157,10 @@ public partial class ShellView : UserControl
     {
         var expanded = NavigationRail.IsKeyboardFocusWithin || NavigationRail.IsPointerOver;
         var textScale = TopLevel.GetTopLevel(this) is MainWindow window ? window.Preferences.TextScale : 1;
-        NavigationRail.Width = expanded ? Math.Min(440, 280 * textScale * (Loc.IsPseudoLocalized ? 1.3 : 1)) : 88;
+        var availableWidth = Math.Max(176, Bounds.Width);
+        NavigationRail.Width = expanded
+            ? Math.Min(availableWidth * 0.55, Math.Min(440, 280 * textScale * (Loc.IsPseudoLocalized ? 1.3 : 1)))
+            : Math.Min(88, availableWidth * 0.25);
         foreach (var label in NavigationRail.GetVisualDescendants().OfType<TextBlock>()
                      .Where(label => label.Classes.Contains("rail-label")))
         {

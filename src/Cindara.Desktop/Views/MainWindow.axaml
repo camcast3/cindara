@@ -8,15 +8,22 @@
         x:DataType="vm:MainViewModel"
         Width="1280" Height="720" MinWidth="720" MinHeight="480"
         WindowState="FullScreen" Title="{loc:Tr Brand.Name}">
+    <Window.Resources>
+        <Thickness x:Key="Cindara.Adaptive.SafeMargin">24</Thickness>
+        <x:Double x:Key="Cindara.Adaptive.ContentSpacing">24</x:Double>
+        <x:Double x:Key="Cindara.Adaptive.DialogMaxHeight">640</x:Double>
+        <x:Double x:Key="Cindara.Adaptive.FormMaxWidth">800</x:Double>
+    </Window.Resources>
     <Grid>
         <Grid x:Name="MainSurface">
-            <Viewbox x:Name="ShellViewport" Stretch="Uniform">
-                <Grid Width="1920" Height="1080">
-                    <Grid Margin="{DynamicResource Cindara.Space.Safe1080}" RowDefinitions="*,Auto" RowSpacing="24">
+            <Grid x:Name="ShellViewport">
+                    <Grid Margin="{DynamicResource Cindara.Adaptive.SafeMargin}" RowDefinitions="*,Auto"
+                          RowSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}">
                         <Grid>
                             <ScrollViewer x:Name="AuthenticationSurface"
                                           HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                                <Border MinWidth="720" MaxWidth="1100" Padding="{DynamicResource Cindara.Space.Safe1080}"
+                                <Border MaxWidth="{DynamicResource Cindara.Adaptive.FormMaxWidth}"
+                                        Padding="{DynamicResource Cindara.Adaptive.SafeMargin}"
                                         HorizontalAlignment="Center" VerticalAlignment="Center"
                                         Background="{DynamicResource Cindara.Brush.Surface}"
                                         CornerRadius="{DynamicResource Cindara.Radius.Large}">
@@ -64,7 +71,9 @@
                             </ScrollViewer>
                             <views:ShellView x:Name="Shell" IsVisible="False" />
                         </Grid>
-                        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="24">
+                        <Grid x:Name="ShellFooter" Grid.Row="1" ColumnDefinitions="*,Auto"
+                              ColumnSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}"
+                              RowSpacing="12">
                             <StackPanel Spacing="8">
                                 <ProgressBar x:Name="BusyIndicator" Height="3" IsVisible="{Binding IsBusy}"
                                              AutomationProperties.Name="{loc:Tr State.Busy}" />
@@ -75,7 +84,8 @@
                                 <TextBlock x:Name="ControllerPrompts" Classes="secondary" TextWrapping="Wrap"
                                            Text="{Binding ControllerStatus}" />
                             </StackPanel>
-                            <StackPanel Grid.Column="1" Spacing="12" VerticalAlignment="Center" MaxWidth="450">
+                            <StackPanel x:Name="FooterActions" Grid.Column="1" Spacing="12"
+                                        VerticalAlignment="Center" MaxWidth="450">
                                 <Button x:Name="CancelLoadingButton" Content="{loc:Tr Action.CancelLoading}"
                                         IsVisible="{Binding ShowDesignGalleryCommand.IsRunning}"
                                         Command="{Binding ShowDesignGalleryCancelCommand}" />
@@ -86,15 +96,17 @@
                             </StackPanel>
                         </Grid>
                     </Grid>
-                </Grid>
-            </Viewbox>
+            </Grid>
             <Grid x:Name="GallerySurface" IsVisible="{Binding IsDesignGalleryVisible}">
                 <views:DesignGalleryView x:Name="GalleryView" DataContext="{Binding DesignGallery}" />
-                <Grid VerticalAlignment="Bottom" ColumnDefinitions="96,*" IsHitTestVisible="False">
+                <Grid x:Name="GalleryFooter" VerticalAlignment="Bottom" ColumnDefinitions="96,*"
+                      IsHitTestVisible="False">
                     <Border Grid.Column="1" Background="{DynamicResource Cindara.Brush.Background}" Padding="24,8">
                         <StackPanel>
-                            <TextBlock Classes="caption" Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />
-                            <TextBlock Classes="caption" Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="GalleryReadHelp" Classes="caption"
+                                       Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="GalleryControllerPrompts" Classes="caption"
+                                       Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -102,20 +114,21 @@
         </Grid>
         <Border x:Name="ModalOverlay" IsVisible="False" Background="#B3080B12"
                 AutomationProperties.ControlTypeOverride="Group" AutomationProperties.AccessibilityView="Control">
-            <Viewbox Stretch="Uniform">
-                <Grid Width="1920" Height="1080">
-                    <Border Classes="dialog" MaxWidth="1200" Margin="{DynamicResource Cindara.Space.Safe1080}"
+            <Grid>
+                    <Border x:Name="ModalDialog" Classes="dialog" MaxWidth="1200"
+                            Margin="{DynamicResource Cindara.Adaptive.SafeMargin}"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <StackPanel Spacing="24">
                             <TextBlock x:Name="ModalTitle" Classes="title"
                                        automation:AutomationProperties.LiveSetting="Assertive" />
-                            <ScrollViewer MaxHeight="700" HorizontalScrollBarVisibility="Disabled">
+                            <ScrollViewer MaxHeight="{DynamicResource Cindara.Adaptive.DialogMaxHeight}"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto">
                                 <StackPanel x:Name="ModalActions" Spacing="16" />
                             </ScrollViewer>
                         </StackPanel>
                     </Border>
-                </Grid>
-            </Viewbox>
+            </Grid>
         </Border>
     </Grid>
 </Window>

@@ -61,11 +61,11 @@ dismissal. Startup localization and pseudo-localization are available; full
 international controller text entry and platform keyboard integration remain
 future work. Physical Unicode typing and paste are retained.
 
-The production frame and dialogs fit a 1920x1080 reference surface uniformly,
-including the existing 48-pixel safe-area token. At 3840x2160 logical pixels they
-scale 2x; a physical 4K display at 200% DPI uses 1920x1080 logical pixels and is not
-scaled twice. Layout follows viewport and DPI changes without cached physical
-dimensions. The approved preview keeps its separate density policy below.
+The production frame and dialogs use live Avalonia logical pixels rather than
+shrinking a fixed reference canvas. A physical 4K display at 200% DPI therefore
+lays out as 1920x1080 logical pixels and is not scaled twice. Layout follows
+viewport, text-scale, and DPI changes without cached physical dimensions. The
+approved Home preview keeps its separate density policy below.
 
 SDL input never transfers keyboard focus between controls when a controller
 connects, disconnects, or becomes active. Fresh input selects the active device;
@@ -114,6 +114,30 @@ persistence, localization, pseudo-locales, contrast coverage, and limits.
 
 ## TV viewport behavior
 
+The supported minimum window is **720x480 logical pixels**. Required actions and
+messages scroll or wrap at that limit; the layout does not promise that an entire
+page remains visible without scrolling. Production breakpoints are based on live
+logical dimensions:
+
+| Class | Rule | Safe margin | Content spacing |
+| --- | --- | --- | --- |
+| Compact | width below 960, or shortest side below 600 | 16 | 16 |
+| Standard | width 960-1439 | 24 | 24 |
+| Wide | width 1440-2559 | 32 | 32 |
+| Ten-foot | width 2560 or greater | 48 | 40 |
+
+The library grid independently follows its available content width: two columns
+below 560, three below 820, four below 1080, and five otherwise. Poster width is
+computed from the available column and capped at the approved 247.2 logical
+pixels, or 370.8 at the ten-foot breakpoint; its 2:3 ratio is preserved.
+Ten-foot typography and bounded forms use a capped 1.5 density scale. This is
+separate from OS display scaling: a physical 4K display at 200% still supplies a
+1920x1080 logical viewport and does not receive the density scale twice.
+Resizing does not replace controls, so
+keyboard/controller focus and scroll memory remain attached to the same item.
+Compact footers stack status and actions, dialogs cap their scrollable body to
+the current height, and long action groups wrap.
+
 `ViewportProfile` defines the production reference: 1920x1080 logical pixels
 with a 48-pixel safe margin. Its uniform scale is
 `min(width / 1920, height / 1080)`: 0.667 at 1280x720 and 2 at 3840x2160.
@@ -123,14 +147,24 @@ policy used by the approved non-production gallery.
 `GalleryViewportProfile` deliberately preserves the density approved on the
 monitor and TV. Cards, their captions, and gutters use
 `clamp(logicalWidth / 1600, 1, 1.55)` to avoid oversized posters. Hero text,
-header text, and text spacing use `clamp(ViewportProfile.Scale, 1, 2)` for
-couch readability. Hero height is `clamp(logicalHeight * 0.48, 420, 1080)`.
-The minimum scale keeps small-window text legible; these intentional caps mean
-cards and hero text do not scale uniformly with one another.
+header text, and text spacing scale from the actual adaptive hero height:
+`clamp(heroHeight / 518.4, 0.7, 2)`. Hero height is constrained by both
+`clamp(logicalHeight * 0.48, 420, 1080)` and the space needed below it for a
+complete poster. This preserves the approved 3440x1400 and 4K typography while
+shrinking long-title layouts on short/compact windows instead of clipping their
+subtitle and metadata. The 0.7 floor keeps small-window text legible; these
+intentional caps mean cards and hero text do not scale uniformly with one another.
+The same height-derived scale applies to all gallery text and icons: navigation
+symbols and labels, the monogram, section headings, media labels, captions, and
+empty-state copy. Navigation actions retain a 48-logical-pixel minimum target
+while the rail itself ranges from 72 logical pixels on compact windows to 192
+at the 4K logical profile. Artwork/card density continues to follow width so
+posters are not made sparse merely because typography must shrink.
 
 | Logical viewport | Card scale | Hero text scale | Hero height |
 | --- | --- | --- | --- |
-| 1280x720 | 1 | 1 | 420 |
+| 1280x720 | 1 | 0.7 | 299.2 |
+| 1280x800 | 1 | 0.731 | 379.2 |
 | 1920x1080 | 1.2 | 1 | 518.4 |
 | 3440x1440 | 1.55 | 1.333 | 691.2 |
 | 3840x2160 | 1.55 | 2 | 1036.8 |
@@ -192,7 +226,12 @@ opacity masks relative to the artwork's visible bounds, not the entire window,
 with fully transparent left and bottom edges over an opaque background. This
 prevents seams and keeps scrolled cards from bleeding through the hero.
 
-Preview hero text starts at the upper left without a top tab bar.
+Preview hero text starts at the upper left without a top tab bar. Its scroll
+viewport is a responsive left column: at most 48% of the post-navigation content
+width and capped by the existing scaled 880-pixel reading measure. It remains
+transparent so the artwork's opacity masks provide the transition instead of an
+opaque rectangle. The hidden vertical scrollbar still supports wheel,
+Page Up/Page Down, and controller scrolling without drawing over the artwork.
 Title, subtitle, metadata, description, and their spacing scale together
 from 1080p to 4K; long text wraps inside a scrollable hero rather than overlapping
 the rails. Page Up/Page Down scroll the description. Poster and landscape cards have no border at rest.
