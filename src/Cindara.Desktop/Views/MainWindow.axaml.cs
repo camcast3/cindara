@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cindara.Core.Diagnostics;
 using Cindara.Desktop.Accessibility;
+using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.Input;
 using Cindara.Desktop.Localization;
 using Cindara.Desktop.Navigation;
@@ -42,12 +43,14 @@ public partial class MainWindow : Window
         _controllerInput = controllerInput;
         _diagnostics = diagnostics;
         InitializeComponent();
+        SizeChanged += (_, args) => ApplyAdaptiveLayout(args.NewSize);
         DiagnosticsButton.IsVisible = diagnostics is not null;
         Shell.HomeLoadingAction = CancelLoadingButton;
         FlowDirection = Loc.IsRightToLeft
             ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight;
         Preferences = preferences ?? new();
         ApplyPresentation();
+        ApplyAdaptiveLayout(ClientSize);
         _navigation = new FocusNavigationService(this);
         _controllerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _controllerTimer.Tick += OnControllerTimerTick;
@@ -547,6 +550,39 @@ public partial class MainWindow : Window
         BusyIndicator.IsIndeterminate = _viewModel?.IsBusy is true && !Preferences.ReducedMotion;
     }
 
+    private void ApplyAdaptiveLayout(Size size)
+    {
+        if (size.Width <= 0 || size.Height <= 0)
+        {
+            return;
+        }
+
+        var profile = AdaptiveLayoutProfile.Create(size.Width, size.Height);
+        Resources["Cindara.Adaptive.SafeMargin"] = new Thickness(profile.SafeMargin);
+        Resources["Cindara.Adaptive.ContentSpacing"] = profile.ContentSpacing;
+        Resources["Cindara.Adaptive.FormMaxWidth"] = 800 * profile.UiScale;
+        Resources["Cindara.Adaptive.DialogMaxHeight"] =
+            Math.Max(240, size.Height - (profile.SafeMargin * 2) - 96);
+        var typographyScale = Preferences.TextScale * profile.UiScale;
+        Resources["Cindara.Type.Display"] = 48 * typographyScale;
+        Resources["Cindara.Type.Title"] = 32 * typographyScale;
+        Resources["Cindara.Type.Heading"] = 24 * typographyScale;
+        Resources["Cindara.Type.Body"] = 18 * typographyScale;
+        Resources["Cindara.Type.Caption"] = 14 * typographyScale;
+        var compact = profile.ViewportClass == AdaptiveViewportClass.Compact;
+        ShellFooter.ColumnDefinitions = compact
+            ? new ColumnDefinitions("*")
+            : new ColumnDefinitions("*,Auto");
+        ShellFooter.RowDefinitions = compact
+            ? new RowDefinitions("Auto,Auto")
+            : new RowDefinitions("Auto");
+        Grid.SetColumn(FooterActions, compact ? 0 : 1);
+        Grid.SetRow(FooterActions, compact ? 1 : 0);
+        FooterActions.HorizontalAlignment = compact
+            ? Avalonia.Layout.HorizontalAlignment.Stretch
+            : Avalonia.Layout.HorizontalAlignment.Right;
+    }
+
     private void OnChooseAccount(object? sender, RoutedEventArgs args)
     {
         if (_viewModel is null || _viewModel.IsBusy || ModalOverlay.IsVisible)
@@ -636,7 +672,13 @@ public partial class MainWindow : Window
         }
 
         BeginModal(AutomationProperties.GetName(target) ?? target.PlaceholderText ?? Loc.Get("Keyboard.EnterText"));
-        var draft = new TextBox { Text = target.Text, PasswordChar = target.PasswordChar, MinWidth = 800, FlowDirection = target.FlowDirection };
+        var draft = new TextBox
+        {
+            Text = target.Text,
+            PasswordChar = target.PasswordChar,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            FlowDirection = target.FlowDirection,
+        };
         AutomationProperties.SetName(draft, ModalTitle.Text);
         draft.CaretIndex = draft.Text?.Length ?? 0;
         _keyboardDraft = draft;

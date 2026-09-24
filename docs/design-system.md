@@ -61,11 +61,11 @@ dismissal. Startup localization and pseudo-localization are available; full
 international controller text entry and platform keyboard integration remain
 future work. Physical Unicode typing and paste are retained.
 
-The production frame and dialogs fit a 1920x1080 reference surface uniformly,
-including the existing 48-pixel safe-area token. At 3840x2160 logical pixels they
-scale 2x; a physical 4K display at 200% DPI uses 1920x1080 logical pixels and is not
-scaled twice. Layout follows viewport and DPI changes without cached physical
-dimensions. The approved preview keeps its separate density policy below.
+The production frame and dialogs use live Avalonia logical pixels rather than
+shrinking a fixed reference canvas. A physical 4K display at 200% DPI therefore
+lays out as 1920x1080 logical pixels and is not scaled twice. Layout follows
+viewport, text-scale, and DPI changes without cached physical dimensions. The
+approved Home preview keeps its separate density policy below.
 
 SDL input never transfers keyboard focus between controls when a controller
 connects, disconnects, or becomes active. Fresh input selects the active device;
@@ -113,6 +113,30 @@ See [the accessibility contract and manual test matrix](accessibility.md) for
 persistence, localization, pseudo-locales, contrast coverage, and limits.
 
 ## TV viewport behavior
+
+The supported minimum window is **720x480 logical pixels**. Required actions and
+messages scroll or wrap at that limit; the layout does not promise that an entire
+page remains visible without scrolling. Production breakpoints are based on live
+logical dimensions:
+
+| Class | Rule | Safe margin | Content spacing |
+| --- | --- | --- | --- |
+| Compact | width below 960, or shortest side below 600 | 16 | 16 |
+| Standard | width 960-1439 | 24 | 24 |
+| Wide | width 1440-2559 | 32 | 32 |
+| Ten-foot | width 2560 or greater | 48 | 40 |
+
+The library grid independently follows its available content width: two columns
+below 560, three below 820, four below 1080, and five otherwise. Poster width is
+computed from the available column and capped at the approved 247.2 logical
+pixels, or 370.8 at the ten-foot breakpoint; its 2:3 ratio is preserved.
+Ten-foot typography and bounded forms use a capped 1.5 density scale. This is
+separate from OS display scaling: a physical 4K display at 200% still supplies a
+1920x1080 logical viewport and does not receive the density scale twice.
+Resizing does not replace controls, so
+keyboard/controller focus and scroll memory remain attached to the same item.
+Compact footers stack status and actions, dialogs cap their scrollable body to
+the current height, and long action groups wrap.
 
 `ViewportProfile` defines the production reference: 1920x1080 logical pixels
 with a 48-pixel safe margin. Its uniform scale is

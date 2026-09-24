@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -12,6 +13,7 @@ namespace Cindara.Desktop.Views;
 
 public partial class LibraryBrowserView : UserControl
 {
+    private const double ReferenceMaximumCardWidth = 247.2;
     private LibraryBrowserViewModel? _model;
     private Button? _focusedCard;
     private bool _pageFocusPending = true;
@@ -36,7 +38,10 @@ public partial class LibraryBrowserView : UserControl
 
     public LibraryBrowserView()
     {
+        Resources["Library.CardWidth"] = ReferenceMaximumCardWidth;
+        Resources["Library.CardHeight"] = ReferenceMaximumCardWidth * 1.5;
         InitializeComponent();
+        SizeChanged += (_, args) => UpdateCardLayout(args.NewSize.Width);
         DataContextChanged += (_, _) =>
         {
             if (_model is not null)
@@ -68,6 +73,34 @@ public partial class LibraryBrowserView : UserControl
         .Where(button => button.Classes.Contains("card")).ToArray();
 
     private Button[] Choices() => LibraryChoices.GetVisualDescendants().OfType<Button>().ToArray();
+
+    private int Columns => LibraryCards.GetVisualDescendants().OfType<UniformGrid>().FirstOrDefault()?.Columns ?? 1;
+
+    private void UpdateCardLayout(double width)
+    {
+        if (width <= 0)
+        {
+            return;
+        }
+
+        var columns = width switch
+        {
+            < 560 => 2,
+            < 820 => 3,
+            < 1080 => 4,
+            _ => 5,
+        };
+        var maximumCardWidth = width >= 2200
+            ? ReferenceMaximumCardWidth * 1.5
+            : ReferenceMaximumCardWidth;
+        var cardWidth = Math.Min(maximumCardWidth, Math.Max(120, (width / columns) - 16));
+        Resources["Library.CardWidth"] = cardWidth;
+        Resources["Library.CardHeight"] = cardWidth * 1.5;
+        if (LibraryCards.GetVisualDescendants().OfType<UniformGrid>().FirstOrDefault() is { } grid)
+        {
+            grid.Columns = columns;
+        }
+    }
 
     private void OnModelChanged(object? sender, PropertyChangedEventArgs args)
     {
@@ -110,18 +143,18 @@ public partial class LibraryBrowserView : UserControl
         var rtl = FlowDirection == Avalonia.Media.FlowDirection.RightToLeft;
         var step = direction switch
         {
-            NavigationDirection.Up => -5,
-            NavigationDirection.Down => 5,
+            NavigationDirection.Up => -Columns,
+            NavigationDirection.Down => Columns,
             NavigationDirection.Left => rtl ? 1 : -1,
             NavigationDirection.Right => rtl ? -1 : 1,
             _ => 0,
         };
-        if (step == -1 && index % 5 == 0)
+        if (step == -1 && index % Columns == 0)
         {
             return false;
         }
 
-        if (step == 1 && (index % 5 == 4 || index == cards.Length - 1))
+        if (step == 1 && (index % Columns == Columns - 1 || index == cards.Length - 1))
         {
             return true;
         }

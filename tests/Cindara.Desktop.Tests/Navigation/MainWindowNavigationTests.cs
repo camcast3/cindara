@@ -1101,9 +1101,14 @@ public sealed class MainWindowNavigationTests
     });
 
     [Theory]
+    [InlineData(720, 480)]
+    [InlineData(800, 600)]
+    [InlineData(1280, 720)]
+    [InlineData(1280, 800)]
+    [InlineData(1366, 768)]
     [InlineData(1920, 1080)]
     [InlineData(3840, 2160)]
-    public Task HomeSettingsAndDialogsFitTvViewports(int width, int height) => TestAppBuilder.Run(() =>
+    public Task HomeSettingsAndDialogsFitRepresentativeViewports(int width, int height) => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
         fixture.Window.WindowState = WindowState.Normal;
@@ -1111,6 +1116,8 @@ public sealed class MainWindowNavigationTests
         fixture.Window.Height = height;
         fixture.SignIn();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        Assert.Equal(width >= 2560 ? 27 : 18,
+            fixture.Shell.FindControl<Button>("SettingsNavigation")!.FontSize);
         Capture(fixture.Window, $"media-home-{width}");
         fixture.OpenSettings();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
@@ -1118,7 +1125,94 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        AssertInsideWindow(fixture.Window, fixture.Window.FindControl<Border>("ModalDialog")!);
         Capture(fixture.Window, $"language-options-{width}");
+    });
+
+    [Theory]
+    [InlineData(720, 480, "qps-ploc")]
+    [InlineData(1280, 800, "qps-plocm")]
+    [InlineData(1920, 1080, "en")]
+    public Task ResizePreservesFocusAndKeepsPseudoLocalizedDestinationsReachable(
+        int width, int height, string cultureName) => TestAppBuilder.Run(() =>
+    {
+        using var culture = new CultureScope(cultureName);
+        using var fixture = new ShellFixture(preferences: new PresentationPreferences(1.5));
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.SignIn();
+        fixture.OpenSettings();
+        var focused = Focused(fixture.Window);
+        Assert.Equal("SettingsLanguageButton", focused.Name);
+        AssertInsideWindow(fixture.Window, focused);
+
+        fixture.Window.Width = width == 720 ? 1366 : 720;
+        fixture.Window.Height = width == 720 ? 768 : 480;
+        fixture.Flush();
+        Assert.Same(focused, Focused(fixture.Window));
+        AssertInsideWindow(fixture.Window, focused);
+
+        foreach (var destination in Destinations)
+        {
+            fixture.Shell.Navigate(destination);
+            fixture.Flush();
+            AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        }
+    });
+
+    [Theory]
+    [InlineData(720, 480)]
+    [InlineData(1280, 800)]
+    [InlineData(1920, 1080)]
+    public Task AuthenticationAndOnScreenKeyboardScrollWithinViewport(int width, int height) => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture(false, new PresentationPreferences(1.5));
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.Flush();
+        var server = fixture.Window.FindControl<TextBox>("ServerAddressTextBox")!;
+        server.Focus();
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+
+        Assert.True(fixture.IsModalVisible);
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        AssertInsideWindow(fixture.Window, fixture.Window.FindControl<Border>("ModalDialog")!);
+        Assert.True(fixture.Modal.GetVisualDescendants().OfType<Button>().Count() > 50);
+    });
+
+    [Theory]
+    [InlineData(720, 480)]
+    [InlineData(1280, 720)]
+    [InlineData(1366, 768)]
+    [InlineData(1920, 1080)]
+    public Task LibraryGridReflowsWithoutReplacingFocusedCards(int width, int height) => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaLibrary));
+        await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var focused = Focused(fixture.Window);
+        Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
+        AssertInsideWindow(fixture.Window, focused);
+
+        fixture.Window.Width = width < 1000 ? 1920 : 720;
+        fixture.Window.Height = width < 1000 ? 1080 : 480;
+        fixture.Flush();
+        Assert.Same(focused, Focused(fixture.Window));
+        Assert.Contains(focused, fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>());
+        AssertInsideWindow(fixture.Window, focused);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Flush();
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
     });
 
     [Fact]
