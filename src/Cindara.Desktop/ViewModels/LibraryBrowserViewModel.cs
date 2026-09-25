@@ -230,7 +230,8 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         RetryIndex = query.StartIndex;
         _retryQuery = query;
         _retryAppend = append;
-        Message = Loc.Get(append ? "Library.LoadingMore" : "Library.Loading");
+        Message = string.Empty;
+        RebuildRows();
         NotifyPageChanged();
         using var operation = _diagnostics?.Begin(DiagnosticArea.Network, DiagnosticAction.LoadLibrary);
         var created = new List<MediaPreviewCardViewModel>();
@@ -287,27 +288,22 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
             created.Clear();
             Message = string.Empty;
             loaded = true;
-            RebuildRows();
             operation?.Complete();
         }
 
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
             operation?.Fail(exception);
-            Message = Loc.Get(append ? "Library.LoadMoreCanceled" : "Library.Canceled");
+            Message = append ? string.Empty : Loc.Get("Library.Canceled");
             CanRetry = !append;
             CanRetryMore = append;
-            RebuildRows();
         }
         catch (MediaPreviewException exception)
         {
             operation?.Fail(exception);
-            Message = append
-                ? Loc.Format("Library.LoadMoreFailed", LocalizedErrors.Get(exception))
-                : LocalizedErrors.Get(exception);
+            Message = append ? string.Empty : LocalizedErrors.Get(exception);
             CanRetry = !append;
             CanRetryMore = append;
-            RebuildRows();
             if (exception.Error == MediaPreviewError.AccessDenied && !_disposed && !cancellationToken.IsCancellationRequested)
             {
                 await _onAccessDenied(exception);
@@ -322,6 +318,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
 
             IsLoading = false;
             IsLoadingMore = false;
+            RebuildRows();
             NotifyPageChanged();
         }
 
@@ -391,52 +388,80 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
 
     private void RebuildRows()
     {
-        var desired = Items
+        var desiredItems = Items
             .Select((item, index) => (item, index))
             .Chunk(_columnCount)
             .Select(chunk => chunk.Select(entry => entry.item).ToArray())
             .ToList();
-        if (CanRetryMore)
+        if (desiredItems.Count == 0 && (IsLoading || IsLoadingMore))
         {
-            if (desired.Count == 0 || desired[^1].Length == _columnCount)
+            desiredItems.Add([]);
+        }
+
+        var placeholderCounts = Enumerable.Repeat(0, desiredItems.Count).ToList();
+        if ((IsLoading && Items.Count == 0) || IsLoadingMore)
+        {
+            var remaining = MediaLibraryPage.PageSize;
+            var rowIndex = Math.Max(0, desiredItems.Count - 1);
+            while (remaining > 0)
             {
-                desired.Add([]);
+                if (rowIndex >= desiredItems.Count)
+                {
+                    desiredItems.Add([]);
+                    placeholderCounts.Add(0);
+                }
+
+                var capacity = _columnCount - desiredItems[rowIndex].Length;
+                var count = Math.Min(remaining, capacity);
+                placeholderCounts[rowIndex] = count;
+                remaining -= count;
+                rowIndex++;
             }
         }
 
-        while (Rows.Count > desired.Count)
+        if (CanRetryMore)
+        {
+            if (desiredItems.Count == 0 || desiredItems[^1].Length == _columnCount)
+            {
+                desiredItems.Add([]);
+                placeholderCounts.Add(0);
+            }
+        }
+
+        while (Rows.Count > desiredItems.Count)
         {
             Rows.RemoveAt(Rows.Count - 1);
         }
 
-        for (var rowIndex = 0; rowIndex < desired.Count; rowIndex++)
+        for (var rowIndex = 0; rowIndex < desiredItems.Count; rowIndex++)
         {
-            var desiredItems = desired[rowIndex];
+            var rowItems = desiredItems[rowIndex];
             if (rowIndex >= Rows.Count)
             {
-                Rows.Add(new(desiredItems));
+                Rows.Add(new(rowItems));
             }
             else if (!Rows[rowIndex].Items.SequenceEqual(
-                         desiredItems.Take(Rows[rowIndex].Items.Count)))
+                         rowItems.Take(Rows[rowIndex].Items.Count)))
             {
-                Rows[rowIndex] = new(desiredItems);
+                Rows[rowIndex] = new(rowItems);
             }
             else
             {
-                while (Rows[rowIndex].Items.Count > desiredItems.Length)
+                while (Rows[rowIndex].Items.Count > rowItems.Length)
                 {
                     Rows[rowIndex].Items.RemoveAt(Rows[rowIndex].Items.Count - 1);
                 }
 
                 for (var itemIndex = Rows[rowIndex].Items.Count;
-                     itemIndex < desiredItems.Length;
+                     itemIndex < rowItems.Length;
                      itemIndex++)
                 {
-                    Rows[rowIndex].Items.Add(desiredItems[itemIndex]);
+                    Rows[rowIndex].Items.Add(rowItems[itemIndex]);
                 }
             }
 
-            Rows[rowIndex].HasRetry = CanRetryMore && rowIndex == desired.Count - 1;
+            Rows[rowIndex].SetPlaceholderCount(placeholderCounts[rowIndex]);
+            Rows[rowIndex].HasRetry = CanRetryMore && rowIndex == desiredItems.Count - 1;
         }
 
         NotifyPageChanged();
@@ -641,7 +666,21 @@ public sealed partial class LibraryGridRowViewModel : ObservableObject
     }
 
     public ObservableCollection<MediaPreviewCardViewModel> Items { get; } = [];
+    public ObservableCollection<int> PlaceholderSlots { get; } = [];
 
     [ObservableProperty]
     private bool _hasRetry;
+
+    public void SetPlaceholderCount(int count)
+    {
+        while (PlaceholderSlots.Count > count)
+        {
+            PlaceholderSlots.RemoveAt(PlaceholderSlots.Count - 1);
+        }
+
+        while (PlaceholderSlots.Count < count)
+        {
+            PlaceholderSlots.Add(PlaceholderSlots.Count);
+        }
+    }
 }

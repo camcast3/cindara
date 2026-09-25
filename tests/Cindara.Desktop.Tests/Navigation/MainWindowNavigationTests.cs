@@ -612,7 +612,7 @@ public sealed class MainWindowNavigationTests
         fixture.SignIn();
         fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
             .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
-        Assert.Equal("CancelLibraryLoading", Focused(fixture.Window).Name);
+        Assert.Equal("DestinationBackButton", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.Back);
         await fixture.Model.LibraryBrowser!.LoadPageCommand.ExecutionTask!;
         fixture.Flush();

@@ -72,7 +72,7 @@ public partial class LibraryBrowserView : UserControl
 
     public event EventHandler<MediaPreviewCardViewModel>? ItemRequested;
 
-    public Control InitialFocus => _model?.IsLoading is true ? CancelLibraryLoading
+    public Control InitialFocus => _model?.IsLoading is true ? this
         : _model?.CanRetry is true ? RetryLibraryLoading
         : !_pageFocusPending && _focusedCard is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } ? _focusedCard
         : Cards().FirstOrDefault() ?? Choices().FirstOrDefault() ?? (Control)this;
@@ -260,9 +260,6 @@ public partial class LibraryBrowserView : UserControl
             await _model.OpenLibraryCommand.ExecuteAsync(library);
         }
     }
-
-    private void OnCancelLoadingClicked(object? sender, RoutedEventArgs args) =>
-        _model?.CancelLoading();
 
     private async void OnFilterClicked(object? sender, RoutedEventArgs args)
     {

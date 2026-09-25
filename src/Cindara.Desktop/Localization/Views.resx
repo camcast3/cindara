@@ -133,10 +133,6 @@
   <data name="Action.Exit" xml:space="preserve"><value>Exit</value></data>
   <data name="Home.Empty" xml:space="preserve"><value>No media in your Home rows yet. Choose a library to browse.</value></data>
   <data name="Library.NoLibraries" xml:space="preserve"><value>No supported movie or TV libraries are available to this account. Check library types and account access on your server.</value></data>
-  <data name="Library.Loading" xml:space="preserve"><value>Loading library...</value></data>
-  <data name="Library.LoadingMore" xml:space="preserve"><value>Loading more titles...</value></data>
-  <data name="Library.LoadMoreCanceled" xml:space="preserve"><value>Loading more titles was canceled. Your loaded posters are unchanged.</value></data>
-  <data name="Library.LoadMoreFailed" xml:space="preserve"><value>{0} Your loaded posters are unchanged.</value></data>
   <data name="Library.RetryMore" xml:space="preserve"><value>Retry loading more</value></data>
   <data name="Library.Canceled" xml:space="preserve"><value>Loading canceled. Retry to load this page.</value></data>
   <data name="Library.Empty" xml:space="preserve"><value>This library is empty.</value></data>

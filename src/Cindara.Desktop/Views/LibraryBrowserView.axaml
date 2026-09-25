@@ -47,9 +47,6 @@
                        IsVisible="{Binding HasArtworkError}" TextWrapping="Wrap"
                        AutomationProperties.LiveSetting="Polite" />
             <WrapPanel Orientation="Horizontal">
-                <Button x:Name="CancelLibraryLoading" Content="{loc:Tr Action.CancelLoading}"
-                        Margin="0,0,16,8" Click="OnCancelLoadingClicked"
-                        IsVisible="{Binding IsAnyLoading}" />
                 <Button x:Name="RetryLibraryLoading" Content="{loc:Tr Library.Retry}"
                         Margin="0,0,16,8" Command="{Binding RetryPageCommand}"
                         IsVisible="{Binding CanRetry}" />
@@ -127,6 +124,27 @@
                                                        Opacity="{Binding MetadataOpacity}"
                                                        TextWrapping="Wrap" MaxLines="1"
                                                        TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ItemsControl ItemsSource="{Binding PlaceholderSlots}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="{DynamicResource Cindara.Media.GridSpacing}" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Spacing="7"
+                                                    Width="{DynamicResource Cindara.Media.GridPosterWidth}">
+                                            <Border Height="{DynamicResource Cindara.Media.GridPosterHeight}"
+                                                    Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
+                                                    CornerRadius="{DynamicResource Cindara.Radius.Medium}"
+                                                    Opacity="0.55" />
+                                            <Border Height="20" Background="Transparent" />
+                                            <Border Height="16" Background="Transparent" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

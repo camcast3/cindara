@@ -60,7 +60,8 @@ public sealed class LibraryBrowserViewModelTests
         Assert.Equal("item-0", model.Items[0].Id);
         Assert.True(model.CanRetryMore);
         Assert.Equal(80, model.RetryIndex);
-        Assert.True(model.HasMessage);
+        Assert.False(model.HasMessage);
+        Assert.Single(model.Rows, row => row.HasRetry);
         Assert.False(model.IsAnyLoading);
 
         await model.SetFilterCommand.ExecuteAsync(MediaLibraryFilter.All);
@@ -129,7 +130,8 @@ public sealed class LibraryBrowserViewModelTests
         Assert.Same(original, model.Items);
         Assert.True(model.CanRetryMore);
         Assert.Equal(40, model.RetryIndex);
-        Assert.True(model.HasMessage);
+        Assert.False(model.HasMessage);
+        Assert.Single(model.Rows, row => row.HasRetry);
         Assert.False(model.IsAnyLoading);
         client.Error = null;
         await model.RetryPageCommand.ExecuteAsync(null);
@@ -164,6 +166,9 @@ public sealed class LibraryBrowserViewModelTests
         using var model = Model(client);
         var loading = model.OpenLibraryCommand.ExecuteAsync(Library);
         Assert.True(model.IsLoading);
+        Assert.Equal(MediaLibraryPage.PageSize,
+            model.Rows.Sum(row => row.PlaceholderSlots.Count));
+        Assert.Empty(model.Message);
         Assert.False(model.LoadPageCommand.CanExecute(0));
         if (dispose)
         {
@@ -263,7 +268,8 @@ public sealed class LibraryBrowserViewModelTests
 
         Assert.Same(original, model.Items);
         Assert.True(model.CanRetryMore);
-        Assert.Contains(Loc.Get("Error.Preview.InvalidResponse"), model.Message, StringComparison.Ordinal);
+        Assert.Empty(model.Message);
+        Assert.Single(model.Rows, row => row.HasRetry);
         Assert.All(decoder.Resources.Take(24), resource => Assert.Equal(0, resource.DisposeCount));
         Assert.All(decoder.Resources.Skip(24).Take(initialResources - 24),
             resource => Assert.Equal(1, resource.DisposeCount));
@@ -338,12 +344,16 @@ public sealed class LibraryBrowserViewModelTests
         Assert.True(model.IsLoadingMore);
         Assert.False(model.LoadMoreCommand.CanExecute(null));
         Assert.Equal(2, client.Queries.Count);
+        Assert.Equal(MediaLibraryPage.PageSize,
+            model.Rows.Sum(row => row.PlaceholderSlots.Count));
+        Assert.Empty(model.Message);
         client.Pending.SetException(new MediaPreviewException(MediaPreviewError.Network, "Load more failed."));
         await loading;
 
         Assert.Same(original, model.Items);
         Assert.Equal(40, model.Items.Count);
         Assert.True(model.CanRetryMore);
+        Assert.Equal(0, model.Rows.Sum(row => row.PlaceholderSlots.Count));
         Assert.True(Assert.Single(model.Rows, row => row.HasRetry).HasRetry);
 
         client.Pending = null;
