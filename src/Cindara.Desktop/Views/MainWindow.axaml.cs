@@ -526,7 +526,7 @@ public partial class MainWindow : Window
         {
             _viewModel.ShowDesignGalleryCommand.Cancel();
         }
-        else if (_viewModel?.LibraryBrowser?.IsLoading is true)
+        else if (_viewModel?.LibraryBrowser?.IsAnyLoading is true)
         {
             _viewModel.LibraryBrowser.CancelLoading();
         }

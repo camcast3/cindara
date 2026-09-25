@@ -29,8 +29,8 @@ rails. Full details and playback remain assigned to the remaining #5 batches and
 Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
 There is no intermediate preview launcher or redundant Home-screen back button.
-Libraries opens bounded paged poster-grid browsing with implemented filter, sort,
-and A–Z title controls. Search preserves one combined result grid, query, selected
+Libraries opens incrementally loaded virtualized poster-grid browsing with
+implemented filter, sort, and A–Z title controls. Search preserves one combined result grid, query, selected
 item, and offsets; Downloads retains an honest unavailable state. Settings exposes
 Language: English, Library layout, Exit, and Back to Home through a category/detail
 split without implying unimplemented settings features. Initial focus is
@@ -131,8 +131,8 @@ logical dimensions:
 Library and Search grids independently follow their available content width.
 Poster width is computed from the actual destination width, remains at
 least 120 logical pixels, and is capped at the approved couch-readable density;
-its 2:3 ratio is preserved. Horizontal scrolling reveals additional bounded page
-results without squeezing cards or clipping the client area.
+its 2:3 ratio is preserved. Library metadata appends in bounded batches while
+virtualized rows prevent the complete library from realizing controls at once.
 Ten-foot typography and bounded forms use a capped 1.5 density scale. This is
 separate from OS display scaling: a physical 4K display at 200% still supplies a
 1920x1080 logical viewport and does not receive the density scale twice.
@@ -292,9 +292,10 @@ Startup uses the OS-selected display rather than persisting a display preference
 
 This gallery intentionally caps rows at 20 items and preloads a bounded subset
 of recently-added backdrops, falling back to card artwork elsewhere. Library
-destinations publish at most 40 metadata cards per page without waiting for
-artwork or preloading backdrops. Six background workers progressively fill the
-existing cards, preserving focus. Poster requests keep a 15-second timeout;
+destinations append metadata in 40-item batches without waiting for artwork or
+preloading backdrops. Only nearby virtualized rows retain decoded posters. Six
+background workers progressively fill the active artwork window, preserving focus.
+Poster requests keep a 15-second timeout;
 failure leaves the grid usable and offers an explicit artwork-only retry.
 Playback and mutations are not implemented here. Metadata and artwork overlap under a six-request cap,
 images are deduplicated within the request, and a 30-second deadline prevents
@@ -341,19 +342,21 @@ shows credentials only for a new or rejected session. Passwords remain ephemeral
         [All / Unwatched / Favorites] [Title A–Z / Z–A] [Item range / total]
         [Poster] [Poster] [Poster] [Poster] ...
         [Poster] [Poster] [Poster] [Poster] ... [All / A–Z rail]
-        [Previous page] [Next page]
 ```
 
 Initial focus: first poster, library choice if empty, Cancel while loading, or
 Retry after a failed/canceled metadata request. Artwork loading does not disable
 the grid or pagination; it has separate loading/cancel/retry controls.
-Directional navigation follows the live responsive column count. The title rail
-filters to All or titles beginning with A–Z and resets paging. Filter/sort changes
-commit only after a successful page. Paging focuses the first card of the new
-page. Only the current page's decoded artwork is retained.
+Directional navigation follows the live responsive column count. Entering the
+final loaded row requests the next 40 metadata items once and appends them in place.
+The title rail filters to All or titles beginning with A–Z and resets loaded items.
+Filter/sort changes commit only after a successful first batch. A failed incremental
+batch preserves all posters and appends a focused Retry loading more tile. Lightweight
+metadata is retained; decoded artwork outside nearby rows is disposed and can reload
+through the session byte cache.
 Selecting a card opens a read-only metadata summary; Back restores the exact
-card and scroll position. Returning from Home or Settings reuses the page.
-Sorting is alphabetical; configurable filters/sorting are not exposed.
+card, loaded batches, and scroll position. Returning from Home or Settings reuses
+the grid.
 
 ### Details
 

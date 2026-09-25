@@ -134,6 +134,10 @@
   <data name="Home.Empty" xml:space="preserve"><value>No media in your Home rows yet. Choose a library to browse.</value></data>
   <data name="Library.NoLibraries" xml:space="preserve"><value>No supported movie or TV libraries are available to this account. Check library types and account access on your server.</value></data>
   <data name="Library.Loading" xml:space="preserve"><value>Loading library...</value></data>
+  <data name="Library.LoadingMore" xml:space="preserve"><value>Loading more titles...</value></data>
+  <data name="Library.LoadMoreCanceled" xml:space="preserve"><value>Loading more titles was canceled. Your loaded posters are unchanged.</value></data>
+  <data name="Library.LoadMoreFailed" xml:space="preserve"><value>{0} Your loaded posters are unchanged.</value></data>
+  <data name="Library.RetryMore" xml:space="preserve"><value>Retry loading more</value></data>
   <data name="Library.Canceled" xml:space="preserve"><value>Loading canceled. Retry to load this page.</value></data>
   <data name="Library.Empty" xml:space="preserve"><value>This library is empty.</value></data>
   <data name="Library.Retry" xml:space="preserve"><value>Retry loading page</value></data>
@@ -143,9 +147,7 @@
   <data name="Library.Sort.Ascending" xml:space="preserve"><value>Title A–Z</value></data>
   <data name="Library.Sort.Descending" xml:space="preserve"><value>Title Z–A</value></data>
   <data name="Library.Letter.All" xml:space="preserve"><value>All titles</value></data>
-  <data name="Library.Previous" xml:space="preserve"><value>Previous page</value></data>
-  <data name="Library.Next" xml:space="preserve"><value>Next page</value></data>
-  <data name="Library.Page" xml:space="preserve"><value>{0:N0}-{1:N0} of {2:N0}</value></data>
+  <data name="Library.Loaded" xml:space="preserve"><value>{0:N0} of {1:N0} loaded</value></data>
   <data name="Library.ArtworkUnavailable" xml:space="preserve"><value>Artwork unavailable</value></data>
   <data name="Library.LoadingArtwork" xml:space="preserve"><value>Loading artwork...</value></data>
   <data name="Library.ArtworkFailed" xml:space="preserve"><value>Some artwork could not be loaded. You can still browse or retry the missing artwork.</value></data>

@@ -292,13 +292,13 @@ public sealed class MainWindowNavigationTests
         fixture.Flush();
         Assert.False(model.IsLoading);
         Assert.True(model.LoadArtworkCommand.IsRunning);
-        Assert.True(fixture.Shell.LibraryView.FindControl<Button>("NextLibraryPage")!.IsEffectivelyEnabled);
+        Assert.True(model.HasMore);
         fixture.Key(Key.Right);
         fixture.Input.Press(ControllerAction.NavigateDown);
         fixture.Flush();
         var focused = Focused(fixture.Window);
         var card = Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
-        Assert.Equal("movie-6", card.Id);
+        Assert.Equal($"movie-{model.ColumnCount + 1}", card.Id);
         Assert.True(card.IsArtworkLoading);
         var artworkChanged = false;
         card.PropertyChanged += (_, args) =>
@@ -520,7 +520,7 @@ public sealed class MainWindowNavigationTests
     [InlineData("en", 1920)]
     [InlineData("en", 3840)]
     [InlineData("qps-plocm", 1920)]
-    public Task LibrariesPageThroughMediaAndRestoreFocusAndScrollFromSummaryAndHome(string cultureName, int width) =>
+    public Task LibrariesIncrementallyLoadAndRestoreFocusAndScrollFromSummaryAndHome(string cultureName, int width) =>
         TestAppBuilder.Run(async () =>
         {
             using var culture = new CultureScope(cultureName);
@@ -540,18 +540,21 @@ public sealed class MainWindowNavigationTests
             Assert.False(fixture.Shell.FindControl<StackPanel>("LibrariesUnavailable")!.IsEffectivelyVisible);
             Assert.Equal(40, fixture.Model.LibraryBrowser!.Items.Count);
             Assert.Equal("movie-0", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
-            Assert.InRange(Focused(fixture.Window).Bounds.Width / 206, 1.195, 1.205);
-            Assert.Equal(310 * 1.2, Focused(fixture.Window).Bounds.Height, precision: 6);
-            var firstPageOffset = browser.FindControl<ScrollViewer>("LibraryScroll")!.Offset;
+            Assert.InRange(
+                Focused(fixture.Window).Bounds.Height / Focused(fixture.Window).Bounds.Width,
+                1.49,
+                1.51);
             fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
             Assert.Equal("movie-1", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
             fixture.Input.Press(ControllerAction.NavigateDown);
             fixture.Input.Press(ControllerAction.NavigateDown);
             fixture.Flush();
             var card = Focused(fixture.Window);
-            Assert.Equal("movie-11", Assert.IsType<MediaPreviewCardViewModel>(card.DataContext).Id);
+            var cardItem = Assert.IsType<MediaPreviewCardViewModel>(card.DataContext);
+            Assert.Equal($"movie-{1 + (fixture.Model.LibraryBrowser.ColumnCount * 2)}", cardItem.Id);
             AssertInsideWindow(fixture.Window, card);
-            var scroll = browser.FindControl<ScrollViewer>("LibraryScroll")!;
+            var scroll = browser.FindControl<ListBox>("LibraryRows")!
+                .GetVisualDescendants().OfType<ScrollViewer>().First();
             var offset = scroll.Offset;
             Assert.True(offset.Y > 0);
             fixture.Input.Press(ControllerAction.Accept);
@@ -568,22 +571,33 @@ public sealed class MainWindowNavigationTests
             Assert.True(fixture.Model.IsDesignGalleryVisible);
             Assert.Same(homeLibrary, Focused(fixture.Window));
             fixture.Click(homeLibrary);
-            Assert.Equal("movie-11", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.Equal(cardItem.Id, Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
             Assert.Same(card, Focused(fixture.Window));
             Assert.Equal(offset, scroll.Offset);
             Assert.Equal(1, fixture.Preview.LibraryCalls);
 
-            fixture.Click(browser.FindControl<Button>("NextLibraryPage")!);
-            await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
+            while (fixture.Model.LibraryBrowser.Items.IndexOf(
+                       Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext))
+                   < fixture.Model.LibraryBrowser.Items.Count - fixture.Model.LibraryBrowser.ColumnCount)
+            {
+                fixture.Input.Press(ControllerAction.NavigateDown);
+                fixture.Flush();
+                if (fixture.Model.LibraryBrowser.LoadMoreCommand.IsRunning)
+                {
+                    break;
+                }
+            }
+
+            if (fixture.Model.LibraryBrowser.LoadMoreCommand.ExecutionTask is { } loadMore)
+            {
+                await loadMore;
+            }
             fixture.Flush();
-            Assert.Equal(7, fixture.Model.LibraryBrowser.Items.Count);
-            Assert.Equal("movie-40", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
-            Assert.False(browser.FindControl<Button>("NextLibraryPage")!.IsEffectivelyEnabled);
-            fixture.Click(browser.FindControl<Button>("PreviousLibraryPage")!);
-            await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
-            fixture.Flush();
-            Assert.Equal("movie-0", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
-            Assert.Equal(firstPageOffset, scroll.Offset);
+            Assert.Equal(47, fixture.Model.LibraryBrowser.Items.Count);
+            Assert.Equal("movie-0", fixture.Model.LibraryBrowser.Items[0].Id);
+            Assert.Equal("movie-40", fixture.Model.LibraryBrowser.Items[40].Id);
+            Assert.Null(browser.FindControl<Button>("NextLibraryPage"));
+            Assert.Null(browser.FindControl<Button>("PreviousLibraryPage"));
         });
 
     [Fact]
@@ -1174,10 +1188,13 @@ public sealed class MainWindowNavigationTests
             AutomationProperties.GetItemStatus(letters.Single(button => Equals(button.Tag, "M"))));
         var cards = view.GetVisualDescendants().OfType<Button>()
             .Where(button => button.Classes.Contains("card")).ToArray();
-        Assert.Equal(40, cards.Length);
-        var columns = view.FindControl<ItemsControl>("LibraryCards")!
-            .GetVisualDescendants().OfType<UniformGrid>().Single().Columns;
+        var columns = model.ColumnCount;
+        Assert.InRange(cards.Length, columns, model.Items.Count);
         Assert.InRange(columns, 2, 9);
+        Assert.Single(view.FindControl<ListBox>("LibraryRows")!
+            .GetVisualDescendants().OfType<VirtualizingStackPanel>());
+        Assert.Null(view.FindControl<Button>("NextLibraryPage"));
+        Assert.Null(view.FindControl<Button>("PreviousLibraryPage"));
         cards[columns - 1].Focus();
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("M", Assert.IsType<Button>(Focused(fixture.Window)).Tag);
@@ -1521,6 +1538,38 @@ public sealed class MainWindowNavigationTests
         AssertInsideWindow(fixture.Window, focused);
         fixture.Input.Press(ControllerAction.NavigateDown);
         fixture.Flush();
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+    });
+
+    [Fact]
+    public Task DeepVirtualizedLibraryFocusSurvivesResponsiveRegrouping() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = 1920;
+        fixture.Window.Height = 720;
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        await model.LoadMoreCommand.ExecuteAsync(null);
+        fixture.Flush();
+        var target = model.Items[45];
+        var row = 45 / model.ColumnCount;
+        var rows = fixture.Shell.LibraryView.FindControl<ListBox>("LibraryRows")!;
+        rows.ScrollIntoView(row);
+        fixture.Flush();
+        var button = fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>()
+            .Single(control => ReferenceEquals(control.DataContext, target));
+        button.Focus();
+        fixture.Flush();
+
+        fixture.Window.Width = 720;
+        fixture.Window.Height = 480;
+        fixture.Flush();
+
+        Assert.Same(target, Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext));
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
     });
 

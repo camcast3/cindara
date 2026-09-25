@@ -18,6 +18,9 @@ public partial class LibraryBrowserView : UserControl
     private const double ReferenceMaximumCardWidth = 180;
     private LibraryBrowserViewModel? _model;
     private Button? _focusedCard;
+    private MediaPreviewCardViewModel? _focusedItem;
+    private int _columns = 7;
+    private (int Start, int End) _realizedRange = (-1, -1);
     private bool _pageFocusPending = true;
     private bool _rememberFocus;
     private Vector? _returnOffset;
@@ -25,7 +28,7 @@ public partial class LibraryBrowserView : UserControl
     public void SuspendFocusMemory()
     {
         _rememberFocus = false;
-        _returnOffset = LibraryScroll.Offset;
+        _returnOffset = RowsScroll()?.Offset;
     }
 
     public void ResumeFocusMemory()
@@ -33,7 +36,10 @@ public partial class LibraryBrowserView : UserControl
         _rememberFocus = true;
         if (_returnOffset is { } offset)
         {
-            LibraryScroll.Offset = offset;
+            if (RowsScroll() is { } scroll)
+            {
+                scroll.Offset = offset;
+            }
             _returnOffset = null;
         }
     }
@@ -45,6 +51,7 @@ public partial class LibraryBrowserView : UserControl
         InitializeComponent();
         BuildLetterChoices();
         SizeChanged += (_, args) => UpdateCardLayout(args.NewSize.Width);
+        LayoutUpdated += (_, _) => UpdateArtworkWindowFromRealizedCards();
         DataContextChanged += (_, _) =>
         {
             if (_model is not null)
@@ -56,12 +63,13 @@ public partial class LibraryBrowserView : UserControl
             if (_model is not null)
             {
                 _model.PropertyChanged += OnModelChanged;
+                _model.SetColumnCount(_columns);
             }
 
             _focusedCard = null;
             _pageFocusPending = true;
             _returnOffset = null;
-            LibraryScroll.Offset = default;
+            _realizedRange = (-1, -1);
         };
     }
 
@@ -72,13 +80,15 @@ public partial class LibraryBrowserView : UserControl
         : !_pageFocusPending && _focusedCard is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } ? _focusedCard
         : Cards().FirstOrDefault() ?? Choices().FirstOrDefault() ?? (Control)this;
 
-    private Button[] Cards() => LibraryCards.GetVisualDescendants().OfType<Button>()
+    private Button[] Cards() => LibraryRows.GetVisualDescendants().OfType<Button>()
         .Where(button => button.Classes.Contains("card")).ToArray();
 
     private Button[] Choices() => LibraryChoices.GetVisualDescendants().OfType<Button>().ToArray();
 
-    private int Columns =>
-        LibraryCards.GetVisualDescendants().OfType<UniformGrid>().FirstOrDefault()?.Columns ?? 1;
+    private int Columns => _columns;
+
+    private ScrollViewer? RowsScroll() =>
+        LibraryRows.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
 
     private void UpdateCardLayout(double width)
     {
@@ -100,9 +110,20 @@ public partial class LibraryBrowserView : UserControl
         var cardWidth = Math.Min(maximumCardWidth, Math.Max(112, ((width - 56) / columns) - 14));
         Resources["Library.CardWidth"] = cardWidth;
         Resources["Library.CardHeight"] = cardWidth * 1.5;
-        if (LibraryCards.GetVisualDescendants().OfType<UniformGrid>().FirstOrDefault() is { } grid)
+        if (_columns != columns)
         {
-            grid.Columns = columns;
+            _columns = columns;
+            var focused = _focusedItem;
+            var focusedIndex = focused is not null && _model is not null
+                ? _model.Items.IndexOf(focused)
+                : -1;
+            _model?.SetColumnCount(columns);
+            if (focusedIndex >= 0)
+            {
+                Dispatcher.UIThread.Post(
+                    () => FocusItemAtIndex(focusedIndex),
+                    DispatcherPriority.Loaded);
+            }
         }
     }
 
@@ -111,9 +132,27 @@ public partial class LibraryBrowserView : UserControl
         if (args.PropertyName == nameof(LibraryBrowserViewModel.Items))
         {
             _focusedCard = null;
+            _focusedItem = null;
             _pageFocusPending = true;
             _returnOffset = null;
-            LibraryScroll.Offset = default;
+            _realizedRange = (-1, -1);
+            if (RowsScroll() is { } scroll)
+            {
+                scroll.Offset = default;
+            }
+        }
+
+        if (args.PropertyName == nameof(LibraryBrowserViewModel.Rows)
+            && _focusedItem is not null
+            && _model is not null)
+        {
+            var focusedIndex = _model.Items.IndexOf(_focusedItem);
+            if (focusedIndex >= 0)
+            {
+                Dispatcher.UIThread.Post(
+                    () => FocusItemAtIndex(focusedIndex),
+                    DispatcherPriority.Loaded);
+            }
         }
 
         if (args.PropertyName == nameof(LibraryBrowserViewModel.IsLoading))
@@ -143,9 +182,14 @@ public partial class LibraryBrowserView : UserControl
 
     public bool TryMove(NavigationDirection direction)
     {
-        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
-        var cards = Cards();
-        var index = Array.FindIndex(cards, card => ReferenceEquals(card, focused));
+        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
+        if (_model is null
+            || focused?.DataContext is not MediaPreviewCardViewModel focusedItem)
+        {
+            return false;
+        }
+
+        var index = _model.Items.IndexOf(focusedItem);
         if (index < 0)
         {
             return false;
@@ -165,7 +209,7 @@ public partial class LibraryBrowserView : UserControl
             return false;
         }
 
-        if (step == 1 && (index % Columns == Columns - 1 || index == cards.Length - 1))
+        if (step == 1 && (index % Columns == Columns - 1 || index == _model.Items.Count - 1))
         {
             ActiveLetterButton()?.Focus(NavigationMethod.Directional);
             return true;
@@ -177,18 +221,52 @@ public partial class LibraryBrowserView : UserControl
             return Choices().FirstOrDefault()?.Focus(NavigationMethod.Directional) is true;
         }
 
-        if (next >= cards.Length)
+        if (next >= _model.Items.Count)
         {
-            var action = NextLibraryPage.IsEffectivelyEnabled ? NextLibraryPage : PreviousLibraryPage;
-            if (action.IsEffectivelyEnabled)
+            if (_model.CanRetryMore
+                && LibraryRows.GetVisualDescendants().OfType<Button>()
+                    .FirstOrDefault(button => button.Name == "RetryLoadingMore") is { } retry)
             {
-                action.Focus(NavigationMethod.Directional);
+                retry.Focus(NavigationMethod.Directional);
+            }
+            else if (_model.LoadMoreCommand.CanExecute(null))
+            {
+                _model.LoadMoreCommand.Execute(null);
             }
 
             return true;
         }
 
-        return cards[next].Focus(NavigationMethod.Directional);
+        return FocusItemAtIndex(next);
+    }
+
+    private bool FocusItemAtIndex(int index)
+    {
+        if (_model is null || index < 0 || index >= _model.Items.Count)
+        {
+            return false;
+        }
+
+        var item = _model.Items[index];
+        if (LibraryRows.GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(button => ReferenceEquals(button.DataContext, item)) is { } realized)
+        {
+            realized.Focus(NavigationMethod.Directional);
+            realized.BringIntoView();
+            return true;
+        }
+
+        LibraryRows.ScrollIntoView(index / Columns);
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (LibraryRows.GetVisualDescendants().OfType<Button>()
+                .FirstOrDefault(button => ReferenceEquals(button.DataContext, item)) is { } button)
+            {
+                button.Focus(NavigationMethod.Directional);
+                button.BringIntoView();
+            }
+        }, DispatcherPriority.Loaded);
+        return true;
     }
 
     private async void OnLibraryClicked(object? sender, RoutedEventArgs args)
@@ -231,6 +309,14 @@ public partial class LibraryBrowserView : UserControl
             && _model.SetLetterCommand.CanExecute(letter))
         {
             await _model.SetLetterCommand.ExecuteAsync(letter);
+        }
+    }
+
+    private async void OnRetryMoreClicked(object? sender, RoutedEventArgs args)
+    {
+        if (_model?.RetryPageCommand.CanExecute(null) is true)
+        {
+            await _model.RetryPageCommand.ExecuteAsync(null);
         }
     }
 
@@ -302,6 +388,17 @@ public partial class LibraryBrowserView : UserControl
         if (sender is Button { DataContext: MediaPreviewCardViewModel item })
         {
             _model!.SelectedItem = item;
+            _focusedItem = item;
+            var index = _model.Items.IndexOf(item);
+            if (index >= 0)
+            {
+                _ = _model.SetArtworkWindowAsync(index, Columns);
+                if (index >= Math.Max(0, _model.Items.Count - Columns)
+                    && _model.LoadMoreCommand.CanExecute(null))
+                {
+                    _model.LoadMoreCommand.Execute(null);
+                }
+            }
         }
 
         if (_rememberFocus)
@@ -312,6 +409,34 @@ public partial class LibraryBrowserView : UserControl
         if (_rememberFocus && sender is Button { Parent: StackPanel panel })
         {
             panel.BringIntoView();
+        }
+    }
+
+    private void UpdateArtworkWindowFromRealizedCards()
+    {
+        if (_model is null || _model.Items.Count == 0)
+        {
+            return;
+        }
+
+        var indexes = Cards()
+            .Select(button => button.DataContext)
+            .OfType<MediaPreviewCardViewModel>()
+            .Select(item => _model.Items.IndexOf(item))
+            .Where(index => index >= 0)
+            .ToArray();
+        if (indexes.Length == 0)
+        {
+            return;
+        }
+
+        var range = (indexes.Min(), indexes.Max() + 1);
+        if (_realizedRange != range)
+        {
+            _realizedRange = range;
+            _ = _model.SetArtworkWindowAsync(
+                range.Item1,
+                Math.Max(Columns, range.Item2 - range.Item1));
         }
     }
 

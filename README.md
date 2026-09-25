@@ -22,11 +22,12 @@ non-Home surfaces do not repeat the Home sidebar. Home includes a single Continu
 Watching row and recently added media
 from the selected libraries, with no generic Libraries shortcut row. Open libraries
 from the sidebar or library chooser. Home library shortcuts use aligned TV, Movie,
-and Anime icons with accessible names. Libraries open bounded 40-item poster-grid
-pages with All/Unwatched/Favorites filters, Title A–Z/Z–A ordering, All/A–Z title
-filtering, and explicit Previous/Next controls rather than loading the entire
-collection. Selecting a card opens a read-only summary; Back restores the exact card,
-query controls, page, and grid position. Search supports debounced physical-keyboard
+and Anime icons with accessible names. Libraries open a virtualized poster grid
+with All/Unwatched/Favorites filters, Title A–Z/Z–A ordering, and All/A–Z title
+filtering. Metadata loads in bounded 40-item batches as focus enters the final loaded
+row; posters append without visible pages or replacing earlier items. Selecting a
+card opens a read-only summary; Back restores the exact card, query controls, loaded
+batches, and grid position. Search supports debounced physical-keyboard
 input, a temporary full-screen controller keyboard, one combined movie/series/season/
 episode poster grid, bounded paging, cancellation, and exact query/focus/scroll
 restoration. Full details and episode navigation remain
@@ -74,12 +75,13 @@ limitations, validation, and the keyboard/screen-reader release checklist.
 Home loads metadata and artwork with at most six requests in flight and a
 30-second overall deadline. Library metadata has the same deadline, but the
 grid appears immediately without waiting for posters. Up to six poster requests
-then run in the background, each with a 15-second request timeout; navigation,
-card summaries, and paging remain available. Failed/missing posters show an
-explicit placeholder and **Retry missing artwork**, without discarding the page.
-Leaving the library, paging, or changing accounts cancels the old artwork work.
-Library pages do not eagerly fetch hero backdrops. Duplicate images share a
-request within each load.
+then run in the background, each with a 15-second request timeout; navigation and
+card summaries remain available. Only nearby virtualized rows retain decoded images;
+moving away disposes them while the bounded byte cache can serve a later reload.
+Failed/missing posters show an explicit placeholder and **Retry missing artwork**.
+Leaving the library, changing the query/account, or loading another batch cancels
+superseded artwork work. Library batches do not eagerly fetch hero backdrops.
+Duplicate images share a request within each artwork window.
 An in-memory LRU artwork cache holds at most 128 entries / 32 MiB and uses a
 five-minute **cache-wide expiry window**, checked on lookup. The first lookup
 after the deadline clears the cache and starts a new window; an image added near
@@ -111,10 +113,8 @@ loads use that lookup directly. All lookups share the existing six-request cap
 and 30-second Home deadline. The candidate set is not trimmed before ranking.
 **Cancel loading** or Back/Escape cancels the request; failures retain sign-in and
 offer Retry (except a rejected session, which returns to sign-in). An unsuccessful
-page change keeps the previous page and retries the failed offset. This includes
-a library shrinking so the requested page is now past its end; Previous page
-remains available to recover without replacing the last useful page with an empty
-result. Empty libraries
+incremental load keeps every loaded poster and appends a focused **Retry loading
+more** tile for the failed offset. Empty libraries
 and missing artwork have visible states. Returning
 from Settings reuses the current account's loaded Home instead of downloading
 it again. Account switching and sign-out clear that data.

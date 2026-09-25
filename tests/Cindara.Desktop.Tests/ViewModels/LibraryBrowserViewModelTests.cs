@@ -28,7 +28,7 @@ public sealed class LibraryBrowserViewModelTests
         "user", "Viewer", "token");
 
     [Fact]
-    public async Task RealPageValidationPreservesPreviousPageWhenLibraryShrinksAndPreviousCanRecover()
+    public async Task IncrementalLoadPreservesItemsWhenLibraryShrinksAndQueryResetCanRecover()
     {
         var requests = new List<int>();
         using var handler = new ShrinkingLibraryHandler(start =>
@@ -46,25 +46,27 @@ public sealed class LibraryBrowserViewModelTests
             new JellyfinClientIdentity("Cindara", "Tests", "device", "1.0"));
         using var model = new LibraryBrowserViewModel(client, Session, [Library], _ => Task.CompletedTask);
         await model.OpenLibraryCommand.ExecuteAsync(Library);
-        await model.LoadPageCommand.ExecuteAsync(40);
-        var previous = model.Items;
+        var original = model.Items;
+        await model.LoadMoreCommand.ExecuteAsync(null);
+        Assert.Same(original, model.Items);
+        Assert.Equal(80, model.Items.Count);
         var description = model.PageDescription;
 
-        await model.LoadPageCommand.ExecuteAsync(80);
+        await model.LoadMoreCommand.ExecuteAsync(null);
 
-        Assert.Same(previous, model.Items);
+        Assert.Same(original, model.Items);
         Assert.Equal(description, model.PageDescription);
-        Assert.Equal(40, model.Items.Count);
-        Assert.Equal("item-40", model.Items[0].Id);
-        Assert.True(model.CanRetry);
+        Assert.Equal(80, model.Items.Count);
+        Assert.Equal("item-0", model.Items[0].Id);
+        Assert.True(model.CanRetryMore);
         Assert.Equal(80, model.RetryIndex);
         Assert.True(model.HasMessage);
-        Assert.False(model.IsLoading);
-        Assert.True(model.HasPreviousPage);
+        Assert.False(model.IsAnyLoading);
 
-        await model.LoadPageCommand.ExecuteAsync(model.PreviousIndex);
+        await model.SetFilterCommand.ExecuteAsync(MediaLibraryFilter.All);
 
         Assert.Equal("item-0", model.Items[0].Id);
+        Assert.Equal(40, model.Items.Count);
         Assert.False(model.CanRetry);
         Assert.False(model.HasMessage);
         Assert.Equal([0, 40, 80, 0], requests);
@@ -87,52 +89,50 @@ public sealed class LibraryBrowserViewModelTests
     [InlineData("en")]
     [InlineData("qps-ploc")]
     [InlineData("qps-plocm")]
-    public async Task PagesReplaceRatherThanAccumulateAndReopeningPreservesTheCurrentPage(string culture)
+    public async Task BatchesAccumulateAndReopeningPreservesLoadedItems(string culture)
     {
         using var scope = new CultureScope(culture);
         var client = new Client();
         using var model = Model(client);
         await model.OpenLibraryCommand.ExecuteAsync(Library);
         Assert.Equal(40, model.Items.Count);
-        Assert.True(model.HasNextPage);
-        Assert.False(model.HasPreviousPage);
+        Assert.True(model.HasMore);
         Assert.Equal(40, model.NextIndex);
-        await model.LoadPageCommand.ExecuteAsync(model.NextIndex);
-        Assert.Equal(7, model.Items.Count);
-        Assert.False(model.HasNextPage);
-        Assert.True(model.HasPreviousPage);
-        Assert.Equal(0, model.PreviousIndex);
-        Assert.Equal(Loc.Format("Library.Page", 41, 47, 47), model.PageDescription);
+        var first = model.Items[0];
+        await model.LoadMoreCommand.ExecuteAsync(null);
+        Assert.Equal(47, model.Items.Count);
+        Assert.Same(first, model.Items[0]);
+        Assert.False(model.HasMore);
+        Assert.Equal(Loc.Format("Library.Loaded", 47, 47), model.PageDescription);
         var previous = model.Items;
         await model.OpenLibraryCommand.ExecuteAsync(Library);
         Assert.Same(previous, model.Items);
         Assert.Equal([0, 40], client.StartIndexes);
-        await model.LoadPageCommand.ExecuteAsync(model.PreviousIndex);
-        Assert.Equal("movie-0", model.Items[0].Id);
     }
 
     [Theory]
     [InlineData(MediaPreviewError.Network)]
     [InlineData(MediaPreviewError.TimedOut)]
     [InlineData(MediaPreviewError.InvalidResponse)]
-    public async Task FailedNextPagePreservesTheCurrentPageAndCanRetryTheFailedOffset(MediaPreviewError error)
+    public async Task FailedLoadMorePreservesItemsAndCanRetryTheFailedOffset(MediaPreviewError error)
     {
         var client = new Client();
         using var model = Model(client);
         await model.OpenLibraryCommand.ExecuteAsync(Library);
         var original = model.Items;
         client.Error = error;
-        await model.LoadPageCommand.ExecuteAsync(40);
+        await model.LoadMoreCommand.ExecuteAsync(null);
         Assert.Same(original, model.Items);
-        Assert.True(model.CanRetry);
+        Assert.True(model.CanRetryMore);
         Assert.Equal(40, model.RetryIndex);
         Assert.True(model.HasMessage);
-        Assert.False(model.IsLoading);
+        Assert.False(model.IsAnyLoading);
         client.Error = null;
-        await model.LoadPageCommand.ExecuteAsync(model.RetryIndex);
-        Assert.False(model.CanRetry);
+        await model.RetryPageCommand.ExecuteAsync(null);
+        Assert.False(model.CanRetryMore);
         Assert.False(model.HasMessage);
-        Assert.Equal("movie-40", model.Items[0].Id);
+        Assert.Equal(47, model.Items.Count);
+        Assert.Equal("movie-40", model.Items[40].Id);
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public sealed class LibraryBrowserViewModelTests
         Assert.True(model.IsEmpty);
         Assert.False(model.CanRetry);
         Assert.False(model.HasMessage);
-        Assert.False(model.HasNextPage);
+        Assert.False(model.HasMore);
     }
 
     [Fact]
@@ -255,12 +255,14 @@ public sealed class LibraryBrowserViewModelTests
         var initialResources = decoder.Resources.Count;
         decoder.FailOnCall = initialResources + 3;
 
-        await model.LoadPageCommand.ExecuteAsync(40);
+        await model.LoadMoreCommand.ExecuteAsync(null);
 
         Assert.Same(original, model.Items);
-        Assert.True(model.CanRetry);
-        Assert.Equal(Loc.Get("Error.Preview.InvalidResponse"), model.Message);
-        Assert.All(decoder.Resources.Take(initialResources), resource => Assert.Equal(0, resource.DisposeCount));
+        Assert.True(model.CanRetryMore);
+        Assert.Contains(Loc.Get("Error.Preview.InvalidResponse"), model.Message, StringComparison.Ordinal);
+        Assert.All(decoder.Resources.Take(28), resource => Assert.Equal(0, resource.DisposeCount));
+        Assert.All(decoder.Resources.Skip(28).Take(initialResources - 28),
+            resource => Assert.Equal(1, resource.DisposeCount));
         Assert.All(decoder.Resources.Skip(initialResources), resource => Assert.Equal(1, resource.DisposeCount));
         model.Dispose();
         Assert.All(decoder.Resources, resource => Assert.Equal(1, resource.DisposeCount));
@@ -316,6 +318,36 @@ public sealed class LibraryBrowserViewModelTests
         Assert.Same(original, model.Items);
         Assert.True(model.CanRetry);
         Assert.Equal(Loc.Get("Library.Canceled"), model.Message);
+    }
+
+    [Fact]
+    public async Task OnlyOneIncrementalRequestRunsAndFailureAppendsRetryRow()
+    {
+        var client = new Client();
+        using var model = Model(client);
+        await model.OpenLibraryCommand.ExecuteAsync(Library);
+        var original = model.Items;
+        client.Pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var loading = model.LoadMoreCommand.ExecuteAsync(null);
+
+        Assert.True(model.IsLoadingMore);
+        Assert.False(model.LoadMoreCommand.CanExecute(null));
+        Assert.Equal(2, client.Queries.Count);
+        client.Pending.SetException(new MediaPreviewException(MediaPreviewError.Network, "Load more failed."));
+        await loading;
+
+        Assert.Same(original, model.Items);
+        Assert.Equal(40, model.Items.Count);
+        Assert.True(model.CanRetryMore);
+        Assert.True(Assert.Single(model.Rows, row => row.HasRetry).HasRetry);
+
+        client.Pending = null;
+        await model.RetryPageCommand.ExecuteAsync(null);
+
+        Assert.Equal(47, model.Items.Count);
+        Assert.False(model.CanRetryMore);
+        Assert.DoesNotContain(model.Rows, row => row.HasRetry);
     }
 
     private static MediaPreviewItem Item(int index) =>
