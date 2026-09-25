@@ -23,7 +23,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     private MediaLibraryQuery? _retryQuery;
     private bool _retryAppend;
     private int _totalRecordCount;
-    private int _columnCount = 7;
+    private int _columnCount = 6;
     private (int Start, int End) _artworkWindow;
     private long _artworkWindowGeneration;
 

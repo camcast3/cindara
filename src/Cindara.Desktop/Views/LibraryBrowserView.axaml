@@ -65,7 +65,8 @@
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
             <ListBox x:Name="LibraryRows" Classes="library-grid" ItemsSource="{Binding Rows}"
                      SelectionMode="Single" IsEnabled="{Binding !IsLoading}"
-                     Background="Transparent" BorderThickness="0">
+                     Background="Transparent" BorderThickness="0"
+                     Padding="6,4,6,8">
                 <ListBox.Styles>
                     <Style Selector="ListBoxItem">
                         <Setter Property="Focusable" Value="False" />
@@ -82,11 +83,14 @@
                 </ListBox.ItemsPanel>
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:LibraryGridRowViewModel">
-                        <StackPanel Orientation="Horizontal" Spacing="14">
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="{DynamicResource Library.GridSpacing}"
+                                    Margin="0,0,0,24">
                             <ItemsControl ItemsSource="{Binding Items}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="14" />
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="{DynamicResource Library.GridSpacing}" />
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
@@ -100,16 +104,19 @@
                                                     AutomationProperties.HelpText="{Binding Subtitle}"
                                                     GotFocus="OnCardFocused"
                                                     Click="OnCardClicked">
-                                                <Grid>
-                                                    <TextBlock Text="{Binding ArtworkPlaceholder}"
-                                                               IsVisible="{Binding !HasArtwork}"
-                                                               TextWrapping="Wrap"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center"
-                                                               Margin="12" />
-                                                    <Image Source="{Binding Artwork}"
-                                                           Stretch="UniformToFill" />
-                                                </Grid>
+                                                <Border ClipToBounds="True"
+                                                        CornerRadius="{DynamicResource Cindara.Radius.Medium}">
+                                                    <Grid>
+                                                        <TextBlock Text="{Binding ArtworkPlaceholder}"
+                                                                   IsVisible="{Binding !HasArtwork}"
+                                                                   TextWrapping="Wrap"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"
+                                                                   Margin="12" />
+                                                        <Image Source="{Binding Artwork}"
+                                                               Stretch="UniformToFill" />
+                                                    </Grid>
+                                                </Border>
                                             </Button>
                                             <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
                                                        MaxLines="2"

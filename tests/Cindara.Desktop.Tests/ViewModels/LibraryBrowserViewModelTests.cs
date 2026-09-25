@@ -264,8 +264,8 @@ public sealed class LibraryBrowserViewModelTests
         Assert.Same(original, model.Items);
         Assert.True(model.CanRetryMore);
         Assert.Contains(Loc.Get("Error.Preview.InvalidResponse"), model.Message, StringComparison.Ordinal);
-        Assert.All(decoder.Resources.Take(28), resource => Assert.Equal(0, resource.DisposeCount));
-        Assert.All(decoder.Resources.Skip(28).Take(initialResources - 28),
+        Assert.All(decoder.Resources.Take(24), resource => Assert.Equal(0, resource.DisposeCount));
+        Assert.All(decoder.Resources.Skip(24).Take(initialResources - 24),
             resource => Assert.Equal(1, resource.DisposeCount));
         Assert.All(decoder.Resources.Skip(initialResources), resource => Assert.Equal(1, resource.DisposeCount));
         model.Dispose();

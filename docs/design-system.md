@@ -183,11 +183,12 @@ carries a dark Cindara gradient so text
 remains readable. Dialogs dim, but do not blur, the context. Toasts do not take
 focus. Skeletons preserve final geometry and respect reduced motion.
 
-Media cards are 20% wider and taller than the initial browsing slice. Before
+Home media cards are 20% wider and taller than the initial browsing slice. Before
 viewport scaling, Home landscape cards are 348 x 195.6 and Home posters are
-187.2 x 280.8 logical pixels. Library-grid posters are 247.2 x 372 logical
-pixels in the existing shell coordinate system. Text sizes, spacing, and viewport
-scaling remain unchanged. Short windows reduce the hero's height to leave room
+187.2 x 280.8 logical pixels. The dedicated Library grid targets 270 x 405
+logical-pixel posters with 24-pixel horizontal and vertical gutters, reducing the
+responsive column count rather than shrinking below the approved couch size.
+Text sizes and viewport scaling remain unchanged. Short windows reduce the hero's height to leave room
 for a full poster, its labels, and input hints; 1080p/ultrawide/4K hero geometry
 is unchanged.
 

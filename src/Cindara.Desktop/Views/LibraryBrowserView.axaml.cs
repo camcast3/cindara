@@ -15,11 +15,12 @@ namespace Cindara.Desktop.Views;
 
 public partial class LibraryBrowserView : UserControl
 {
-    private const double ReferenceMaximumCardWidth = 180;
+    private const double ReferenceMaximumCardWidth = 270;
+    private const double GridSpacing = 24;
     private LibraryBrowserViewModel? _model;
     private Button? _focusedCard;
     private MediaPreviewCardViewModel? _focusedItem;
-    private int _columns = 7;
+    private int _columns = 6;
     private (int Start, int End) _realizedRange = (-1, -1);
     private bool _pageFocusPending = true;
     private bool _rememberFocus;
@@ -48,6 +49,7 @@ public partial class LibraryBrowserView : UserControl
     {
         Resources["Library.CardWidth"] = ReferenceMaximumCardWidth;
         Resources["Library.CardHeight"] = ReferenceMaximumCardWidth * 1.5;
+        Resources["Library.GridSpacing"] = GridSpacing;
         InitializeComponent();
         BuildLetterChoices();
         SizeChanged += (_, args) => UpdateCardLayout(args.NewSize.Width);
@@ -97,18 +99,15 @@ public partial class LibraryBrowserView : UserControl
             return;
         }
 
-        var columns = width switch
-        {
-            < 560 => 2,
-            < 800 => 3,
-            < 1100 => 5,
-            < 1500 => 6,
-            < 2000 => 8,
-            < 2800 => 12,
-            _ => 14,
-        };
-        var maximumCardWidth = width >= 2200 ? ReferenceMaximumCardWidth * 1.3 : ReferenceMaximumCardWidth;
-        var cardWidth = Math.Min(maximumCardWidth, Math.Max(112, ((width - 56) / columns) - 14));
+        var availableWidth = Math.Max(280, width - 64);
+        var columns = Math.Clamp(
+            (int)Math.Floor((availableWidth + GridSpacing)
+                / (ReferenceMaximumCardWidth + GridSpacing)),
+            2,
+            14);
+        var cardWidth = Math.Min(
+            ReferenceMaximumCardWidth,
+            Math.Max(132, (availableWidth - (GridSpacing * (columns - 1))) / columns));
         Resources["Library.CardWidth"] = cardWidth;
         Resources["Library.CardHeight"] = cardWidth * 1.5;
         if (_columns != columns)
