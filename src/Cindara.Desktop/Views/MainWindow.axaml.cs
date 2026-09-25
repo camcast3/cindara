@@ -611,6 +611,9 @@ public partial class MainWindow : Window
         Resources["Cindara.Adaptive.DialogMaxHeight"] =
             Math.Max(240, size.Height - (profile.SafeMargin * 2) - 96);
         var typographyScale = Preferences.TextScale * density.TypeScale;
+        Resources["Cindara.Media.GridTitleHeight"] = 48 * typographyScale;
+        Resources["Cindara.Media.GridTitleLineHeight"] = 24 * typographyScale;
+        Resources["Cindara.Media.GridSubtitleHeight"] = 20 * typographyScale;
         Resources["Cindara.Type.Display"] = 48 * typographyScale;
         Resources["Cindara.Type.Title"] = 32 * typographyScale;
         Resources["Cindara.Type.Heading"] = 24 * typographyScale;

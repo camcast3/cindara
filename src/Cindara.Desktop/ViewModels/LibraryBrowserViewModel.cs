@@ -11,6 +11,7 @@ namespace Cindara.Desktop.ViewModels;
 
 public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposable
 {
+    private const int PlaceholderBufferSize = 60;
     private readonly IJellyfinMediaPreviewClient _client;
     private readonly AuthenticatedSession _session;
     private readonly Func<MediaPreviewException, Task> _onAccessDenied;
@@ -126,7 +127,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
 
     private bool CanOpenLibrary() => !_disposed && !IsAnyLoading;
     private bool CanLoadPage() => CanOpenLibrary() && SelectedLibrary is not null;
-    private bool CanLoadMore() => CanLoadPage() && HasMore;
+    private bool CanLoadMore() => CanLoadPage() && HasMore && !CanRetryMore;
     private bool CanLoadArtwork() => !_disposed && _sources.Count > 0
         && Enumerable.Range(_artworkWindow.Start, Math.Max(0, _artworkWindow.End - _artworkWindow.Start))
             .Any(index => index < _sources.Count
@@ -388,44 +389,44 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
 
     private void RebuildRows()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         var desiredItems = Items
             .Select((item, index) => (item, index))
             .Chunk(_columnCount)
             .Select(chunk => chunk.Select(entry => entry.item).ToArray())
             .ToList();
-        if (desiredItems.Count == 0 && (IsLoading || IsLoadingMore))
+        var remaining = Items.Count == 0
+            ? IsLoading ? MediaLibraryPage.PageSize : 0
+            : Math.Clamp(_totalRecordCount - Items.Count, 0, PlaceholderBufferSize);
+        if (CanRetryMore)
+        {
+            remaining = Math.Max(1, remaining);
+        }
+
+        if (desiredItems.Count == 0 && remaining > 0)
         {
             desiredItems.Add([]);
         }
 
         var placeholderCounts = Enumerable.Repeat(0, desiredItems.Count).ToList();
-        if ((IsLoading && Items.Count == 0) || IsLoadingMore)
+        var placeholderRowIndex = Math.Max(0, desiredItems.Count - 1);
+        while (remaining > 0)
         {
-            var remaining = MediaLibraryPage.PageSize;
-            var rowIndex = Math.Max(0, desiredItems.Count - 1);
-            while (remaining > 0)
-            {
-                if (rowIndex >= desiredItems.Count)
-                {
-                    desiredItems.Add([]);
-                    placeholderCounts.Add(0);
-                }
-
-                var capacity = _columnCount - desiredItems[rowIndex].Length;
-                var count = Math.Min(remaining, capacity);
-                placeholderCounts[rowIndex] = count;
-                remaining -= count;
-                rowIndex++;
-            }
-        }
-
-        if (CanRetryMore)
-        {
-            if (desiredItems.Count == 0 || desiredItems[^1].Length == _columnCount)
+            if (placeholderRowIndex >= desiredItems.Count)
             {
                 desiredItems.Add([]);
                 placeholderCounts.Add(0);
             }
+
+            var capacity = _columnCount - desiredItems[placeholderRowIndex].Length;
+            var count = Math.Min(remaining, capacity);
+            placeholderCounts[placeholderRowIndex] = count;
+            remaining -= count;
+            placeholderRowIndex++;
         }
 
         while (Rows.Count > desiredItems.Count)
@@ -460,8 +461,8 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
                 }
             }
 
+            Rows[rowIndex].HasRetry = CanRetryMore && rowIndex == Items.Count / _columnCount;
             Rows[rowIndex].SetPlaceholderCount(placeholderCounts[rowIndex]);
-            Rows[rowIndex].HasRetry = CanRetryMore && rowIndex == desiredItems.Count - 1;
         }
 
         NotifyPageChanged();
@@ -684,32 +685,36 @@ public sealed partial class LibraryGridRowViewModel : ObservableObject
             PlaceholderSlots.Add(PlaceholderSlots.Count);
         }
 
-        var desired = Items
-            .Select(item => new LibraryGridSlotViewModel(item))
-            .Concat(PlaceholderSlots.Select(_ => new LibraryGridSlotViewModel(null)))
-            .ToArray();
-        while (Slots.Count > desired.Length)
+        var desiredCount = Items.Count + count;
+        while (Slots.Count > desiredCount)
         {
             Slots.RemoveAt(Slots.Count - 1);
         }
 
-        for (var index = 0; index < desired.Length; index++)
+        for (var index = 0; index < desiredCount; index++)
         {
             if (index >= Slots.Count)
             {
-                Slots.Add(desired[index]);
+                Slots.Add(new());
             }
-            else if (!ReferenceEquals(Slots[index].Item, desired[index].Item))
-            {
-                Slots[index] = desired[index];
-            }
+
+            Slots[index].Item = index < Items.Count ? Items[index] : null;
+            Slots[index].IsRetry = HasRetry && index == Items.Count;
         }
     }
 }
 
-public sealed class LibraryGridSlotViewModel(MediaPreviewCardViewModel? item)
+public sealed partial class LibraryGridSlotViewModel : ObservableObject
 {
-    public MediaPreviewCardViewModel? Item { get; } = item;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasItem))]
+    [NotifyPropertyChangedFor(nameof(IsPlaceholder))]
+    private MediaPreviewCardViewModel? _item;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPlaceholder))]
+    private bool _isRetry;
+
     public bool HasItem => Item is not null;
-    public bool IsPlaceholder => Item is null;
+    public bool IsPlaceholder => Item is null && !IsRetry;
 }

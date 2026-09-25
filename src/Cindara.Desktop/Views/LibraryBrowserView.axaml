@@ -89,8 +89,11 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:LibraryGridSlotViewModel">
-                                        <Grid Width="{DynamicResource Cindara.Media.GridPosterWidth}">
+                                        <Grid Classes="library-slot"
+                                              Width="{DynamicResource Cindara.Media.GridPosterWidth}">
                                             <ContentControl Content="{Binding Item}"
+                                                            HorizontalContentAlignment="Stretch"
+                                                            VerticalContentAlignment="Top"
                                                             IsVisible="{Binding HasItem}">
                                                 <ContentControl.ContentTemplate>
                                                     <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
@@ -120,11 +123,15 @@
                                                                 </Border>
                                                             </Button>
                                                             <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                                                       Height="{DynamicResource Cindara.Media.GridTitleHeight}"
+                                                                       LineHeight="{DynamicResource Cindara.Media.GridTitleLineHeight}"
                                                                        Opacity="{Binding MetadataOpacity}"
                                                                        MaxLines="2"
                                                                        TextTrimming="CharacterEllipsis" />
                                                             <TextBlock Classes="caption"
                                                                        Text="{Binding Subtitle}"
+                                                                       Height="{DynamicResource Cindara.Media.GridSubtitleHeight}"
+                                                                       LineHeight="{DynamicResource Cindara.Media.GridSubtitleHeight}"
                                                                        Opacity="{Binding MetadataOpacity}"
                                                                        TextWrapping="Wrap" MaxLines="1"
                                                                        TextTrimming="CharacterEllipsis" />
@@ -133,23 +140,28 @@
                                                 </ContentControl.ContentTemplate>
                                             </ContentControl>
                                             <StackPanel Spacing="7" IsVisible="{Binding IsPlaceholder}">
-                                            <Border Height="{DynamicResource Cindara.Media.GridPosterHeight}"
-                                                    Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
-                                                    CornerRadius="{DynamicResource Cindara.Radius.Medium}"
-                                                    Opacity="0.55" />
-                                            <Border Height="20" Background="Transparent" />
-                                            <Border Height="16" Background="Transparent" />
+                                                <Border Height="{DynamicResource Cindara.Media.GridPosterHeight}"
+                                                        Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
+                                                        CornerRadius="{DynamicResource Cindara.Radius.Medium}"
+                                                        Opacity="0.55" />
+                                                <Border Height="{DynamicResource Cindara.Media.GridTitleHeight}"
+                                                        Background="Transparent" />
+                                                <Border Height="{DynamicResource Cindara.Media.GridSubtitleHeight}"
+                                                        Background="Transparent" />
+                                            </StackPanel>
+                                            <StackPanel Spacing="7" IsVisible="{Binding IsRetry}">
+                                                <Button x:Name="RetryLoadingMore"
+                                                        Height="{DynamicResource Cindara.Media.GridPosterHeight}"
+                                                        HorizontalAlignment="Stretch"
+                                                        Content="{loc:Tr Library.RetryMore}"
+                                                        Click="OnRetryMoreClicked" />
+                                                <Border Height="{DynamicResource Cindara.Media.GridTitleHeight}" />
+                                                <Border Height="{DynamicResource Cindara.Media.GridSubtitleHeight}" />
                                             </StackPanel>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Button x:Name="RetryLoadingMore"
-                                    Width="{DynamicResource Cindara.Media.GridPosterWidth}"
-                                    Height="{DynamicResource Cindara.Media.GridPosterHeight}"
-                                    IsVisible="{Binding HasRetry}"
-                                    Content="{loc:Tr Library.RetryMore}"
-                                    Click="OnRetryMoreClicked" />
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

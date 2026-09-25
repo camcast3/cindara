@@ -353,14 +353,19 @@ shows credentials only for a new or rejected session. Passwords remain ephemeral
         [Poster] [Poster] [Poster] [Poster] ... [All / A–Z rail]
 ```
 
-Initial focus: first poster, library choice if empty, Cancel while loading, or
-Retry after a failed/canceled metadata request. Artwork loading does not disable
-the grid or pagination; it has separate loading/cancel/retry controls.
+Initial focus: first poster, library choice if empty, Back while loading, or
+Retry after a failed/canceled metadata request. Artwork loads silently in each
+poster without disabling the grid; failures offer an artwork-only retry.
 Directional navigation follows the live responsive column count. Entering the
-final loaded row requests the next 40 metadata items once and appends them in place.
+final loaded row by focus or scrolling requests the next 40 metadata items once.
+After the first batch, 60 blank slots stay ahead of loaded items, capped to the
+remaining library count. Responses fill existing slots and replenish the buffer
+only at its far end; starting a request does not insert rows. Loaded and blank
+slots reserve identical poster, two-line title, and year geometry at every text scale.
 The title rail filters to All or titles beginning with A–Z and resets loaded items.
 Filter/sort changes commit only after a successful first batch. A failed incremental
-batch preserves all posters and appends a focused Retry loading more tile. Lightweight
+batch preserves posters and the buffer, replacing its first blank with a
+Retry loading more tile until explicitly retried. Lightweight
 metadata is retained; decoded artwork outside nearby rows is disposed and can reload
 through the session byte cache.
 Selecting a card opens a read-only metadata summary; Back restores the exact

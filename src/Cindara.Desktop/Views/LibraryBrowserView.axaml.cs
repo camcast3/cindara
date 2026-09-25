@@ -23,6 +23,7 @@ public partial class LibraryBrowserView : UserControl
     private bool _pageFocusPending = true;
     private bool _rememberFocus;
     private Vector? _returnOffset;
+    private bool _loadMoreQueued;
 
     public void SuspendFocusMemory()
     {
@@ -207,11 +208,14 @@ public partial class LibraryBrowserView : UserControl
 
         if (next >= _model.Items.Count)
         {
-            if (_model.CanRetryMore
-                && LibraryRows.GetVisualDescendants().OfType<Button>()
-                    .FirstOrDefault(button => button.Name == "RetryLoadingMore") is { } retry)
+            if (_model.CanRetryMore)
             {
-                retry.Focus(NavigationMethod.Directional);
+                LibraryRows.ScrollIntoView(_model.Items.Count / Columns);
+                Dispatcher.UIThread.Post(() =>
+                    LibraryRows.GetVisualDescendants().OfType<Button>()
+                        .FirstOrDefault(button => button.Name == "RetryLoadingMore"
+                            && button.IsEffectivelyVisible)?.Focus(NavigationMethod.Directional),
+                    DispatcherPriority.Loaded);
             }
             else if (_model.LoadMoreCommand.CanExecute(null))
             {
@@ -395,9 +399,23 @@ public partial class LibraryBrowserView : UserControl
 
     private void UpdateArtworkWindowFromRealizedCards()
     {
-        if (_model is null || _model.Items.Count == 0)
+        if (_model is null || _model.Items.Count == 0 || !IsEffectivelyVisible)
         {
             return;
+        }
+
+        if (!_loadMoreQueued && _model.LoadMoreCommand.CanExecute(null) && IsLoadBoundaryVisible())
+        {
+            _loadMoreQueued = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _loadMoreQueued = false;
+                if (IsEffectivelyVisible && _model?.LoadMoreCommand.CanExecute(null) is true
+                    && IsLoadBoundaryVisible())
+                {
+                    _model.LoadMoreCommand.Execute(null);
+                }
+            }, DispatcherPriority.Background);
         }
 
         var indexes = Cards()
@@ -419,6 +437,22 @@ public partial class LibraryBrowserView : UserControl
                 range.Item1,
                 Math.Max(Columns, range.Item2 - range.Item1));
         }
+    }
+
+    private bool IsLoadBoundaryVisible()
+    {
+        if (_model is null || _model.Items.Count == 0 || RowsScroll() is not { } scroll)
+        {
+            return false;
+        }
+
+        var lastLoadedRow = (_model.Items.Count - 1) / Columns;
+        return LibraryRows.GetVisualDescendants().OfType<ListBoxItem>()
+            .Any(container => container.DataContext is LibraryGridRowViewModel row
+                && _model.Rows.IndexOf(row) >= lastLoadedRow
+                && container.TranslatePoint(default, scroll) is { } position
+                && position.Y < scroll.Viewport.Height
+                && position.Y + container.Bounds.Height > 0);
     }
 
     private void OnCardClicked(object? sender, RoutedEventArgs args)

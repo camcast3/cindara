@@ -1592,6 +1592,129 @@ public sealed class MainWindowNavigationTests
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
     });
 
+    [Theory]
+    [InlineData("en", 1920, 1080, 1)]
+    [InlineData("qps-plocm", 1920, 1080, 1.5)]
+    [InlineData("en", 720, 480, 1.5)]
+    public Task LibraryBufferFillsWithoutMovingSlotsOrScroll(
+        string culture, int width, int height, double textScale) => TestAppBuilder.Run(async () =>
+    {
+        using var scope = new CultureScope(culture);
+        using var fixture = new ShellFixture(
+            preferences: new PresentationPreferences(TextScale: textScale, ReducedMotion: true));
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.LibraryTotal = 250;
+        fixture.Preview.LongLibraryTitles = true;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var slots = model.Rows.SelectMany(row => row.Slots).ToArray();
+        Assert.Equal(100, slots.Length);
+        Assert.Equal(60, slots.Count(slot => slot.IsPlaceholder));
+        var view = fixture.Shell.LibraryView;
+        var filter = view.FindControl<Button>("FilterAllButton")!;
+        filter.Focus();
+        var rows = view.FindControl<ListBox>("LibraryRows")!;
+        var scroll = rows.GetVisualDescendants().OfType<ScrollViewer>().First();
+        fixture.Preview.LibraryGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        rows.ScrollIntoView(40 / model.ColumnCount);
+        fixture.Flush();
+
+        Assert.True(model.IsLoadingMore);
+        Assert.Equal(2, fixture.Preview.LibraryCalls);
+        Assert.Equal(slots, model.Rows.SelectMany(row => row.Slots));
+        var placeholder = view.GetVisualDescendants().OfType<Grid>()
+            .Single(grid => grid.Classes.Contains("library-slot") && ReferenceEquals(grid.DataContext, slots[40]));
+        var offset = scroll.Offset;
+        var position = placeholder.TranslatePoint(default, view);
+        var size = placeholder.Bounds.Size;
+        Assert.True(slots[40].IsPlaceholder);
+        fixture.Preview.LibraryGate.SetResult(true);
+        await model.LoadMoreCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.Equal(80, model.Items.Count);
+        Assert.Equal(2, fixture.Preview.LibraryCalls);
+        Assert.Same(filter, Focused(fixture.Window));
+        Assert.Equal(offset, scroll.Offset);
+        Assert.Equal(position, placeholder.TranslatePoint(default, view));
+        Assert.Equal(size, placeholder.Bounds.Size);
+        Assert.Contains(placeholder, view.GetVisualDescendants());
+        Assert.Same(slots[40], placeholder.DataContext);
+        Assert.True(slots[40].HasItem);
+        Assert.Equal(60, model.Rows.SelectMany(row => row.Slots).Count(slot => slot.IsPlaceholder));
+        Assert.Contains(placeholder.GetVisualDescendants().OfType<Button>(),
+            button => button.IsEffectivelyVisible && ReferenceEquals(button.DataContext, model.Items[40]));
+    });
+
+    [Fact]
+    public Task ScrollingIntoTheBlankBufferLoadsOnceAndShowsRetryWithoutMovingRows() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = 1920;
+        fixture.Window.Height = 1080;
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.LibraryTotal = 250;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var view = fixture.Shell.LibraryView;
+        var rows = view.FindControl<ListBox>("LibraryRows")!;
+        var originalRows = model.Rows.ToArray();
+        var slots = originalRows.SelectMany(row => row.Slots).ToArray();
+        fixture.Preview.LibraryGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        rows.ScrollIntoView(80 / model.ColumnCount);
+        fixture.Flush();
+
+        Assert.True(model.IsLoadingMore);
+        Assert.Equal(2, fixture.Preview.LibraryCalls);
+        Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(),
+            button => button.DataContext is MediaPreviewCardViewModel && button.IsEffectivelyVisible);
+        var scroll = rows.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var offset = scroll.Offset;
+        fixture.Preview.LibraryGate.SetException(
+            new MediaPreviewException(MediaPreviewError.Network, "Library unavailable."));
+        await model.LoadMoreCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.Equal(2, fixture.Preview.LibraryCalls);
+        Assert.Equal(originalRows, model.Rows);
+        Assert.Equal(slots, model.Rows.SelectMany(row => row.Slots));
+        Assert.Equal(offset, scroll.Offset);
+        Assert.True(slots[40].IsRetry);
+
+        rows.ScrollIntoView(40 / model.ColumnCount);
+        fixture.Flush();
+        var retry = view.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.Name == "RetryLoadingMore" && button.IsEffectivelyVisible);
+        var slot = view.GetVisualDescendants().OfType<Grid>()
+            .Single(grid => grid.Classes.Contains("library-slot") && ReferenceEquals(grid.DataContext, slots[40]));
+        var size = slot.Bounds.Size;
+        var position = slot.TranslatePoint(default, view);
+        offset = scroll.Offset;
+        fixture.Preview.LibraryGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Click(retry);
+        Assert.Equal(3, fixture.Preview.LibraryCalls);
+        Assert.Equal(size, slot.Bounds.Size);
+        Assert.Equal(position, slot.TranslatePoint(default, view));
+        Assert.Equal(offset, scroll.Offset);
+        fixture.Preview.LibraryGate.SetResult(true);
+        await model.RetryPageCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.Equal(80, model.Items.Count);
+        Assert.Equal(size, slot.Bounds.Size);
+        Assert.Equal(position, slot.TranslatePoint(default, view));
+    });
+
     [Fact]
     public Task DpiMigrationPreservesLogicalSettingsLayoutAndFocus() => TestAppBuilder.Run(() =>
     {
@@ -1803,6 +1926,9 @@ public sealed class MainWindowNavigationTests
         public bool WithLibraries { get; set; }
         public bool LayoutLibraries { get; set; }
         public bool PauseLibrary { get; set; }
+        public int LibraryTotal { get; set; } = 47;
+        public bool LongLibraryTitles { get; set; }
+        public TaskCompletionSource<bool>? LibraryGate { get; set; }
         public int SearchCalls { get; private set; }
         public Task<MediaSearchPage> SearchAsync(AuthenticatedSession session, string query, int startIndex,
             CancellationToken cancellationToken = default)
@@ -1828,12 +1954,19 @@ public sealed class MainWindowNavigationTests
                 await Task.Delay(Timeout.Infinite, cancellationToken);
             }
 
-            return new MediaLibraryPage(Enumerable.Range(startIndex, Math.Min(40, 47 - startIndex))
-                .Select(index => new MediaPreviewItem($"movie-{index}", $"Movie {index}", "2026", "Movie",
+            if (LibraryGate is { } gate)
+            {
+                await gate.Task.WaitAsync(cancellationToken);
+            }
+
+            return new MediaLibraryPage(Enumerable.Range(startIndex, Math.Min(40, LibraryTotal - startIndex))
+                .Select(index => new MediaPreviewItem($"movie-{index}",
+                    LongLibraryTitles ? $"Movie {index} with a long title wrapping across multiple lines" : $"Movie {index}",
+                    "2026", "Movie",
                     null, null, "A media description.", "1h 5m", null)
                 {
                     ArtworkItemId = ProgressiveArtwork ? $"movie-{index}" : null,
-                }).ToArray(), startIndex, 47);
+                }).ToArray(), startIndex, LibraryTotal);
         }
 
         public int Calls { get; private set; }

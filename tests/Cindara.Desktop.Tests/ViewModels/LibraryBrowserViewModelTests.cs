@@ -101,7 +101,7 @@ public sealed class LibraryBrowserViewModelTests
         Assert.Equal(40, model.NextIndex);
         var first = model.Items[0];
         model.SetColumnCount(7);
-        var finalInitialRow = model.Rows[^1];
+        var finalInitialRow = model.Rows[5];
         await model.LoadMoreCommand.ExecuteAsync(null);
         Assert.Equal(47, model.Items.Count);
         Assert.Same(first, model.Items[0]);
@@ -182,6 +182,7 @@ public sealed class LibraryBrowserViewModelTests
         client.Pending.SetResult(new MediaLibraryPage([Item(0)], 0, 1));
         await loading;
         Assert.Empty(model.Items);
+        Assert.Empty(model.Rows);
         Assert.False(model.IsLoading);
         Assert.Equal(!dispose, model.OpenLibraryCommand.CanExecute(Library));
         Assert.Equal(!dispose, model.LoadPageCommand.CanExecute(0));
@@ -344,7 +345,7 @@ public sealed class LibraryBrowserViewModelTests
         Assert.True(model.IsLoadingMore);
         Assert.False(model.LoadMoreCommand.CanExecute(null));
         Assert.Equal(2, client.Queries.Count);
-        Assert.Equal(MediaLibraryPage.PageSize,
+        Assert.Equal(7,
             model.Rows.Sum(row => row.PlaceholderSlots.Count));
         Assert.Empty(model.Message);
         var finalLoadedRow = model.Rows[6];
@@ -357,8 +358,10 @@ public sealed class LibraryBrowserViewModelTests
         Assert.Same(original, model.Items);
         Assert.Equal(40, model.Items.Count);
         Assert.True(model.CanRetryMore);
-        Assert.Equal(0, model.Rows.Sum(row => row.PlaceholderSlots.Count));
+        Assert.Equal(7, model.Rows.Sum(row => row.PlaceholderSlots.Count));
         Assert.True(Assert.Single(model.Rows, row => row.HasRetry).HasRetry);
+        Assert.True(model.Rows.SelectMany(row => row.Slots).ElementAt(40).IsRetry);
+        Assert.False(model.LoadMoreCommand.CanExecute(null));
 
         client.Pending = null;
         await model.RetryPageCommand.ExecuteAsync(null);
@@ -366,6 +369,107 @@ public sealed class LibraryBrowserViewModelTests
         Assert.Equal(47, model.Items.Count);
         Assert.False(model.CanRetryMore);
         Assert.DoesNotContain(model.Rows, row => row.HasRetry);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(14)]
+    public async Task SixtySlotsAreReservedBeforeRequestsAndFilledInPlace(int columns)
+    {
+        var client = new Client { Total = 250 };
+        using var model = Model(client);
+        model.SetColumnCount(columns);
+        await model.OpenLibraryCommand.ExecuteAsync(Library);
+        var originalRows = model.Rows.ToArray();
+        var originalSlots = model.Rows.SelectMany(row => row.Slots).ToArray();
+        Assert.Equal(100, originalSlots.Length);
+        Assert.Equal(60, originalSlots.Count(slot => slot.IsPlaceholder));
+        var changes = new List<string?>();
+        originalSlots[40].PropertyChanged += (_, args) => changes.Add(args.PropertyName);
+        client.Pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var loading = model.LoadMoreCommand.ExecuteAsync(null);
+
+        Assert.Equal(originalRows, model.Rows);
+        Assert.Equal(originalSlots, model.Rows.SelectMany(row => row.Slots));
+        Assert.Equal(60, originalSlots.Count(slot => slot.IsPlaceholder));
+        client.Pending.SetResult(new MediaLibraryPage(
+            Enumerable.Range(40, 40).Select(Item).ToArray(), 40, 250));
+        await loading;
+
+        Assert.Equal(80, model.Items.Count);
+        Assert.Equal(originalRows, model.Rows.Take(originalRows.Length));
+        var slots = model.Rows.SelectMany(row => row.Slots).ToArray();
+        Assert.Equal(140, slots.Length);
+        Assert.Equal(originalSlots, slots.Take(100));
+        Assert.Equal(model.Items, slots.Take(80).Select(slot => slot.Item));
+        Assert.All(slots.Skip(80), slot => Assert.True(slot.IsPlaceholder));
+        Assert.Contains(nameof(LibraryGridSlotViewModel.Item), changes);
+        Assert.Contains(nameof(LibraryGridSlotViewModel.IsPlaceholder), changes);
+        Assert.All(model.Rows, row => Assert.InRange(row.Slots.Count, 1, columns));
+        Assert.Equal([0, 40], client.StartIndexes);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(20)]
+    [InlineData(40)]
+    [InlineData(47)]
+    [InlineData(87)]
+    [InlineData(100)]
+    [InlineData(101)]
+    public async Task ReservedSlotsNeverExceedTheLibraryAndDisappearAsTheTailLoads(int total)
+    {
+        var client = new Client { Total = total };
+        using var model = Model(client);
+        await model.OpenLibraryCommand.ExecuteAsync(Library);
+        do
+        {
+            var slots = model.Rows.SelectMany(row => row.Slots).ToArray();
+            Assert.Equal(Math.Min(total, model.Items.Count + 60), slots.Length);
+            Assert.Equal(Math.Min(60, total - model.Items.Count),
+                slots.Count(slot => slot.IsPlaceholder));
+            if (!model.HasMore)
+            {
+                break;
+            }
+
+            await model.LoadMoreCommand.ExecuteAsync(null);
+        } while (true);
+
+        Assert.Equal(total, model.Items.Count);
+        Assert.DoesNotContain(model.Rows.SelectMany(row => row.Slots), slot => slot.IsPlaceholder);
+    }
+
+    [Fact]
+    public async Task FailedAppendAndRetryKeepTheBufferAndRetrySlotInPlace()
+    {
+        var client = new Client { Total = 250 };
+        using var model = Model(client);
+        await model.OpenLibraryCommand.ExecuteAsync(Library);
+        var slots = model.Rows.SelectMany(row => row.Slots).ToArray();
+        client.Error = MediaPreviewError.Network;
+
+        await model.LoadMoreCommand.ExecuteAsync(null);
+
+        Assert.Equal(slots, model.Rows.SelectMany(row => row.Slots));
+        Assert.Equal(40, Array.IndexOf(slots, Assert.Single(slots, slot => slot.IsRetry)));
+        Assert.False(model.LoadMoreCommand.CanExecute(null));
+        client.Error = null;
+        client.Pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var retry = model.RetryPageCommand.ExecuteAsync(null);
+
+        Assert.Equal(slots, model.Rows.SelectMany(row => row.Slots));
+        Assert.True(slots[40].IsPlaceholder);
+        client.Pending.SetResult(new MediaLibraryPage(
+            Enumerable.Range(40, 40).Select(Item).ToArray(), 40, 250));
+        await retry;
+        Assert.Equal(slots, model.Rows.SelectMany(row => row.Slots).Take(100));
+        Assert.True(slots[40].HasItem);
+        Assert.False(slots[40].IsRetry);
     }
 
     private static MediaPreviewItem Item(int index) =>

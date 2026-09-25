@@ -26,8 +26,11 @@ from the selected libraries, with no generic Libraries shortcut row. Open librar
 from the sidebar or library chooser. Home library shortcuts use aligned TV, Movie,
 and Anime icons with accessible names. Libraries open a virtualized poster grid
 with All/Unwatched/Favorites filters, Title A–Z/Z–A ordering, and All/A–Z title
-filtering. Metadata loads in bounded 40-item batches as focus enters the final loaded
-row; posters append without visible pages or replacing earlier items. Selecting a
+filtering. Metadata loads in bounded 40-item batches as focus or scrolling reaches
+the final loaded row. A rolling buffer of 60 blank poster slots (capped to the
+remaining titles) is present before the next request; responses fill those slots
+in place and extend only the far end. Poster and metadata heights stay stable.
+There are no visible pages or replacements of earlier items. Selecting a
 card opens a read-only summary; Back restores the exact card, query controls, loaded
 batches, and grid position. Search supports debounced physical-keyboard
 input, a temporary full-screen controller keyboard, one combined movie/series/season/
@@ -115,8 +118,8 @@ loads use that lookup directly. All lookups share the existing six-request cap
 and 30-second Home deadline. The candidate set is not trimmed before ranking.
 **Cancel loading** or Back/Escape cancels the request; failures retain sign-in and
 offer Retry (except a rejected session, which returns to sign-in). An unsuccessful
-incremental load keeps every loaded poster and appends a focused **Retry loading
-more** tile for the failed offset. Empty libraries
+incremental load keeps every loaded poster and the reserved buffer, replacing the
+first blank with a **Retry loading more** tile for the failed offset. Empty libraries
 and missing artwork have visible states. Returning
 from Settings reuses the current account's loaded Home instead of downloading
 it again. Account switching and sign-out clear that data.
