@@ -192,8 +192,19 @@ public sealed class MainWindowNavigationTests
                     Assert.Equal(["tv", "movies", "anime"], fixture.Model.DesignGallery!.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
                     var shortcutButtons = fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
                         .GetVisualDescendants().OfType<Button>().ToArray();
+                    var homeButton = fixture.Gallery.FindControl<Button>("SidebarHomeButton")!;
+                    var homeCenter = homeButton.TranslatePoint(
+                        new Point(homeButton.Bounds.Width / 2, homeButton.Bounds.Height / 2),
+                        fixture.Gallery)!.Value.X;
                     Assert.All(shortcutButtons, button =>
-                        Assert.Single(button.GetVisualDescendants().OfType<PathIcon>()));
+                    {
+                        Assert.Equal(homeButton.Bounds.Size, button.Bounds.Size);
+                        var center = button.TranslatePoint(
+                            new Point(button.Bounds.Width / 2, button.Bounds.Height / 2),
+                            fixture.Gallery)!.Value.X;
+                        Assert.InRange(Math.Abs(center - homeCenter), 0, 1);
+                        Assert.Single(button.GetVisualDescendants().OfType<PathIcon>());
+                    });
                     Assert.Equal(3, shortcutButtons.Select(button =>
                             Assert.Single(button.GetVisualDescendants().OfType<PathIcon>()).Data)
                         .Distinct().Count());

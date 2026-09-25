@@ -106,7 +106,9 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="core:MediaLibrary">
-                                <Button Width="{DynamicResource Gallery.ShortcutWidth}" MinHeight="48" Classes="nav" Click="OnLibraryClicked"
+                                <Button Width="{DynamicResource Gallery.NavigationButtonSize}"
+                                        Height="{DynamicResource Gallery.NavigationButtonSize}"
+                                        Classes="nav" Click="OnLibraryClicked"
                                         AutomationProperties.Name="{Binding Name}" ToolTip.Tip="{Binding Name}">
                                     <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
                                               Height="{DynamicResource Gallery.NavigationIconSize}"
