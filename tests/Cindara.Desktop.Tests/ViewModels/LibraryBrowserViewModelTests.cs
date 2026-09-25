@@ -99,9 +99,13 @@ public sealed class LibraryBrowserViewModelTests
         Assert.True(model.HasMore);
         Assert.Equal(40, model.NextIndex);
         var first = model.Items[0];
+        model.SetColumnCount(7);
+        var finalInitialRow = model.Rows[^1];
         await model.LoadMoreCommand.ExecuteAsync(null);
         Assert.Equal(47, model.Items.Count);
         Assert.Same(first, model.Items[0]);
+        Assert.Same(finalInitialRow, model.Rows[5]);
+        Assert.Equal(7, finalInitialRow.Items.Count);
         Assert.False(model.HasMore);
         Assert.Equal(Loc.Format("Library.Loaded", 47, 47), model.PageDescription);
         var previous = model.Items;

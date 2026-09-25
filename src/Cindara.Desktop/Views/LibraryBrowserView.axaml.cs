@@ -102,9 +102,10 @@ public partial class LibraryBrowserView : UserControl
             < 560 => 2,
             < 800 => 3,
             < 1100 => 5,
-            < 1500 => 7,
-            < 2200 => 8,
-            _ => 9,
+            < 1500 => 6,
+            < 2000 => 8,
+            < 2800 => 12,
+            _ => 14,
         };
         var maximumCardWidth = width >= 2200 ? ReferenceMaximumCardWidth * 1.3 : ReferenceMaximumCardWidth;
         var cardWidth = Math.Min(maximumCardWidth, Math.Max(112, ((width - 56) / columns) - 14));
@@ -139,19 +140,6 @@ public partial class LibraryBrowserView : UserControl
             if (RowsScroll() is { } scroll)
             {
                 scroll.Offset = default;
-            }
-        }
-
-        if (args.PropertyName == nameof(LibraryBrowserViewModel.Rows)
-            && _focusedItem is not null
-            && _model is not null)
-        {
-            var focusedIndex = _model.Items.IndexOf(_focusedItem);
-            if (focusedIndex >= 0)
-            {
-                Dispatcher.UIThread.Post(
-                    () => FocusItemAtIndex(focusedIndex),
-                    DispatcherPriority.Loaded);
             }
         }
 

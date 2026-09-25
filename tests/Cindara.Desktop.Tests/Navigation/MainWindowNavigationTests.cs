@@ -1190,7 +1190,7 @@ public sealed class MainWindowNavigationTests
             .Where(button => button.Classes.Contains("card")).ToArray();
         var columns = model.ColumnCount;
         Assert.InRange(cards.Length, columns, model.Items.Count);
-        Assert.InRange(columns, 2, 9);
+        Assert.InRange(columns, 2, 14);
         Assert.Single(view.FindControl<ListBox>("LibraryRows")!
             .GetVisualDescendants().OfType<VirtualizingStackPanel>());
         Assert.Null(view.FindControl<Button>("NextLibraryPage"));
@@ -1514,6 +1514,7 @@ public sealed class MainWindowNavigationTests
     [InlineData(1280, 720)]
     [InlineData(1366, 768)]
     [InlineData(1920, 1080)]
+    [InlineData(3440, 1440)]
     public Task LibraryGridReflowsWithoutReplacingFocusedCards(int width, int height) => TestAppBuilder.Run(async () =>
     {
         using var fixture = new ShellFixture();
@@ -1527,15 +1528,20 @@ public sealed class MainWindowNavigationTests
         await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
         fixture.Flush();
         var focused = Focused(fixture.Window);
-        Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
+        var focusedItem = Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
         AssertInsideWindow(fixture.Window, focused);
+        if (width >= 2800)
+        {
+            Assert.Equal(14, fixture.Model.LibraryBrowser.ColumnCount);
+        }
 
         fixture.Window.Width = width < 1000 ? 1920 : 720;
         fixture.Window.Height = width < 1000 ? 1080 : 480;
         fixture.Flush();
-        Assert.Same(focused, Focused(fixture.Window));
-        Assert.Contains(focused, fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>());
-        AssertInsideWindow(fixture.Window, focused);
+        Assert.Same(focusedItem, Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext));
+        Assert.Contains(Focused(fixture.Window),
+            fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>());
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         fixture.Input.Press(ControllerAction.NavigateDown);
         fixture.Flush();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));

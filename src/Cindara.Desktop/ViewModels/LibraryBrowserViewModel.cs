@@ -65,8 +65,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     [ObservableProperty]
     private ObservableCollection<MediaPreviewCardViewModel> _items = [];
 
-    [ObservableProperty]
-    private IReadOnlyList<LibraryGridRowViewModel> _rows = [];
+    public ObservableCollection<LibraryGridRowViewModel> Rows { get; } = [];
 
     [ObservableProperty]
     private MediaPreviewCardViewModel? _selectedItem;
@@ -391,19 +390,54 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
 
     private void RebuildRows()
     {
-        var rows = Items
+        var desired = Items
             .Select((item, index) => (item, index))
             .Chunk(_columnCount)
-            .Select(chunk => new LibraryGridRowViewModel(
-                chunk.Select(entry => entry.item).ToArray(),
-                HasRetry: false))
+            .Select(chunk => chunk.Select(entry => entry.item).ToArray())
             .ToList();
         if (CanRetryMore)
         {
-            rows.Add(new([], HasRetry: true));
+            if (desired.Count == 0 || desired[^1].Length == _columnCount)
+            {
+                desired.Add([]);
+            }
         }
 
-        Rows = rows;
+        while (Rows.Count > desired.Count)
+        {
+            Rows.RemoveAt(Rows.Count - 1);
+        }
+
+        for (var rowIndex = 0; rowIndex < desired.Count; rowIndex++)
+        {
+            var desiredItems = desired[rowIndex];
+            if (rowIndex >= Rows.Count)
+            {
+                Rows.Add(new(desiredItems));
+            }
+            else if (!Rows[rowIndex].Items.SequenceEqual(
+                         desiredItems.Take(Rows[rowIndex].Items.Count)))
+            {
+                Rows[rowIndex] = new(desiredItems);
+            }
+            else
+            {
+                while (Rows[rowIndex].Items.Count > desiredItems.Length)
+                {
+                    Rows[rowIndex].Items.RemoveAt(Rows[rowIndex].Items.Count - 1);
+                }
+
+                for (var itemIndex = Rows[rowIndex].Items.Count;
+                     itemIndex < desiredItems.Length;
+                     itemIndex++)
+                {
+                    Rows[rowIndex].Items.Add(desiredItems[itemIndex]);
+                }
+            }
+
+            Rows[rowIndex].HasRetry = CanRetryMore && rowIndex == desired.Count - 1;
+        }
+
         NotifyPageChanged();
     }
 
@@ -566,7 +600,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         ArtworkMessage = string.Empty;
         var previous = Items;
         Items = [];
-        Rows = [];
+        Rows.Clear();
         _sources.Clear();
         _totalRecordCount = 0;
         _artworkWindow = default;
@@ -595,6 +629,18 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     }
 }
 
-public sealed record LibraryGridRowViewModel(
-    IReadOnlyList<MediaPreviewCardViewModel> Items,
-    bool HasRetry);
+public sealed partial class LibraryGridRowViewModel : ObservableObject
+{
+    public LibraryGridRowViewModel(IEnumerable<MediaPreviewCardViewModel> items)
+    {
+        foreach (var item in items)
+        {
+            Items.Add(item);
+        }
+    }
+
+    public ObservableCollection<MediaPreviewCardViewModel> Items { get; } = [];
+
+    [ObservableProperty]
+    private bool _hasRetry;
+}

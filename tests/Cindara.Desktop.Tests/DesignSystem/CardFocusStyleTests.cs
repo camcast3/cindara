@@ -30,5 +30,11 @@ public sealed class CardFocusStyleTests
         Assert.Contains(hoverStyle.Elements(xaml + "Setter"),
             setter => (string?)setter.Attribute("Property") == "BorderThickness"
                 && (string?)setter.Attribute("Value") == "2");
+        var rowSelection = Assert.Single(styles,
+            style => (string?)style.Attribute("Selector")
+                == "ListBox.library-grid ListBoxItem:selected /template/ ContentPresenter");
+        Assert.Contains(rowSelection.Elements(xaml + "Setter"),
+            setter => (string?)setter.Attribute("Property") == "Background"
+                && (string?)setter.Attribute("Value") == "Transparent");
     }
 }
