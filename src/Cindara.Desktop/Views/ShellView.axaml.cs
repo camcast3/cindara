@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -245,9 +246,16 @@ public partial class ShellView : UserControl
         SettingsCategoryScroll.VerticalScrollBarVisibility = compact
             ? Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
             : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
+        var textScale = TopLevel.GetTopLevel(this) is MainWindow window
+            ? window.Preferences.TextScale
+            : 1;
+        var categoryWidth = Math.Min(
+            420,
+            Math.Max(280, 250 * textScale * (Loc.IsPseudoLocalized ? 1.15 : 1)));
         SettingsWorkspace.ColumnDefinitions = compact
             ? new ColumnDefinitions("*")
-            : new ColumnDefinitions("250,*");
+            : new ColumnDefinitions(
+                $"{categoryWidth.ToString(CultureInfo.InvariantCulture)},*");
         SettingsWorkspace.RowDefinitions = compact
             ? new RowDefinitions("Auto,Auto")
             : new RowDefinitions("Auto");

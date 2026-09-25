@@ -190,9 +190,13 @@ public sealed class MainWindowNavigationTests
                     fixture.SignIn();
                     Assert.Equal(["tv", "movies", "anime"], fixture.Model.SidebarLibraries.Select(library => library.Id));
                     Assert.Equal(["tv", "movies", "anime"], fixture.Model.DesignGallery!.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
-                    Assert.All(fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
-                        .GetVisualDescendants().OfType<Button>(), button =>
-                        Assert.Single(Assert.Single(button.GetVisualDescendants().OfType<TextBlock>()).TextLayout.TextLines));
+                    var shortcutButtons = fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
+                        .GetVisualDescendants().OfType<Button>().ToArray();
+                    Assert.All(shortcutButtons, button =>
+                        Assert.Single(button.GetVisualDescendants().OfType<PathIcon>()));
+                    Assert.Equal(3, shortcutButtons.Select(button =>
+                            Assert.Single(button.GetVisualDescendants().OfType<PathIcon>()).Data)
+                        .Distinct().Count());
                     fixture.OpenLibraryLayoutSettings();
                     fixture.ClickAutomationId("ConfigureSidebarLibraries");
                     Assert.Equal(3, fixture.Modal.GetVisualDescendants().OfType<Button>()
@@ -1080,6 +1084,10 @@ public sealed class MainWindowNavigationTests
         fixture.OpenSettings();
         Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        Assert.All(fixture.Shell.FindControl<StackPanel>("SettingsCategories")!
+            .GetVisualDescendants().OfType<Button>(), button =>
+            Assert.Single(Assert.Single(button.GetVisualDescendants().OfType<TextBlock>())
+                .TextLayout.TextLines));
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
