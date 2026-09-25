@@ -300,6 +300,8 @@ public sealed class MainWindowNavigationTests
         var card = Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
         Assert.Equal($"movie-{model.ColumnCount + 1}", card.Id);
         Assert.True(card.IsArtworkLoading);
+        Assert.Equal(0, card.MetadataOpacity);
+        Assert.False(card.ShowArtworkPlaceholder);
         var artworkChanged = false;
         card.PropertyChanged += (_, args) =>
         {
@@ -316,10 +318,11 @@ public sealed class MainWindowNavigationTests
 
         Assert.True(artworkChanged);
         Assert.True(card.HasArtwork);
+        Assert.Equal(1, card.MetadataOpacity);
         Assert.Same(focused, Focused(fixture.Window));
         AssertInsideWindow(fixture.Window, focused);
         Assert.False(model.CanRetryArtwork);
-        Assert.False(fixture.Shell.LibraryView.FindControl<Button>("CancelLibraryArtwork")!.IsEffectivelyVisible);
+        Assert.Null(fixture.Shell.LibraryView.FindControl<Button>("CancelLibraryArtwork"));
     });
 
     [Theory]

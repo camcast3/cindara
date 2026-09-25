@@ -54,16 +54,21 @@
                                     AutomationProperties.HelpText="{Binding Subtitle}"
                                     GotFocus="OnCardFocused" Click="OnCardClicked">
                                 <Grid>
+                                    <Border IsVisible="{Binding IsArtworkLoading}"
+                                            Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
+                                            Opacity="0.55" />
                                     <TextBlock Text="{Binding ArtworkPlaceholder}"
-                                               IsVisible="{Binding !HasArtwork}" TextWrapping="Wrap"
+                                               IsVisible="{Binding ShowArtworkPlaceholder}" TextWrapping="Wrap"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                                Margin="12" />
                                     <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
                                 </Grid>
                             </Button>
                             <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                       Opacity="{Binding MetadataOpacity}"
                                        MaxLines="2" TextTrimming="CharacterEllipsis" />
                             <TextBlock Classes="caption" Text="{Binding Subtitle}"
+                                       Opacity="{Binding MetadataOpacity}"
                                        TextWrapping="Wrap" MaxLines="1"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>

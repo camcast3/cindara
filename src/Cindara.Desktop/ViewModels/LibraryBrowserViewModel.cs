@@ -51,7 +51,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     public int NextIndex => Items.Count;
     public bool IsEmpty => !IsLoading && _totalRecordCount == 0 && SelectedLibrary is not null;
     public bool HasMessage => !string.IsNullOrEmpty(Message);
-    public bool HasArtworkMessage => !string.IsNullOrEmpty(ArtworkMessage);
+    public bool HasArtworkError => CanRetryArtwork && !string.IsNullOrEmpty(ArtworkMessage);
     public string PageDescription => SelectedLibrary is null
         ? string.Empty
         : Loc.Format("Library.Loaded", Items.Count, _totalRecordCount);
@@ -117,10 +117,11 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     private bool _canRetryMore;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasArtworkMessage))]
+    [NotifyPropertyChangedFor(nameof(HasArtworkError))]
     private string _artworkMessage = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasArtworkError))]
     private bool _canRetryArtwork;
 
     private bool CanOpenLibrary() => !_disposed && !IsAnyLoading;
@@ -457,7 +458,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
             .Where(pair => pair.Source.ArtworkItemId is not null && !pair.Card.HasArtwork)
             .ToArray();
         CanRetryArtwork = false;
-        ArtworkMessage = Loc.Get("Library.LoadingArtwork");
+        ArtworkMessage = string.Empty;
         foreach (var (_, card) in pending)
         {
             card.IsArtworkLoading = true;

@@ -44,7 +44,7 @@
                        TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             <TextBlock Classes="secondary" Text="{loc:Tr Library.Empty}" IsVisible="{Binding IsEmpty}" />
             <TextBlock Classes="caption" Text="{Binding ArtworkMessage}"
-                       IsVisible="{Binding HasArtworkMessage}" TextWrapping="Wrap"
+                       IsVisible="{Binding HasArtworkError}" TextWrapping="Wrap"
                        AutomationProperties.LiveSetting="Polite" />
             <WrapPanel Orientation="Horizontal">
                 <Button x:Name="CancelLibraryLoading" Content="{loc:Tr Action.CancelLoading}"
@@ -53,9 +53,6 @@
                 <Button x:Name="RetryLibraryLoading" Content="{loc:Tr Library.Retry}"
                         Margin="0,0,16,8" Command="{Binding RetryPageCommand}"
                         IsVisible="{Binding CanRetry}" />
-                <Button x:Name="CancelLibraryArtwork" Content="{loc:Tr Library.CancelArtwork}"
-                        Margin="0,0,16,8" Command="{Binding LoadArtworkCancelCommand}"
-                        IsVisible="{Binding LoadArtworkCommand.IsRunning}" />
                 <Button x:Name="RetryLibraryArtwork" Content="{loc:Tr Library.RetryArtwork}"
                         Margin="0,0,16,8" Command="{Binding LoadArtworkCommand}"
                         IsVisible="{Binding CanRetryArtwork}" />
@@ -107,8 +104,11 @@
                                                 <Border ClipToBounds="True"
                                                         CornerRadius="{DynamicResource Cindara.Radius.Medium}">
                                                     <Grid>
+                                                        <Border IsVisible="{Binding IsArtworkLoading}"
+                                                                Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
+                                                                Opacity="0.55" />
                                                         <TextBlock Text="{Binding ArtworkPlaceholder}"
-                                                                   IsVisible="{Binding !HasArtwork}"
+                                                                   IsVisible="{Binding ShowArtworkPlaceholder}"
                                                                    TextWrapping="Wrap"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center"
@@ -119,10 +119,12 @@
                                                 </Border>
                                             </Button>
                                             <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                                       Opacity="{Binding MetadataOpacity}"
                                                        MaxLines="2"
                                                        TextTrimming="CharacterEllipsis" />
                                             <TextBlock Classes="caption"
                                                        Text="{Binding Subtitle}"
+                                                       Opacity="{Binding MetadataOpacity}"
                                                        TextWrapping="Wrap" MaxLines="1"
                                                        TextTrimming="CharacterEllipsis" />
                                         </StackPanel>

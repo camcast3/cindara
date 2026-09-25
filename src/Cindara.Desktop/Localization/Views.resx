@@ -149,10 +149,8 @@
   <data name="Library.Letter.All" xml:space="preserve"><value>All titles</value></data>
   <data name="Library.Loaded" xml:space="preserve"><value>{0:N0} of {1:N0} loaded</value></data>
   <data name="Library.ArtworkUnavailable" xml:space="preserve"><value>Artwork unavailable</value></data>
-  <data name="Library.LoadingArtwork" xml:space="preserve"><value>Loading artwork...</value></data>
   <data name="Library.ArtworkFailed" xml:space="preserve"><value>Some artwork could not be loaded. You can still browse or retry the missing artwork.</value></data>
   <data name="Library.ArtworkCanceled" xml:space="preserve"><value>Artwork loading canceled. You can still browse or retry the missing artwork.</value></data>
-  <data name="Library.CancelArtwork" xml:space="preserve"><value>Cancel artwork loading</value></data>
   <data name="Library.RetryArtwork" xml:space="preserve"><value>Retry missing artwork</value></data>
   <data name="LibraryLayout.Title" xml:space="preserve"><value>Library layout</value></data>
   <data name="LibraryLayout.Scope" xml:space="preserve"><value>Choose and order libraries separately for the sidebar and Home. Saved for this account and server on this device.</value></data>
