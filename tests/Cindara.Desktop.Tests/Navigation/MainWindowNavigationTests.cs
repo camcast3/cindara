@@ -947,7 +947,7 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
-    public Task SearchSupportsControllerKeyboardGroupingAndExactReturnState() => TestAppBuilder.Run(async () =>
+    public Task SearchSupportsKeyboardOverlayCombinedGridAndExactReturnState() => TestAppBuilder.Run(async () =>
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
@@ -964,27 +964,27 @@ public sealed class MainWindowNavigationTests
         Assert.Equal(Loc.Get("Search.Help"), AutomationProperties.GetHelpText(query));
 
         fixture.Input.Press(ControllerAction.Accept);
-        Assert.True(view.IsKeyboardOpen);
-        foreach (var character in "SPACE")
+        Assert.True(fixture.IsModalVisible);
+        foreach (var character in "space")
         {
-            fixture.Click(view.FindControl<UniformGrid>("KeyboardKeys")!.Children.OfType<Button>()
+            fixture.Click(fixture.Modal.GetVisualDescendants().OfType<Button>()
                 .Single(button => Equals(button.Content, character.ToString())));
         }
-        fixture.Click(view.FindControl<WrapPanel>("KeyboardActions")!.Children.OfType<Button>()
+        fixture.Click(fixture.Modal.GetVisualDescendants().OfType<Button>()
             .Single(button => Equals(button.Content, Loc.Get("Keyboard.Done"))));
-        Assert.False(view.IsKeyboardOpen);
+        Assert.False(fixture.IsModalVisible);
         await search.LoadPageCommand.ExecuteAsync(0);
         fixture.Flush();
 
-        Assert.Equal(["Movies", "Series", "Seasons", "Episodes"], search.Groups.Select(group => group.Title));
+        Assert.Equal(MediaSearchPage.PageSize, search.Items.Count);
         var cards = view.GetVisualDescendants().OfType<Button>()
             .Where(button => button.Classes.Contains("search-card")).ToArray();
         Assert.Equal(MediaSearchPage.PageSize, cards.Length);
         var selected = cards[17];
         selected.Focus();
-        view.FindControl<ScrollViewer>("SearchViewportScroll")!.Offset = new Vector(0, 500);
+        view.FindControl<ScrollViewer>("SearchScroll")!.Offset = new Vector(0, 500);
         fixture.Flush();
-        var offset = view.FindControl<ScrollViewer>("SearchViewportScroll")!.Offset;
+        var offset = view.FindControl<ScrollViewer>("SearchScroll")!.Offset;
         fixture.Click(selected);
         Assert.True(fixture.IsModalVisible);
         fixture.Input.Press(ControllerAction.Back);
@@ -996,9 +996,9 @@ public sealed class MainWindowNavigationTests
         var searchSource = fixture.Gallery.GetVisualDescendants().OfType<Button>()
             .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search"));
         fixture.Click(searchSource);
-        Assert.Equal("SPACE", query.Text);
+        Assert.Equal("space", query.Text);
         Assert.Same(selected, Focused(fixture.Window));
-        Assert.Equal(offset, view.FindControl<ScrollViewer>("SearchViewportScroll")!.Offset);
+        Assert.Equal(offset, view.FindControl<ScrollViewer>("SearchScroll")!.Offset);
         fixture.Input.Press(ControllerAction.Back);
         Assert.True(fixture.Model.IsDesignGalleryVisible);
         Assert.Same(searchSource, Focused(fixture.Window));
@@ -1048,22 +1048,22 @@ public sealed class MainWindowNavigationTests
         query.Focus();
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
-        Assert.True(searchView.IsKeyboardOpen);
+        Assert.True(fixture.IsModalVisible);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
-        var keyboardKeys = searchView.FindControl<UniformGrid>("KeyboardKeys")!
-            .Children.OfType<Button>().ToArray();
+        var keyboardKeys = fixture.Modal.GetVisualDescendants().OfType<UniformGrid>()
+            .Single().Children.OfType<Button>().ToArray();
         keyboardKeys[^1].Focus();
         keyboardKeys[^1].BringIntoView();
         fixture.Flush();
         AssertInsideWindow(fixture.Window, keyboardKeys[^1]);
-        var done = searchView.FindControl<WrapPanel>("KeyboardActions")!.Children.OfType<Button>()
+        var done = fixture.Modal.GetVisualDescendants().OfType<Button>()
             .Single(button => Equals(button.Content, Loc.Get("Keyboard.Done")));
         done.Focus();
         done.BringIntoView();
         fixture.Flush();
         AssertInsideWindow(fixture.Window, done);
         fixture.Input.Press(ControllerAction.Back);
-        Assert.False(searchView.IsKeyboardOpen);
+        Assert.False(fixture.IsModalVisible);
         Assert.Same(query, Focused(fixture.Window));
 
         fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
@@ -1102,7 +1102,7 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
-    public Task InlineSearchKeyboardHonorsMaximumQueryLength() => TestAppBuilder.Run(() =>
+    public Task SearchKeyboardOverlayHonorsMaximumQueryLength() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
@@ -1113,11 +1113,59 @@ public sealed class MainWindowNavigationTests
         query.Text = new string('A', query.MaxLength);
         query.CaretIndex = query.Text.Length;
         fixture.Input.Press(ControllerAction.Accept);
-        fixture.Click(view.FindControl<UniformGrid>("KeyboardKeys")!.Children.OfType<Button>()
-            .Single(button => Equals(button.Content, "B")));
+        var draft = fixture.Modal.GetVisualDescendants().OfType<TextBox>().Single();
+        fixture.Click(fixture.Modal.GetVisualDescendants().OfType<Button>()
+            .Single(button => Equals(button.Content, "b")));
+        Assert.Equal(query.MaxLength, draft.Text!.Length);
+        fixture.ClickContent(Loc.Get("Keyboard.Done"));
 
         Assert.Equal(query.MaxLength, query.Text.Length);
         Assert.Equal(new string('A', query.MaxLength), query.Text);
+    });
+
+    [Fact]
+    public Task LibraryReferenceGridExposesFiltersSortAndAllLetterChoices() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!);
+        var view = fixture.Shell.LibraryView;
+        fixture.Click(view.FindControl<ItemsControl>("LibraryChoices")!
+            .GetVisualDescendants().OfType<Button>().Single());
+        await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var model = fixture.Model.LibraryBrowser;
+
+        fixture.Click(view.FindControl<Button>("FilterFavoritesButton")!);
+        await model.SetFilterCommand.ExecutionTask!;
+        fixture.Click(view.FindControl<Button>("SortDescendingButton")!);
+        await model.SetSortDirectionCommand.ExecutionTask!;
+        var letters = view.FindControl<StackPanel>("LetterChoices")!
+            .Children.OfType<Button>().ToArray();
+        Assert.Equal(27, letters.Length);
+        fixture.Click(letters.Single(button => Equals(button.Tag, "M")));
+        await model.SetLetterCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.Equal(MediaLibraryFilter.Favorites, model.SelectedFilter);
+        Assert.Equal(MediaLibrarySortDirection.Descending, model.SelectedSortDirection);
+        Assert.Equal('M', model.SelectedLetter);
+        Assert.Equal(Loc.Get("State.Selected"),
+            AutomationProperties.GetItemStatus(view.FindControl<Button>("FilterFavoritesButton")!));
+        Assert.Equal(Loc.Get("State.Selected"),
+            AutomationProperties.GetItemStatus(view.FindControl<Button>("SortDescendingButton")!));
+        Assert.Equal(Loc.Get("State.Selected"),
+            AutomationProperties.GetItemStatus(letters.Single(button => Equals(button.Tag, "M"))));
+        var cards = view.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("card")).ToArray();
+        Assert.Equal(40, cards.Length);
+        var columns = view.FindControl<ItemsControl>("LibraryCards")!
+            .GetVisualDescendants().OfType<UniformGrid>().Single().Columns;
+        Assert.InRange(columns, 2, 9);
+        cards[columns - 1].Focus();
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Equal("M", Assert.IsType<Button>(Focused(fixture.Window)).Tag);
     });
 
     [Fact]

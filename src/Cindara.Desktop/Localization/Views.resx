@@ -137,6 +137,12 @@
   <data name="Library.Canceled" xml:space="preserve"><value>Loading canceled. Retry to load this page.</value></data>
   <data name="Library.Empty" xml:space="preserve"><value>This library is empty.</value></data>
   <data name="Library.Retry" xml:space="preserve"><value>Retry loading page</value></data>
+  <data name="Library.Filter.All" xml:space="preserve"><value>All</value></data>
+  <data name="Library.Filter.Unwatched" xml:space="preserve"><value>Unwatched</value></data>
+  <data name="Library.Filter.Favorites" xml:space="preserve"><value>Favorites</value></data>
+  <data name="Library.Sort.Ascending" xml:space="preserve"><value>Title A–Z</value></data>
+  <data name="Library.Sort.Descending" xml:space="preserve"><value>Title Z–A</value></data>
+  <data name="Library.Letter.All" xml:space="preserve"><value>All titles</value></data>
   <data name="Library.Previous" xml:space="preserve"><value>Previous page</value></data>
   <data name="Library.Next" xml:space="preserve"><value>Next page</value></data>
   <data name="Library.Page" xml:space="preserve"><value>{0:N0}-{1:N0} of {2:N0}</value></data>

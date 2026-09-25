@@ -119,6 +119,7 @@ public partial class MainWindow : Window
         GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.SearchView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        Shell.SearchView.KeyboardRequested += (_, target) => ShowKeyboard(target, fullScreen: true);
         GalleryView.NavigationWidthChanged += (_, _) => UpdateGalleryFooter();
         UpdateGalleryFooter();
     }
@@ -530,9 +531,6 @@ public partial class MainWindow : Window
         {
             _viewModel.LibraryBrowser.CancelLoading();
         }
-        else if (Shell.SearchView.IsEffectivelyVisible && Shell.SearchView.TryGoBack())
-        {
-        }
         else if (_viewModel?.SearchBrowser?.IsLoading is true)
         {
             _viewModel.SearchBrowser.CancelLoading();
@@ -764,18 +762,29 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ShowKeyboard(TextBox target)
+    private void ShowKeyboard(TextBox target, bool fullScreen = false)
     {
         if (ModalOverlay.IsVisible)
         {
             return;
         }
 
-        BeginModal(AutomationProperties.GetName(target) ?? target.PlaceholderText ?? Loc.Get("Keyboard.EnterText"));
+        var title = AutomationProperties.GetName(target)
+            ?? target.PlaceholderText
+            ?? Loc.Get("Keyboard.EnterText");
+        if (fullScreen)
+        {
+            BeginFullScreenModal(title);
+        }
+        else
+        {
+            BeginModal(title);
+        }
         var draft = new TextBox
         {
             Text = target.Text,
             PasswordChar = target.PasswordChar,
+            MaxLength = target.MaxLength,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
             FlowDirection = target.FlowDirection,
         };
@@ -788,7 +797,13 @@ public partial class MainWindow : Window
         foreach (var character in "1234567890-=" + "qwertyuiop[]" + "asdfghjkl;'\\"
                      + "zxcvbnm,./`" + "!@#$%^&*()_+{}:\"|<>?~")
         {
-            var key = new Button { Content = character.ToString(), Margin = new Avalonia.Thickness(3) };
+            var key = new Button
+            {
+                Content = character.ToString(),
+                Margin = new Avalonia.Thickness(3),
+                MinWidth = 48,
+                MinHeight = 48,
+            };
             key.Click += (_, _) => InsertText(draft, (string)key.Content!);
             keys.Children.Add(key);
             if (char.IsLetter(character))
@@ -831,7 +846,12 @@ public partial class MainWindow : Window
 
         void AddKeyboardAction(string text, Action action)
         {
-            var button = new Button { Content = text, Margin = new Avalonia.Thickness(3) };
+            var button = new Button
+            {
+                Content = text,
+                Margin = new Avalonia.Thickness(3),
+                MinHeight = 48,
+            };
             button.Click += (_, _) => action();
             actions.Children.Add(button);
         }
@@ -841,8 +861,15 @@ public partial class MainWindow : Window
     {
         var start = Math.Min(draft.SelectionStart, draft.SelectionEnd);
         var length = Math.Abs(draft.SelectionEnd - draft.SelectionStart);
-        draft.Text = (draft.Text ?? string.Empty).Remove(start, length).Insert(start, value);
-        draft.CaretIndex = start + value.Length;
+        var text = draft.Text ?? string.Empty;
+        start = Math.Clamp(start, 0, text.Length);
+        length = Math.Min(length, text.Length - start);
+        var available = draft.MaxLength > 0
+            ? Math.Max(0, draft.MaxLength - (text.Length - length))
+            : int.MaxValue;
+        var insertion = value.Length <= available ? value : value[..available];
+        draft.Text = text.Remove(start, length).Insert(start, insertion);
+        draft.CaretIndex = start + insertion.Length;
         draft.SelectionStart = draft.SelectionEnd = draft.CaretIndex;
     }
 }

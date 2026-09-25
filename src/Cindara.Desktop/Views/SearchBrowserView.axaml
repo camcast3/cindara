@@ -4,125 +4,74 @@
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.SearchBrowserView"
              x:DataType="vm:SearchBrowserViewModel">
-    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16">
-        <StackPanel Spacing="12">
-            <TextBlock Classes="display" Text="{loc:Tr Nav.Search}" />
-            <Grid x:Name="SearchEntry" ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                <TextBox x:Name="SearchTextBox"
-                         MaxLength="200"
-                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         PlaceholderText="{loc:Tr Search.Placeholder}"
-                         AutomationProperties.Name="{loc:Tr Search.Name}"
-                         AutomationProperties.HelpText="{loc:Tr Search.Help}" />
-                <Button x:Name="SearchKeyboardButton" Grid.Column="1"
-                        MinWidth="48" MinHeight="48"
-                        Content="{loc:Tr Search.Keyboard}"
-                        AutomationProperties.Name="{loc:Tr Search.Keyboard}"
-                        Click="OnKeyboardClicked" />
-            </Grid>
+    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
+        <Grid x:Name="SearchEntry" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <TextBox x:Name="SearchTextBox"
+                     MaxLength="200"
+                     Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     PlaceholderText="{loc:Tr Search.Placeholder}"
+                     AutomationProperties.Name="{loc:Tr Search.Name}"
+                     AutomationProperties.HelpText="{loc:Tr Search.Help}" />
+            <Button x:Name="SearchKeyboardButton" Grid.Column="1"
+                    MinWidth="48" MinHeight="48"
+                    Content="{loc:Tr Search.Keyboard}"
+                    AutomationProperties.Name="{loc:Tr Search.Keyboard}"
+                    Click="OnKeyboardClicked" />
+        </Grid>
+
+        <StackPanel Grid.Row="1" Spacing="8">
             <TextBlock Classes="secondary" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
                        TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             <WrapPanel Orientation="Horizontal">
                 <Button x:Name="CancelSearch" Content="{loc:Tr Action.CancelLoading}"
-                        Margin="0,0,16,8" IsVisible="{Binding IsLoading}" Click="OnCancelClicked" />
+                        Margin="0,0,16,8" IsVisible="{Binding IsLoading}"
+                        Click="OnCancelClicked" />
                 <Button x:Name="RetrySearch" Content="{loc:Tr Search.Retry}"
                         Margin="0,0,16,8" IsVisible="{Binding CanRetry}"
                         Command="{Binding LoadPageCommand}" CommandParameter="{Binding RetryIndex}" />
             </WrapPanel>
         </StackPanel>
 
-        <ScrollViewer x:Name="SearchViewportScroll" Grid.Row="1"
-                      HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-            <Grid x:Name="SearchBody" ColumnDefinitions="Auto,*" ColumnSpacing="24">
-                <Border x:Name="InlineKeyboard" Classes="settings-card" Width="360"
-                        IsVisible="False" VerticalAlignment="Top">
-                    <StackPanel Spacing="12">
-                        <TextBlock Classes="heading" Text="{loc:Tr Search.Keyboard}" />
-                        <UniformGrid x:Name="KeyboardKeys" Columns="6"
-                                     FlowDirection="LeftToRight" />
-                        <WrapPanel x:Name="KeyboardActions" FlowDirection="LeftToRight" />
-                    </StackPanel>
-                </Border>
-
-                <StackPanel x:Name="SearchResults" Grid.Column="1" Spacing="20">
-                    <Border Classes="hero" MinHeight="0" Padding="24"
-                            IsVisible="{Binding !!SelectedItem}">
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="24">
-                            <Border Width="{DynamicResource Search.HeroPosterWidth}"
-                                    Height="{DynamicResource Search.HeroPosterHeight}"
-                                    Background="{DynamicResource Cindara.Brush.Surface}">
+        <ScrollViewer x:Name="SearchScroll" Grid.Row="2"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="SearchCards" ItemsSource="{Binding Items}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid x:Name="SearchCardGrid" Columns="7" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
+                        <StackPanel Margin="7" Spacing="7"
+                                    Width="{DynamicResource Search.CardWidth}"
+                                    HorizontalAlignment="Center">
+                            <Button Classes="card search-card"
+                                    Height="{DynamicResource Search.CardHeight}"
+                                    HorizontalAlignment="Stretch"
+                                    AutomationProperties.Name="{Binding Name}"
+                                    AutomationProperties.HelpText="{Binding Subtitle}"
+                                    GotFocus="OnCardFocused" Click="OnCardClicked">
                                 <Grid>
-                                    <TextBlock Text="{Binding SelectedItem.ArtworkPlaceholder}"
-                                               IsVisible="{Binding !SelectedItem.HasArtwork}"
-                                               TextWrapping="Wrap" HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" Margin="12" />
-                                    <Image Source="{Binding SelectedItem.Artwork}" Stretch="UniformToFill" />
+                                    <TextBlock Text="{Binding ArtworkPlaceholder}"
+                                               IsVisible="{Binding !HasArtwork}" TextWrapping="Wrap"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Margin="12" />
+                                    <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
                                 </Grid>
-                            </Border>
-                            <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
-                                <TextBlock Classes="title" Text="{Binding SelectedItem.Name}"
-                                           TextWrapping="Wrap" MaxLines="3" />
-                                <TextBlock Classes="secondary" Text="{Binding SelectedItem.Subtitle}"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Classes="caption" Text="{Binding SelectedItem.Details}"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding SelectedItem.Overview}" TextWrapping="Wrap"
-                                           MaxLines="4" />
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-
-                    <ItemsControl x:Name="SearchGroups" ItemsSource="{Binding Groups}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:SearchResultGroupViewModel">
-                                <StackPanel Spacing="12" Margin="0,0,0,20">
-                                    <TextBlock Classes="heading" Text="{Binding Title}" />
-                                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                                  VerticalScrollBarVisibility="Disabled">
-                                        <ItemsControl ItemsSource="{Binding Items}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <StackPanel Orientation="Horizontal" Spacing="16" />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
-                                                    <StackPanel Spacing="8"
-                                                                Width="{DynamicResource Search.CardWidth}">
-                                                        <Button Classes="card search-card"
-                                                                Height="{DynamicResource Search.CardHeight}"
-                                                                HorizontalAlignment="Stretch"
-                                                                AutomationProperties.Name="{Binding Name}"
-                                                                AutomationProperties.HelpText="{Binding Subtitle}"
-                                                                GotFocus="OnCardFocused" Click="OnCardClicked">
-                                                            <Grid>
-                                                                <TextBlock Text="{Binding ArtworkPlaceholder}"
-                                                                           IsVisible="{Binding !HasArtwork}"
-                                                                           TextWrapping="Wrap"
-                                                                           HorizontalAlignment="Center"
-                                                                           VerticalAlignment="Center" Margin="12" />
-                                                                <Image Source="{Binding Artwork}"
-                                                                       Stretch="UniformToFill" />
-                                                            </Grid>
-                                                        </Button>
-                                                        <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
-                                                                   MaxLines="2" />
-                                                        <TextBlock Classes="caption" Text="{Binding Subtitle}"
-                                                                   TextWrapping="Wrap" MaxLines="2" />
-                                                    </StackPanel>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </ScrollViewer>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Grid>
+                            </Button>
+                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                       MaxLines="2" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="caption" Text="{Binding Subtitle}"
+                                       TextWrapping="Wrap" MaxLines="1"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </ScrollViewer>
 
-        <WrapPanel Grid.Row="2" Orientation="Horizontal">
+        <WrapPanel Grid.Row="3" Orientation="Horizontal">
             <Button x:Name="PreviousSearchPage" Content="{loc:Tr Search.Previous}"
                     Margin="0,0,16,8" IsEnabled="{Binding HasPreviousPage}"
                     Command="{Binding LoadPageCommand}" CommandParameter="{Binding PreviousIndex}" />

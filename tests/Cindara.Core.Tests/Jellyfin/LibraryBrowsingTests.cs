@@ -81,6 +81,43 @@ public sealed class LibraryBrowsingTests
     }
 
     [Theory]
+    [InlineData(MediaLibraryFilter.All, MediaLibrarySortDirection.Ascending, null, "SortOrder=Ascending")]
+    [InlineData(MediaLibraryFilter.Unwatched, MediaLibrarySortDirection.Descending, "M", "Filters=IsUnplayed")]
+    [InlineData(MediaLibraryFilter.Favorites, MediaLibrarySortDirection.Ascending, "Z", "Filters=IsFavorite")]
+    public async Task FilteredPagesEncodeRealSortAndTitleQueries(
+        MediaLibraryFilter filter,
+        MediaLibrarySortDirection direction,
+        string? startsWith,
+        string expected)
+    {
+        using var handler = new Handler((_, _) => Task.FromResult(Json(PageJson(0, 1, 1))));
+        using var client = Client(handler);
+        var query = new MediaLibraryQuery(0, filter, direction, startsWith?[0]);
+
+        await client.GetLibraryPageAsync(Session, Library, query);
+
+        var uri = Assert.Single(handler.Requests);
+        Assert.Contains(expected, uri.Query, StringComparison.Ordinal);
+        Assert.Contains($"SortOrder={direction}", uri.Query, StringComparison.Ordinal);
+        Assert.Equal(startsWith is not null, uri.Query.Contains($"NameStartsWith={startsWith}", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData('@')]
+    [InlineData('a')]
+    [InlineData('1')]
+    public async Task InvalidTitleFiltersNeverSendCredentials(char startsWith)
+    {
+        using var handler = new Handler((_, _) => throw new InvalidOperationException("No request expected."));
+        using var client = Client(handler);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            client.GetLibraryPageAsync(Session, Library, new MediaLibraryQuery(StartsWith: startsWith)));
+
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
     [InlineData("boxsets")]
     [InlineData("people")]
     [InlineData("music")]

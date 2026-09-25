@@ -18,6 +18,8 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     private readonly LocalDiagnostics? _diagnostics;
     private bool _disposed;
     private MediaLibraryPage? _page;
+    private MediaLibraryQuery _activeQuery = new();
+    private MediaLibraryQuery? _retryQuery;
 
     internal LibraryBrowserViewModel(
         IJellyfinMediaPreviewClient client,
@@ -61,6 +63,15 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     private MediaPreviewCardViewModel? _selectedItem;
 
     [ObservableProperty]
+    private MediaLibraryFilter _selectedFilter;
+
+    [ObservableProperty]
+    private MediaLibrarySortDirection _selectedSortDirection;
+
+    [ObservableProperty]
+    private char? _selectedLetter;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]
     private string _message = string.Empty;
 
@@ -68,6 +79,10 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     [NotifyCanExecuteChangedFor(nameof(OpenLibraryCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadArtworkCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetFilterCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetSortDirectionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetLetterCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RetryPageCommand))]
     private bool _isLoading;
 
     [ObservableProperty]
@@ -103,6 +118,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         }
 
         ClearPage();
+        SetActiveQuery(new());
         SelectedLibrary = library;
         await LoadPageCommand.ExecuteAsync(0);
     }
@@ -110,7 +126,48 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     [RelayCommand(CanExecute = nameof(CanLoadPage), IncludeCancelCommand = true)]
     private async Task LoadPageAsync(int startIndex, CancellationToken cancellationToken)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        await LoadQueryAsync(_activeQuery with { StartIndex = startIndex }, cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadPage))]
+    private async Task SetFilterAsync(MediaLibraryFilter filter, CancellationToken cancellationToken)
+    {
+        await LoadQueryAsync(_activeQuery with { StartIndex = 0, Filter = filter }, cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadPage))]
+    private async Task SetSortDirectionAsync(
+        MediaLibrarySortDirection sortDirection,
+        CancellationToken cancellationToken)
+    {
+        await LoadQueryAsync(
+            _activeQuery with { StartIndex = 0, SortDirection = sortDirection },
+            cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadPage))]
+    private async Task SetLetterAsync(string? letter, CancellationToken cancellationToken)
+    {
+        char? startsWith = string.IsNullOrEmpty(letter) ? null : char.ToUpperInvariant(letter[0]);
+        await LoadQueryAsync(
+            _activeQuery with { StartIndex = 0, StartsWith = startsWith },
+            cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadPage))]
+    private async Task RetryPageAsync(CancellationToken cancellationToken)
+    {
+        if (_retryQuery is null)
+        {
+            return;
+        }
+
+        await LoadQueryAsync(_retryQuery, cancellationToken);
+    }
+
+    private async Task LoadQueryAsync(MediaLibraryQuery query, CancellationToken cancellationToken)
+    {
+        query.Validate();
         if (SelectedLibrary is not { } library)
         {
             throw new InvalidOperationException("Choose a library before loading a page.");
@@ -118,7 +175,8 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
 
         IsLoading = true;
         CanRetry = false;
-        RetryIndex = startIndex;
+        RetryIndex = query.StartIndex;
+        _retryQuery = query;
         Message = Loc.Get("Library.Loading");
         NotifyPageChanged();
         using var operation = _diagnostics?.Begin(DiagnosticArea.Network, DiagnosticAction.LoadLibrary);
@@ -133,7 +191,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var page = await _client.GetLibraryPageAsync(_session, library, startIndex, cancellationToken);
+            var page = await _client.GetLibraryPageAsync(_session, library, query, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (_disposed)
             {
@@ -159,11 +217,14 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
             _page = page;
             Items = cards;
             SelectedItem = cards.FirstOrDefault();
+            SetActiveQuery(query);
+            _retryQuery = null;
             created.Clear();
             Message = string.Empty;
             loaded = true;
             operation?.Complete();
         }
+
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
             operation?.Fail(exception);
@@ -195,6 +256,14 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         {
             LoadArtworkCommand.Execute(null);
         }
+    }
+
+    private void SetActiveQuery(MediaLibraryQuery query)
+    {
+        _activeQuery = query;
+        SelectedFilter = query.Filter;
+        SelectedSortDirection = query.SortDirection;
+        SelectedLetter = query.StartsWith;
     }
 
     [RelayCommand(CanExecute = nameof(CanLoadArtwork), IncludeCancelCommand = true)]
@@ -328,6 +397,10 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     public void CancelLoading()
     {
         LoadPageCommand.Cancel();
+        SetFilterCommand.Cancel();
+        SetSortDirectionCommand.Cancel();
+        SetLetterCommand.Cancel();
+        RetryPageCommand.Cancel();
         LoadArtworkCommand.Cancel();
     }
 
@@ -364,5 +437,9 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         OpenLibraryCommand.NotifyCanExecuteChanged();
         LoadPageCommand.NotifyCanExecuteChanged();
         LoadArtworkCommand.NotifyCanExecuteChanged();
+        SetFilterCommand.NotifyCanExecuteChanged();
+        SetSortDirectionCommand.NotifyCanExecuteChanged();
+        SetLetterCommand.NotifyCanExecuteChanged();
+        RetryPageCommand.NotifyCanExecuteChanged();
     }
 }

@@ -266,6 +266,58 @@ public sealed class LibraryBrowserViewModelTests
         Assert.All(decoder.Resources, resource => Assert.Equal(1, resource.DisposeCount));
     }
 
+    [Fact]
+    public async Task FilterSortAndLetterChangesCommitOnlyAfterSuccessfulPages()
+    {
+        var client = new Client();
+        using var model = Model(client);
+        await model.OpenLibraryCommand.ExecuteAsync(Library);
+        var original = model.Items;
+        client.Error = MediaPreviewError.Network;
+
+        await model.SetFilterCommand.ExecuteAsync(MediaLibraryFilter.Favorites);
+
+        Assert.Equal(MediaLibraryFilter.All, model.SelectedFilter);
+        Assert.Same(original, model.Items);
+        Assert.True(model.CanRetry);
+        client.Error = null;
+        await model.RetryPageCommand.ExecuteAsync(null);
+        Assert.Equal(MediaLibraryFilter.Favorites, model.SelectedFilter);
+
+        await model.SetSortDirectionCommand.ExecuteAsync(MediaLibrarySortDirection.Descending);
+        await model.SetLetterCommand.ExecuteAsync("M");
+
+        Assert.Equal(MediaLibrarySortDirection.Descending, model.SelectedSortDirection);
+        Assert.Equal('M', model.SelectedLetter);
+        Assert.Equal(
+            new MediaLibraryQuery(
+                Filter: MediaLibraryFilter.Favorites,
+                SortDirection: MediaLibrarySortDirection.Descending,
+                StartsWith: 'M'),
+            client.Queries[^1]);
+    }
+
+    [Fact]
+    public async Task CancelLoadingStopsFilterRequestsAndKeepsTheActiveQuery()
+    {
+        var client = new Client();
+        using var model = Model(client);
+        await model.OpenLibraryCommand.ExecuteAsync(Library);
+        var original = model.Items;
+        client.Pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var loading = model.SetFilterCommand.ExecuteAsync(MediaLibraryFilter.Unwatched);
+        Assert.True(model.IsLoading);
+        model.CancelLoading();
+        client.Pending.SetResult(new MediaLibraryPage([Item(0)], 0, 1));
+        await loading;
+
+        Assert.Equal(MediaLibraryFilter.All, model.SelectedFilter);
+        Assert.Same(original, model.Items);
+        Assert.True(model.CanRetry);
+        Assert.Equal(Loc.Get("Library.Canceled"), model.Message);
+    }
+
     private static MediaPreviewItem Item(int index) =>
         new($"movie-{index}", $"Movie {index}", "2026", "Movie", null, null, "Overview", "2026", null);
 
@@ -274,6 +326,7 @@ public sealed class LibraryBrowserViewModelTests
         public Task<byte[]?> GetLibraryArtworkAsync(AuthenticatedSession session, string itemId,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public List<int> StartIndexes { get; } = [];
+        public List<MediaLibraryQuery> Queries { get; } = [];
         public MediaPreviewError? Error { get; set; }
         public int Total { get; set; } = 47;
         public bool Artwork { get; set; }
@@ -285,17 +338,32 @@ public sealed class LibraryBrowserViewModelTests
 
         public Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,
             int startIndex, CancellationToken cancellationToken = default)
+            => GetLibraryPageAsync(
+                session,
+                library,
+                new MediaLibraryQuery(startIndex),
+                cancellationToken);
+
+        public Task<MediaLibraryPage> GetLibraryPageAsync(
+            AuthenticatedSession session,
+            MediaLibrary library,
+            MediaLibraryQuery query,
+            CancellationToken cancellationToken = default)
         {
             Assert.Equal(Session, session);
-            StartIndexes.Add(startIndex);
+            query.Validate();
+            StartIndexes.Add(query.StartIndex);
+            Queries.Add(query);
             if (Error is { } error)
             {
                 throw new MediaPreviewException(error, "Page failure.");
             }
 
             return Pending?.Task ?? Task.FromResult(new MediaLibraryPage(
-                Enumerable.Range(startIndex, Math.Min(MediaLibraryPage.PageSize, Total - startIndex))
-                    .Select(index => Item(index) with { Artwork = Artwork ? [1] : null }).ToArray(), startIndex, Total));
+                Enumerable.Range(query.StartIndex, Math.Min(MediaLibraryPage.PageSize, Total - query.StartIndex))
+                    .Select(index => Item(index) with { Artwork = Artwork ? [1] : null }).ToArray(),
+                query.StartIndex,
+                Total));
         }
     }
 }

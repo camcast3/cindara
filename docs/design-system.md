@@ -29,8 +29,8 @@ rails. Full details and playback remain assigned to the remaining #5 batches and
 Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
 There is no intermediate preview launcher or redundant Home-screen back button.
-Libraries opens bounded paged browsing with a focused-item metadata hero and a
-horizontal poster rail. Search preserves query, grouped result rails, selected
+Libraries opens bounded paged poster-grid browsing with implemented filter, sort,
+and A–Z title controls. Search preserves one combined result grid, query, selected
 item, and offsets; Downloads retains an honest unavailable state. Settings exposes
 Language: English, Library layout, Exit, and Back to Home through a category/detail
 split without implying unimplemented settings features. Initial focus is
@@ -128,8 +128,8 @@ logical dimensions:
 | Wide | width 1440-2559 | 32 | 32 |
 | Ten-foot | width 2560 or greater | 48 | 40 |
 
-Library and Search result rails independently follow their available content
-width. Poster width is computed from the actual destination width, remains at
+Library and Search grids independently follow their available content width.
+Poster width is computed from the actual destination width, remains at
 least 120 logical pixels, and is capped at the approved couch-readable density;
 its 2:3 ratio is preserved. Horizontal scrolling reveals additional bounded page
 results without squeezing cards or clipping the client area.
@@ -176,9 +176,9 @@ All inputs are Avalonia logical dimensions. A physical 3840x2160 TV at 200%
 OS scaling therefore uses the 1920x1080 row; the OS applies the remaining 2x,
 not the gallery. Overscan-safe margins remain the production shell's target.
 
-Poster cards use a 2:3 ratio; landscape cards use 16:9. Home, Library, and Search
-rails reveal additional cards through horizontal movement. Library and Search
-heroes update from the focused card without mutating playback state. Hero artwork
+Poster cards use a 2:3 ratio; landscape cards use 16:9. Home rails reveal
+additional cards through horizontal movement; Library and Search use vertically
+scrolling multi-row grids. Hero artwork
 carries a dark Cindara gradient so text
 remains readable. Dialogs dim, but do not blur, the context. Toasts do not take
 focus. Skeletons preserve final geometry and respect reduced motion.
@@ -337,20 +337,20 @@ shows credentials only for a new or rejected session. Passwords remain ephemeral
 ### Library
 
 ```text
-[Rail]  Libraries
-        [Horizontal library choices]
-        [Focused-item metadata hero]
-        [Selected library / loading or error state]
-        [Bounded horizontal poster rail]
-        [Previous page] [Item range / total] [Next page]
+[Back]  Library name
+        [All / Unwatched / Favorites] [Title A–Z / Z–A] [Item range / total]
+        [Poster] [Poster] [Poster] [Poster] ...
+        [Poster] [Poster] [Poster] [Poster] ... [All / A–Z rail]
+        [Previous page] [Next page]
 ```
 
 Initial focus: first poster, library choice if empty, Cancel while loading, or
 Retry after a failed/canceled metadata request. Artwork loading does not disable
-the rail or pagination; it has separate loading/cancel/retry controls.
-Left/right moves within the poster rail; up returns to library choices and down
-reaches paging. The focused card updates the hero. Paging focuses the first card
-of the new page. Only the current page's decoded artwork is retained.
+the grid or pagination; it has separate loading/cancel/retry controls.
+Directional navigation follows the live responsive column count. The title rail
+filters to All or titles beginning with A–Z and resets paging. Filter/sort changes
+commit only after a successful page. Paging focuses the first card of the new
+page. Only the current page's decoded artwork is retained.
 Selecting a card opens a read-only metadata summary; Back restores the exact
 card and scroll position. Returning from Home or Settings reuses the page.
 Sorting is alphabetical; configurable filters/sorting are not exposed.
@@ -371,18 +371,18 @@ with an explanation.
 ### Search
 
 ```text
-[Rail]  [Search field] [Inline keyboard toggle]
-        [Inline controller keyboard when requested]
-        [Focused-result metadata hero]
-        [Movie / Series / Season / Episode result rails]
+[Back]  [Search field] [Controller keyboard]
+        [Poster] [Poster] [Poster] [Poster] ...
+        [Poster] [Poster] [Poster] [Poster] ...
         [Previous] [Item range / total] [Next]
 ```
 
-Initial focus: search field. Controller Accept opens the inline keyboard without
-hiding query or result context; Back closes it before leaving Search. Physical
-keyboard input remains direct. Results are grouped into supported Jellyfin types
-and use horizontal rail navigation. Focus updates the metadata hero. Empty,
-loading, canceled, retry, paging, and expired-session states are explicit.
+Initial focus: search field. Controller Accept opens a temporary full-screen
+keyboard overlay; Done restores the exact grid focus/offset and Back dismisses
+the keyboard before leaving Search. Physical keyboard input remains direct.
+Supported Jellyfin types share one combined poster grid with title/year; richer
+metadata appears only after opening details. Empty, loading, canceled, retry,
+paging, and expired-session states are explicit.
 
 ### Settings
 

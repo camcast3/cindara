@@ -5,32 +5,41 @@
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.LibraryBrowserView"
              x:DataType="vm:LibraryBrowserViewModel">
-    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="16">
-        <StackPanel Spacing="12">
-            <TextBlock Classes="display" Text="{loc:Tr Nav.Libraries}" />
-            <TextBlock Classes="secondary" Text="{loc:Tr Library.NoLibraries}"
-                       IsVisible="{Binding !HasLibraries}" />
-            <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Disabled">
-                <ItemsControl x:Name="LibraryChoices" ItemsSource="{Binding Libraries}"
-                              IsEnabled="{Binding !IsLoading}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="12" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="core:MediaLibrary">
-                            <Button Content="{Binding Name}" Click="OnLibraryClicked"
-                                    MinHeight="48" MaxWidth="500"
-                                    AutomationProperties.Name="{Binding Name}" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
-        </StackPanel>
+    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
+        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="LibraryChoices" ItemsSource="{Binding Libraries}"
+                          IsEnabled="{Binding !IsLoading}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="10" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="core:MediaLibrary">
+                        <Button Content="{Binding Name}" Click="OnLibraryClicked"
+                                MinHeight="48" MaxWidth="500"
+                                AutomationProperties.Name="{Binding Name}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
 
         <StackPanel Grid.Row="1" Spacing="8">
+            <WrapPanel Orientation="Horizontal">
+                <Button x:Name="FilterAllButton" Content="{loc:Tr Library.Filter.All}"
+                        Tag="All" Margin="0,0,10,8" Click="OnFilterClicked" />
+                <Button x:Name="FilterUnwatchedButton" Content="{loc:Tr Library.Filter.Unwatched}"
+                        Tag="Unwatched" Margin="0,0,10,8" Click="OnFilterClicked" />
+                <Button x:Name="FilterFavoritesButton" Content="{loc:Tr Library.Filter.Favorites}"
+                        Tag="Favorites" Margin="0,0,18,8" Click="OnFilterClicked" />
+                <Button x:Name="SortAscendingButton" Content="{loc:Tr Library.Sort.Ascending}"
+                        Tag="Ascending" Margin="0,0,10,8" Click="OnSortClicked" />
+                <Button x:Name="SortDescendingButton" Content="{loc:Tr Library.Sort.Descending}"
+                        Tag="Descending" Margin="0,0,18,8" Click="OnSortClicked" />
+                <TextBlock Text="{Binding PageDescription}" VerticalAlignment="Center"
+                           Margin="0,0,12,8" AutomationProperties.LiveSetting="Polite" />
+            </WrapPanel>
             <TextBlock Classes="secondary" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
                        TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             <TextBlock Classes="secondary" Text="{loc:Tr Library.Empty}" IsVisible="{Binding IsEmpty}" />
@@ -39,11 +48,11 @@
                        AutomationProperties.LiveSetting="Polite" />
             <WrapPanel Orientation="Horizontal">
                 <Button x:Name="CancelLibraryLoading" Content="{loc:Tr Action.CancelLoading}"
-                        Margin="0,0,16,8" Command="{Binding LoadPageCancelCommand}"
+                        Margin="0,0,16,8" Click="OnCancelLoadingClicked"
                         IsVisible="{Binding IsLoading}" />
                 <Button x:Name="RetryLibraryLoading" Content="{loc:Tr Library.Retry}"
-                        Margin="0,0,16,8" Command="{Binding LoadPageCommand}"
-                        CommandParameter="{Binding RetryIndex}" IsVisible="{Binding CanRetry}" />
+                        Margin="0,0,16,8" Command="{Binding RetryPageCommand}"
+                        IsVisible="{Binding CanRetry}" />
                 <Button x:Name="CancelLibraryArtwork" Content="{loc:Tr Library.CancelArtwork}"
                         Margin="0,0,16,8" Command="{Binding LoadArtworkCancelCommand}"
                         IsVisible="{Binding LoadArtworkCommand.IsRunning}" />
@@ -53,79 +62,54 @@
             </WrapPanel>
         </StackPanel>
 
-        <ScrollViewer x:Name="LibraryScroll" Grid.Row="2"
-                      HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="20">
-                <Border Classes="hero" MinHeight="0" Padding="24"
-                        IsVisible="{Binding !!SelectedItem}">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="24">
-                        <Border Width="{DynamicResource Library.HeroPosterWidth}"
-                                Height="{DynamicResource Library.HeroPosterHeight}"
-                                Background="{DynamicResource Cindara.Brush.Surface}">
-                            <Grid>
-                                <TextBlock Text="{Binding SelectedItem.ArtworkPlaceholder}"
-                                           IsVisible="{Binding !SelectedItem.HasArtwork}"
-                                           TextWrapping="Wrap" HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" Margin="12" />
-                                <Image Source="{Binding SelectedItem.Artwork}" Stretch="UniformToFill" />
-                            </Grid>
-                        </Border>
-                        <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
-                            <TextBlock Classes="title" Text="{Binding SelectedItem.Name}"
-                                       TextWrapping="Wrap" MaxLines="3" />
-                            <TextBlock Classes="secondary" Text="{Binding SelectedItem.Subtitle}"
-                                       TextWrapping="Wrap" />
-                            <TextBlock Classes="caption" Text="{Binding SelectedItem.Details}"
-                                       TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding SelectedItem.Overview}"
-                                       TextWrapping="Wrap" MaxLines="4" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
-
-                <TextBlock Classes="heading" Text="{Binding SelectedLibrary.Name}" TextWrapping="Wrap" />
-                <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                              VerticalScrollBarVisibility="Disabled">
-                    <ItemsControl x:Name="LibraryCards" ItemsSource="{Binding Items}"
-                                  IsEnabled="{Binding !IsLoading}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="16" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
-                                <StackPanel Spacing="8" Width="{DynamicResource Library.CardWidth}">
-                                    <Button Classes="card" Height="{DynamicResource Library.CardHeight}"
-                                            HorizontalAlignment="Stretch"
-                                            AutomationProperties.Name="{Binding Name}"
-                                            AutomationProperties.HelpText="{Binding Subtitle}"
-                                            GotFocus="OnCardFocused" Click="OnCardClicked">
-                                        <Grid>
-                                            <TextBlock Text="{Binding ArtworkPlaceholder}"
-                                                       IsVisible="{Binding !HasArtwork}" TextWrapping="Wrap"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       Margin="12" />
-                                            <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
-                                        </Grid>
-                                    </Button>
-                                    <TextBlock Text="{Binding Name}" TextWrapping="Wrap" MaxLines="2" />
-                                    <TextBlock Classes="caption" Text="{Binding Subtitle}"
-                                               TextWrapping="Wrap" MaxLines="2" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-            </StackPanel>
-        </ScrollViewer>
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <ScrollViewer x:Name="LibraryScroll" HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="LibraryCards" ItemsSource="{Binding Items}"
+                              IsEnabled="{Binding !IsLoading}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid x:Name="LibraryCardGrid" Columns="7" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
+                            <StackPanel Margin="7" Spacing="7"
+                                        Width="{DynamicResource Library.CardWidth}"
+                                        HorizontalAlignment="Center">
+                                <Button Classes="card" Height="{DynamicResource Library.CardHeight}"
+                                        HorizontalAlignment="Stretch"
+                                        AutomationProperties.Name="{Binding Name}"
+                                        AutomationProperties.HelpText="{Binding Subtitle}"
+                                        GotFocus="OnCardFocused" Click="OnCardClicked">
+                                    <Grid>
+                                        <TextBlock Text="{Binding ArtworkPlaceholder}"
+                                                   IsVisible="{Binding !HasArtwork}" TextWrapping="Wrap"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Margin="12" />
+                                        <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
+                                    </Grid>
+                                </Button>
+                                <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                           MaxLines="2" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="caption" Text="{Binding Subtitle}"
+                                           TextWrapping="Wrap" MaxLines="1"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="LetterChoices" Spacing="2" />
+            </ScrollViewer>
+        </Grid>
 
         <WrapPanel Grid.Row="3" Orientation="Horizontal">
             <Button x:Name="PreviousLibraryPage" Content="{loc:Tr Library.Previous}"
                     Margin="0,0,16,8" IsEnabled="{Binding HasPreviousPage}"
                     Command="{Binding LoadPageCommand}" CommandParameter="{Binding PreviousIndex}" />
-            <TextBlock Text="{Binding PageDescription}" VerticalAlignment="Center"
-                       Margin="0,0,16,8" AutomationProperties.LiveSetting="Polite" />
             <Button x:Name="NextLibraryPage" Content="{loc:Tr Library.Next}"
                     Margin="0,0,0,8" IsEnabled="{Binding HasNextPage}"
                     Command="{Binding LoadPageCommand}" CommandParameter="{Binding NextIndex}" />

@@ -10,7 +10,6 @@ namespace Cindara.Desktop.ViewModels;
 
 public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposable
 {
-    private static readonly string[] TypeOrder = ["Movie", "Series", "Season", "Episode"];
     private readonly IJellyfinMediaPreviewClient _client;
     private readonly AuthenticatedSession _session;
     private readonly Func<MediaPreviewException, Task> _onAccessDenied;
@@ -46,10 +45,7 @@ public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposab
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasResults))]
-    private IReadOnlyList<SearchResultGroupViewModel> _groups = [];
-
-    [ObservableProperty]
-    private MediaPreviewCardViewModel? _selectedItem;
+    private IReadOnlyList<MediaPreviewCardViewModel> _items = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]
@@ -69,12 +65,12 @@ public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposab
     private int _retryIndex;
 
     public bool HasMessage => !string.IsNullOrEmpty(Message);
-    public bool HasResults => Groups.Count > 0;
+    public bool HasResults => Items.Count > 0;
     public bool IsEmpty => !IsLoading && _page is { TotalRecordCount: 0 };
     public bool HasPreviousPage => !IsLoading && _page?.StartIndex > 0;
     public bool HasNextPage => !IsLoading && _page?.HasNextPage is true;
     public int PreviousIndex => Math.Max(0, (_page?.StartIndex ?? 0) - MediaSearchPage.PageSize);
-    public int NextIndex => (_page?.StartIndex ?? 0) + Groups.Sum(group => group.Items.Count);
+    public int NextIndex => (_page?.StartIndex ?? 0) + Items.Count;
     public string PageDescription => _page is null ? string.Empty
         : Loc.Format("Search.Page", _page.Items.Count == 0 ? 0 : _page.StartIndex + 1,
             _page.Items.Count == 0 ? 0 : _page.StartIndex + _page.Items.Count, _page.TotalRecordCount);
@@ -146,16 +142,9 @@ public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposab
 
             var sources = page.Items.ToDictionary(item => item.Id, StringComparer.Ordinal);
             var cards = page.Items.Select(_createCard).ToArray();
-            var groups = TypeOrder
-                .Select(type => new SearchResultGroupViewModel(
-                    Loc.Get($"Search.Group.{type}"),
-                    cards.Where(card => sources[card.Id].MediaType == type).ToArray()))
-                .Where(group => group.Items.Count > 0)
-                .ToArray();
             ClearResults();
             _page = page;
-            Groups = groups;
-            SelectedItem = groups.SelectMany(group => group.Items).FirstOrDefault();
+            Items = cards;
             Message = page.TotalRecordCount == 0 ? Loc.Get("Search.Empty") : string.Empty;
             operation?.Complete();
             NotifyPageChanged();
@@ -270,7 +259,7 @@ public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposab
     }
 
     private bool Contains(MediaPreviewCardViewModel card) =>
-        Groups.Any(group => group.Items.Contains(card));
+        Items.Contains(card);
 
     public void CancelLoading()
     {
@@ -304,13 +293,12 @@ public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposab
 
     private void ClearResults()
     {
-        var previous = Groups;
-        Groups = [];
-        SelectedItem = null;
+        var previous = Items;
+        Items = [];
         _page = null;
-        foreach (var group in previous)
+        foreach (var item in previous)
         {
-            group.Dispose();
+            item.Dispose();
         }
     }
 
@@ -321,18 +309,5 @@ public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposab
         CancelPendingSearch();
         ClearResults();
         LoadPageCommand.NotifyCanExecuteChanged();
-    }
-}
-
-public sealed record SearchResultGroupViewModel(
-    string Title,
-    IReadOnlyList<MediaPreviewCardViewModel> Items) : IDisposable
-{
-    public void Dispose()
-    {
-        foreach (var item in Items)
-        {
-            item.Dispose();
-        }
     }
 }

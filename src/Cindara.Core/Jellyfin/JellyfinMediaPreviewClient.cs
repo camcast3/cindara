@@ -142,17 +142,29 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         AuthenticatedSession session,
         MediaLibrary library,
         int startIndex,
+        CancellationToken cancellationToken = default) =>
+        await GetLibraryPageAsync(
+            session,
+            library,
+            new MediaLibraryQuery(startIndex),
+            cancellationToken).ConfigureAwait(false);
+
+    public async Task<MediaLibraryPage> GetLibraryPageAsync(
+        AuthenticatedSession session,
+        MediaLibrary library,
+        MediaLibraryQuery query,
         CancellationToken cancellationToken = default)
     {
         ValidateSession(session);
         ArgumentNullException.ThrowIfNull(library);
+        ArgumentNullException.ThrowIfNull(query);
+        query.Validate();
         ArgumentException.ThrowIfNullOrWhiteSpace(library.Id);
         if (!library.IsSupportedVideoLibrary)
         {
             throw new ArgumentException("Only movie and TV libraries support video browsing.", nameof(library));
         }
 
-        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
@@ -160,16 +172,19 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         {
             var result = await GetAsync<ItemResult>(load,
                 $"Users/{Uri.EscapeDataString(session.UserId)}/Items"
-                + $"?ParentId={Uri.EscapeDataString(library.Id)}&StartIndex={startIndex}&Limit={MediaLibraryPage.PageSize}"
-                + $"&Recursive=true&SortBy=SortName&SortOrder=Ascending&EnableTotalRecordCount=true&Fields={ItemFields}"
+                + $"?ParentId={Uri.EscapeDataString(library.Id)}&StartIndex={query.StartIndex}&Limit={MediaLibraryPage.PageSize}"
+                + $"&Recursive=true&SortBy=SortName&SortOrder={query.SortDirection}&EnableTotalRecordCount=true&Fields={ItemFields}"
+                + (query.Filter == MediaLibraryFilter.Unwatched ? "&Filters=IsUnplayed"
+                    : query.Filter == MediaLibraryFilter.Favorites ? "&Filters=IsFavorite" : string.Empty)
+                + (query.StartsWith is { } letter ? $"&NameStartsWith={letter}" : string.Empty)
                 + (library.CollectionType == "movies" ? "&IncludeItemTypes=Movie"
                     : library.CollectionType == "tvshows" ? "&IncludeItemTypes=Series" : string.Empty),
                 "library media").ConfigureAwait(false);
             if (result?.Items is not { } sources || result.TotalRecordCount is not { } total
-                || total < 0 || startIndex > 0 && startIndex >= total
+                || total < 0 || query.StartIndex > 0 && query.StartIndex >= total
                 || sources.Length > MediaLibraryPage.PageSize
-                || (sources.Length == 0 && startIndex < total)
-                || (sources.Length > 0 && (long)startIndex + sources.Length > total)
+                || (sources.Length == 0 && query.StartIndex < total)
+                || (sources.Length > 0 && (long)query.StartIndex + sources.Length > total)
                 || sources.Any(item => item is null || string.IsNullOrWhiteSpace(item.Id) || string.IsNullOrWhiteSpace(item.Name)))
             {
                 throw InvalidResponse(new JsonException("Invalid library page."));
@@ -181,7 +196,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             }).ToArray();
             cancellationToken.ThrowIfCancellationRequested();
             deadline.Token.ThrowIfCancellationRequested();
-            return new MediaLibraryPage(items, startIndex, total);
+            return new MediaLibraryPage(items, query.StartIndex, total);
         }
         catch (OperationCanceledException) when (
             deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)

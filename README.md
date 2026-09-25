@@ -21,13 +21,15 @@ destination opens a dedicated full-screen surface with one explicit Back path;
 non-Home surfaces do not repeat the Home sidebar. Home includes a single Continue
 Watching row and recently added media
 from the selected libraries, with no generic Libraries shortcut row. Open libraries
-from the sidebar or library chooser. Libraries open alphabetically sorted, bounded
-40-item pages presented as a focused-item metadata hero and horizontal poster rail,
-with explicit Previous/Next controls rather than loading the entire collection.
-Selecting a card opens a read-only summary; Back restores the exact card and rail
-position. Search supports debounced physical-keyboard input and an inline controller
-keyboard, grouped movie/series/season/episode rails, bounded paging, cancellation,
-and exact query/focus/scroll restoration. Full details and episode navigation remain
+from the sidebar or library chooser. Home library shortcuts use aligned TV, Movie,
+and Anime icons with accessible names. Libraries open bounded 40-item poster-grid
+pages with All/Unwatched/Favorites filters, Title A–Z/Z–A ordering, All/A–Z title
+filtering, and explicit Previous/Next controls rather than loading the entire
+collection. Selecting a card opens a read-only summary; Back restores the exact card,
+query controls, page, and grid position. Search supports debounced physical-keyboard
+input, a temporary full-screen controller keyboard, one combined movie/series/season/
+episode poster grid, bounded paging, cancellation, and exact query/focus/scroll
+restoration. Full details and episode navigation remain
 deferred to the remaining issue #5 batches; downloads remain deferred. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.

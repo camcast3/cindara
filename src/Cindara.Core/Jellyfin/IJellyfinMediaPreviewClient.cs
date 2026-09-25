@@ -14,6 +14,13 @@ public interface IJellyfinMediaPreviewClient
         int startIndex,
         CancellationToken cancellationToken = default);
 
+    Task<MediaLibraryPage> GetLibraryPageAsync(
+        AuthenticatedSession session,
+        MediaLibrary library,
+        MediaLibraryQuery query,
+        CancellationToken cancellationToken = default) =>
+        GetLibraryPageAsync(session, library, query.Validate().StartIndex, cancellationToken);
+
     Task<MediaSearchPage> SearchAsync(
         AuthenticatedSession session,
         string query,

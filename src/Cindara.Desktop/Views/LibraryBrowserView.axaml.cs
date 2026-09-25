@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -7,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cindara.Core.Jellyfin;
+using Cindara.Desktop.Localization;
 using Cindara.Desktop.ViewModels;
 
 namespace Cindara.Desktop.Views;
@@ -40,9 +42,8 @@ public partial class LibraryBrowserView : UserControl
     {
         Resources["Library.CardWidth"] = ReferenceMaximumCardWidth;
         Resources["Library.CardHeight"] = ReferenceMaximumCardWidth * 1.5;
-        Resources["Library.HeroPosterWidth"] = 120d;
-        Resources["Library.HeroPosterHeight"] = 180d;
         InitializeComponent();
+        BuildLetterChoices();
         SizeChanged += (_, args) => UpdateCardLayout(args.NewSize.Width);
         DataContextChanged += (_, _) =>
         {
@@ -76,7 +77,8 @@ public partial class LibraryBrowserView : UserControl
 
     private Button[] Choices() => LibraryChoices.GetVisualDescendants().OfType<Button>().ToArray();
 
-    private int Columns => Math.Max(1, Cards().Length);
+    private int Columns =>
+        LibraryCards.GetVisualDescendants().OfType<UniformGrid>().FirstOrDefault()?.Columns ?? 1;
 
     private void UpdateCardLayout(double width)
     {
@@ -85,14 +87,23 @@ public partial class LibraryBrowserView : UserControl
             return;
         }
 
-        var maximumCardWidth = width >= 2200
-            ? ReferenceMaximumCardWidth * 1.5
-            : ReferenceMaximumCardWidth;
-        var cardWidth = Math.Min(maximumCardWidth, Math.Max(120, width / (width < 960 ? 3.3 : 6.5)));
+        var columns = width switch
+        {
+            < 560 => 2,
+            < 800 => 3,
+            < 1100 => 5,
+            < 1500 => 7,
+            < 2200 => 8,
+            _ => 9,
+        };
+        var maximumCardWidth = width >= 2200 ? ReferenceMaximumCardWidth * 1.3 : ReferenceMaximumCardWidth;
+        var cardWidth = Math.Min(maximumCardWidth, Math.Max(112, ((width - 56) / columns) - 14));
         Resources["Library.CardWidth"] = cardWidth;
         Resources["Library.CardHeight"] = cardWidth * 1.5;
-        Resources["Library.HeroPosterWidth"] = Math.Clamp(cardWidth * 0.65, 84, 120);
-        Resources["Library.HeroPosterHeight"] = Math.Clamp(cardWidth * 0.65, 84, 120) * 1.5;
+        if (LibraryCards.GetVisualDescendants().OfType<UniformGrid>().FirstOrDefault() is { } grid)
+        {
+            grid.Columns = columns;
+        }
     }
 
     private void OnModelChanged(object? sender, PropertyChangedEventArgs args)
@@ -120,6 +131,13 @@ public partial class LibraryBrowserView : UserControl
                     }
                 }
             }, DispatcherPriority.Loaded);
+        }
+
+        if (args.PropertyName is nameof(LibraryBrowserViewModel.SelectedFilter)
+            or nameof(LibraryBrowserViewModel.SelectedSortDirection)
+            or nameof(LibraryBrowserViewModel.SelectedLetter))
+        {
+            UpdateSelections();
         }
     }
 
@@ -149,6 +167,7 @@ public partial class LibraryBrowserView : UserControl
 
         if (step == 1 && (index % Columns == Columns - 1 || index == cards.Length - 1))
         {
+            ActiveLetterButton()?.Focus(NavigationMethod.Directional);
             return true;
         }
 
@@ -178,6 +197,104 @@ public partial class LibraryBrowserView : UserControl
         {
             await _model.OpenLibraryCommand.ExecuteAsync(library);
         }
+    }
+
+    private void OnCancelLoadingClicked(object? sender, RoutedEventArgs args) =>
+        _model?.CancelLoading();
+
+    private async void OnFilterClicked(object? sender, RoutedEventArgs args)
+    {
+        if (_model is not null
+            && sender is Button { Tag: string value }
+            && Enum.TryParse<MediaLibraryFilter>(value, out var filter)
+            && _model.SetFilterCommand.CanExecute(filter))
+        {
+            await _model.SetFilterCommand.ExecuteAsync(filter);
+        }
+    }
+
+    private async void OnSortClicked(object? sender, RoutedEventArgs args)
+    {
+        if (_model is not null
+            && sender is Button { Tag: string value }
+            && Enum.TryParse<MediaLibrarySortDirection>(value, out var direction)
+            && _model.SetSortDirectionCommand.CanExecute(direction))
+        {
+            await _model.SetSortDirectionCommand.ExecuteAsync(direction);
+        }
+    }
+
+    private async void OnLetterClicked(object? sender, RoutedEventArgs args)
+    {
+        if (_model is not null
+            && sender is Button { Tag: string letter }
+            && _model.SetLetterCommand.CanExecute(letter))
+        {
+            await _model.SetLetterCommand.ExecuteAsync(letter);
+        }
+    }
+
+    private void BuildLetterChoices()
+    {
+        AddLetter(Loc.Get("Library.Letter.All"), string.Empty);
+        foreach (var letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        {
+            AddLetter(letter.ToString(), letter.ToString());
+        }
+
+        UpdateSelections();
+    }
+
+    private void AddLetter(string label, string value)
+    {
+        var button = new Button
+        {
+            Content = label,
+            Tag = value,
+            MinWidth = 48,
+            MinHeight = 32,
+        };
+        AutomationProperties.SetName(button,
+            string.IsNullOrEmpty(value) ? Loc.Get("Library.Letter.All") : value);
+        button.Click += OnLetterClicked;
+        LetterChoices.Children.Add(button);
+    }
+
+    private void UpdateSelections()
+    {
+        if (_model is null)
+        {
+            return;
+        }
+
+        SetSelected(FilterAllButton, _model.SelectedFilter == MediaLibraryFilter.All);
+        SetSelected(FilterUnwatchedButton, _model.SelectedFilter == MediaLibraryFilter.Unwatched);
+        SetSelected(FilterFavoritesButton, _model.SelectedFilter == MediaLibraryFilter.Favorites);
+        SetSelected(SortAscendingButton,
+            _model.SelectedSortDirection == MediaLibrarySortDirection.Ascending);
+        SetSelected(SortDescendingButton,
+            _model.SelectedSortDirection == MediaLibrarySortDirection.Descending);
+        foreach (var button in LetterChoices.Children.OfType<Button>())
+        {
+            var selected = _model.SelectedLetter?.ToString() == (string?)button.Tag
+                || _model.SelectedLetter is null && string.IsNullOrEmpty((string?)button.Tag);
+            SetSelected(button, selected);
+        }
+    }
+
+    private Button? ActiveLetterButton()
+    {
+        var selected = _model?.SelectedLetter?.ToString() ?? string.Empty;
+        return LetterChoices.Children.OfType<Button>()
+            .FirstOrDefault(button => Equals(button.Tag, selected))
+            ?? LetterChoices.Children.OfType<Button>().FirstOrDefault();
+    }
+
+    private static void SetSelected(Button button, bool selected)
+    {
+        button.Classes.Set("selected", selected);
+        AutomationProperties.SetItemStatus(
+            button, selected ? Loc.Get("State.Selected") : string.Empty);
     }
 
     private void OnCardFocused(object? sender, RoutedEventArgs args)

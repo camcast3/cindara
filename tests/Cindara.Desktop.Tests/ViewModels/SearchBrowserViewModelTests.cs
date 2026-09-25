@@ -15,23 +15,22 @@ public sealed class SearchBrowserViewModelTests
         "user", "Viewer", "token");
 
     [Fact]
-    public async Task ResultsAreGroupedPagedAndKeepThePreviousPageWhenPagingFails()
+    public async Task CombinedResultsArePagedAndKeepThePreviousPageWhenPagingFails()
     {
         var client = new Client();
         using var model = Model(client);
         model.Query = "space";
         await model.LoadPageCommand.ExecuteAsync(0);
 
-        Assert.Equal(["Movies", "Series", "Episodes"], model.Groups.Select(group => group.Title));
-        Assert.Equal(["movie", "series", "episode"], model.Groups.SelectMany(group => group.Items).Select(item => item.Id));
+        Assert.Equal(["movie", "series", "episode"], model.Items.Select(item => item.Id));
         Assert.True(model.HasNextPage);
         Assert.Equal(3, model.NextIndex);
-        var original = model.Groups;
+        var original = model.Items;
 
         client.Error = MediaPreviewError.Network;
         await model.LoadPageCommand.ExecuteAsync(model.NextIndex);
 
-        Assert.Same(original, model.Groups);
+        Assert.Same(original, model.Items);
         Assert.True(model.CanRetry);
         Assert.Equal(3, model.RetryIndex);
         Assert.Equal(Loc.Get("Error.Preview.Network"), model.Message);
@@ -50,11 +49,11 @@ public sealed class SearchBrowserViewModelTests
 
         client.Complete("new", Item("new", "New", "Movie"));
         await client.WaitForCompletionAsync("new");
-        await WaitForAsync(() => model.Groups.Count > 0);
+        await WaitForAsync(() => model.Items.Count > 0);
         client.Complete("old", Item("old", "Old", "Movie"));
         await client.WaitForCompletionAsync("old");
 
-        Assert.Equal("new", Assert.Single(Assert.Single(model.Groups).Items).Id);
+        Assert.Equal("new", Assert.Single(model.Items).Id);
         Assert.Equal("new", model.Query);
     }
 
