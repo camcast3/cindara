@@ -38,7 +38,7 @@
                         IsVisible="False" VerticalAlignment="Top">
                     <StackPanel Spacing="12">
                         <TextBlock Classes="heading" Text="{loc:Tr Search.Keyboard}" />
-                        <UniformGrid x:Name="KeyboardKeys" Columns="10"
+                        <UniformGrid x:Name="KeyboardKeys" Columns="6"
                                      FlowDirection="LeftToRight" />
                         <WrapPanel x:Name="KeyboardActions" FlowDirection="LeftToRight" />
                     </StackPanel>

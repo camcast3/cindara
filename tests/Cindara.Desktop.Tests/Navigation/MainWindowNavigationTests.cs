@@ -1032,6 +1032,18 @@ public sealed class MainWindowNavigationTests
         fixture.Flush();
         Assert.True(searchView.IsKeyboardOpen);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        var keyboardKeys = searchView.FindControl<UniformGrid>("KeyboardKeys")!
+            .Children.OfType<Button>().ToArray();
+        keyboardKeys[^1].Focus();
+        keyboardKeys[^1].BringIntoView();
+        fixture.Flush();
+        AssertInsideWindow(fixture.Window, keyboardKeys[^1]);
+        var done = searchView.FindControl<WrapPanel>("KeyboardActions")!.Children.OfType<Button>()
+            .Single(button => Equals(button.Content, Loc.Get("Keyboard.Done")));
+        done.Focus();
+        done.BringIntoView();
+        fixture.Flush();
+        AssertInsideWindow(fixture.Window, done);
         fixture.Input.Press(ControllerAction.Back);
         Assert.False(searchView.IsKeyboardOpen);
         Assert.Same(query, Focused(fixture.Window));
