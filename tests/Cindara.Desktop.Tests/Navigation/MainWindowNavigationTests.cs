@@ -1029,6 +1029,8 @@ public sealed class MainWindowNavigationTests
 
         AssertInsideWindow(fixture.Window, query);
         AssertInsideWindow(fixture.Window, searchView.FindControl<Button>("SearchKeyboardButton")!);
+        Assert.Equal(width >= 1920,
+            fixture.Shell.FindControl<TextBlock>("DestinationBrand")!.IsEffectivelyVisible);
         AssertInsideWindow(fixture.Window, fixture.Window.FindControl<Button>("DiagnosticsButton")!);
         var searchCards = searchView.GetVisualDescendants().OfType<Button>()
             .Where(button => button.Classes.Contains("search-card")).ToArray();

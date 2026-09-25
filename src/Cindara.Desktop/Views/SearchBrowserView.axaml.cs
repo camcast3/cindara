@@ -227,7 +227,7 @@ public partial class SearchBrowserView : UserControl
             return;
         }
 
-        var compact = size.Width < 960;
+        var compact = size.Width < 1400;
         SearchEntry.ColumnDefinitions = compact
             ? new ColumnDefinitions("*")
             : new ColumnDefinitions("*,Auto");

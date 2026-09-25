@@ -18,7 +18,8 @@
                            Text="{loc:Tr Brand.Name}" />
                 <TextBlock x:Name="DestinationTitle" Classes="display" />
             </StackPanel>
-            <TextBlock Grid.Column="2" Classes="heading" VerticalAlignment="Center"
+            <TextBlock x:Name="DestinationBrand" Grid.Column="2" Classes="heading"
+                       VerticalAlignment="Center"
                        Text="{loc:Tr Brand.Name}" />
         </Grid>
 

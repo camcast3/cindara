@@ -235,6 +235,7 @@ public partial class ShellView : UserControl
         }
 
         var compact = width < 900;
+        DestinationBrand.IsVisible = width >= 1400;
         SettingsCategories.Orientation = compact
             ? Avalonia.Layout.Orientation.Horizontal
             : Avalonia.Layout.Orientation.Vertical;
