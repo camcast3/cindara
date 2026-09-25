@@ -163,12 +163,15 @@ public sealed class MainViewModelTests
         var authentication = new TestAuthenticationService();
         var viewModel = new MainViewModel(new StubServerClient(), authentication);
         await viewModel.InitializeCommand.ExecuteAsync(null);
+        viewModel.SelectServerCommand.Execute(viewModel.SavedServers[0]);
         var selected = Assert.IsType<SessionProfile>(viewModel.SelectedSavedSession);
         var other = selected with { UserId = "other-user", Username = "other" };
         if (keepAnotherAccount)
         {
             authentication.SavedProfiles = [selected, other];
             await viewModel.InitializeCommand.ExecuteAsync(null);
+            viewModel.SelectServerCommand.Execute(viewModel.SavedServers[0]);
+            viewModel.SelectedSavedSession = selected;
         }
 
         await viewModel.RemoveSavedSessionCommand.ExecuteAsync(null);
@@ -190,6 +193,54 @@ public sealed class MainViewModelTests
         }
     }
 
+    [Fact]
+    public async Task SavedSessionsAreGroupedIntoServerThenAccountSteps()
+    {
+        var authentication = new TestAuthenticationService();
+        authentication.SavedProfiles = [new SessionProfile(Server, "user-1", "viewer")];
+        var first = authentication.SavedProfiles[0];
+        var secondAccount = first with { UserId = "second", Username = "Second viewer" };
+        var upgradedAccount = first with
+        {
+            UserId = "upgraded",
+            Username = "Upgraded viewer",
+            Server = first.Server with
+            {
+                DisplayName = "Renamed living room",
+                Version = "10.12",
+                OperatingSystem = "Updated OS",
+            },
+        };
+        var otherServer = first with
+        {
+            Server = first.Server with
+            {
+                Id = "other-server",
+                BaseUri = new Uri("https://other.example/"),
+                DisplayName = "Other room",
+            },
+            UserId = "other-user",
+        };
+        authentication.SavedProfiles = [first, secondAccount, upgradedAccount, otherServer];
+        var viewModel = new MainViewModel(new StubServerClient(), authentication);
+
+        await viewModel.InitializeCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsServerSelectionVisible);
+        Assert.Equal(2, viewModel.SavedServers.Count);
+        viewModel.SelectServerCommand.Execute(first.Server);
+        Assert.True(viewModel.AreSavedSessionsVisible);
+        Assert.Equal(3, viewModel.ServerAccounts.Count);
+        Assert.Contains(upgradedAccount, viewModel.ServerAccounts);
+        Assert.Equal(secondAccount, viewModel.SelectedSavedSession);
+
+        viewModel.AddAccountCommand.Execute(null);
+
+        Assert.True(viewModel.IsSignInVisible);
+        Assert.Empty(viewModel.Username);
+        Assert.Equal(first.Server.BaseUri.ToString(), viewModel.ServerAddress);
+    }
+
     [Theory]
     [InlineData(AuthenticationError.RevokedSession)]
     [InlineData(AuthenticationError.Network)]
@@ -200,6 +251,7 @@ public sealed class MainViewModelTests
         var authentication = new TestAuthenticationService();
         var viewModel = new MainViewModel(new StubServerClient(), authentication);
         await viewModel.InitializeCommand.ExecuteAsync(null);
+        viewModel.SelectServerCommand.Execute(viewModel.SavedServers[0]);
         var profile = Assert.IsType<SessionProfile>(viewModel.SelectedSavedSession);
         var other = profile with { UserId = "other-user", Username = "other" };
         viewModel.SavedSessions.Add(other);
@@ -642,7 +694,7 @@ public sealed class MainViewModelTests
 
         public bool FailRefresh { get; set; }
 
-        public IReadOnlyList<SessionProfile>? SavedProfiles { get; set; }
+        public SessionProfile[]? SavedProfiles { get; set; }
 
         public bool FailOperation { get; set; }
 

@@ -9,11 +9,11 @@ branding, exact layout, or proprietary interaction.
 ## Information architecture
 
 The production information architecture exposes **Home**, **Libraries**, **Search**,
-**Downloads**, and **Settings** in that order. It is collapsed to icons during
-browsing and expands when focused. Downloads is a visible placeholder until
-offline media ships so later work does not destabilize navigation order.
-Details are entered from content rather than added to the rail. Playback is a
-temporary full-screen layer.
+**Downloads**, and **Settings**. Home alone owns the persistent icon rail, hero,
+and media rows. Selecting a non-Home destination opens a dedicated full-screen
+surface with an explicit Back action; it does not repeat the Home rail. Downloads
+is a visible placeholder until offline media ships. Details are entered from
+content, and playback is a temporary full-screen layer.
 
 The authenticated Home uses a compact icon rail with Search, Home,
 Libraries, and Settings. The product owner removed the speculative
@@ -25,7 +25,8 @@ rails. Full details and playback remain assigned to the remaining #5 batches and
 
 ## Implemented shell navigation
 
-`ShellView` owns the production frame, not browsing data. Sign-in opens media
+`ShellView` owns the full-screen non-Home destination frame, not browsing data.
+Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
 There is no intermediate preview launcher or redundant Home-screen back button.
 Libraries opens bounded paged browsing with a focused-item metadata hero and a
@@ -39,12 +40,10 @@ consistent padding.
 Minimal account/window controls are tracked separately in [#27](https://github.com/camcast3/cindara/issues/27);
 expanded settings remain deferred.
 
-The rail expands on focus or hover and collapses to original vector icons when
-content is focused. Up/down follows Home, Libraries, Search, Downloads, Settings
-without wrapping. Accept opens the focused destination. Right returns to remembered
-content in the current destination; left or Back from content enters its selected
-rail item. Back from the settings rail returns to media Home without reloading it.
-Exit closes the app; Back to Home restores media and focus without reloading.
+The Home rail expands on focus or hover and collapses to original vector icons
+when content is focused. Accept opens the focused destination. Non-Home Back
+returns directly to the exact source action or library shortcut on Home without
+reloading it. Exit closes the app; Back to Home restores media and focus.
 The login screen offers only the English language selector alongside authentication.
 
 `FocusNavigationService` scopes navigation to the active screen or dialog.
@@ -321,6 +320,20 @@ so recently inserted images may expire sooner; there is no per-image minimum
 lifetime. Per-image expiry is deferred to #10. Authentication boundaries also
 discard the cache. HTTP responses are capped at 8 MiB.
 
+### Login
+
+```text
+[Ambient Cindara background]
+          Step 1: [Saved server / Add server]
+          Step 2: [Saved account / Add account]
+          Step 3: [Restore or username/password sign-in]
+[Language]          [Progress]          [Diagnostics]
+```
+
+Each step has one primary decision. Saved sessions are grouped by canonical
+server, then user. Selecting a saved user attempts protected restoration and
+shows credentials only for a new or rejected session. Passwords remain ephemeral.
+
 ### Library
 
 ```text
@@ -374,13 +387,15 @@ loading, canceled, retry, paging, and expired-session states are explicit.
 ### Settings
 
 ```text
-[Rail]  Settings
-        [Preferences]  [Language: English / Library layout]
-        [Application]  [Exit / Back to Home]
+[Back]  Settings
+        [Preferences]    [Language: English]
+        [Library layout] [Configure sidebar / Home order]
+        [Application]    [Exit / Back to Home]
+        [Diagnostics]    [Open local diagnostics]
 ```
 
 Initial focus: Preferences. Up/down changes category and its detail pane, right
-enters the visible actions, and left returns through category to the rail. The
+enters the visible actions, and left returns through category to Back. The
 language picker traps focus until selection or Back and currently offers English
 only. Exit closes the app, while Back to Home restores media without a new load.
 The category composition does not add new settings features.

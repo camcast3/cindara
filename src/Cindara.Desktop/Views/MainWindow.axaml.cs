@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Core.Authentication;
 using Cindara.Core.Diagnostics;
 using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.DesignSystem;
@@ -94,6 +95,7 @@ public partial class MainWindow : Window
         Shell.ExitRequested += (_, _) => Close();
         Shell.LanguageRequested += (_, _) => ShowLanguage();
         Shell.LibraryLayoutRequested += (_, _) => ShowLibraryLayout();
+        Shell.DiagnosticsRequested += (_, _) => ShowDiagnostics();
         GalleryView.SettingsRequested += (_, _) =>
         {
             GalleryView.SuspendFocusMemory();
@@ -107,8 +109,13 @@ public partial class MainWindow : Window
             Shell.Navigate("Search");
             _viewModel?.HideDesignGalleryCommand.Execute(null);
         };
+        GalleryView.DownloadsRequested += (_, _) =>
+        {
+            GalleryView.SuspendFocusMemory();
+            Shell.Navigate("Downloads");
+            _viewModel?.HideDesignGalleryCommand.Execute(null);
+        };
         GalleryView.LibraryRequested += OnLibraryRequested;
-        Shell.LibraryRequested += OnLibraryRequested;
         GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.SearchView.ItemRequested += (_, item) => ShowMediaSummary(item);
@@ -253,6 +260,7 @@ public partial class MainWindow : Window
         }
 
         if (args.PropertyName is nameof(MainViewModel.IsServerEntryVisible)
+            or nameof(MainViewModel.IsServerSelectionVisible)
             or nameof(MainViewModel.IsSignInVisible) or nameof(MainViewModel.AreSavedSessionsVisible)
             or nameof(MainViewModel.IsAuthenticatedVisible) or nameof(MainViewModel.IsDesignGalleryVisible)
             or nameof(MainViewModel.IsBusy))
@@ -277,12 +285,14 @@ public partial class MainWindow : Window
         ShellViewport.IsVisible = !_viewModel.IsDesignGalleryVisible;
         Shell.IsVisible = _viewModel.IsAuthenticatedVisible;
         AuthenticationSurface.IsVisible = !Shell.IsVisible;
+        ShellFooter.IsVisible = !Shell.IsVisible || Shell.Destination == "Home";
         var screen = _viewModel.IsDesignGalleryVisible ? "gallery"
             : _viewModel.IsAuthenticatedVisible && Shell.Destination == "Home"
                 && _viewModel.ShowDesignGalleryCommand.IsRunning ? "shell:Home:loading"
             : _viewModel.IsAuthenticatedVisible ? $"shell:{Shell.Destination}"
             : _viewModel.IsSignInVisible ? "sign-in"
             : _viewModel.AreSavedSessionsVisible ? "accounts"
+            : _viewModel.IsServerSelectionVisible ? "server-selection"
             : _viewModel.IsServerEntryVisible ? "server" : "loading";
         if (_diagnosticsOpen)
         {
@@ -312,10 +322,20 @@ public partial class MainWindow : Window
         _screen = screen;
         var contentFocus = Shell.ContentFocus;
         UpdateLayout();
+        AuthenticationProgress.Text = screen switch
+        {
+            "server-selection" or "server" => Loc.Get("Auth.StepServer"),
+            "accounts" => Loc.Get("Auth.StepAccount"),
+            "sign-in" => Loc.Get("Auth.StepSignIn"),
+            _ => string.Empty,
+        };
         var initial = screen switch
         {
             "sign-in" => UsernameTextBox,
-            "accounts" => SavedAccountButton,
+            "accounts" => SavedAccountsList.GetVisualDescendants().OfType<Button>().FirstOrDefault()
+                ?? AddAccountButton,
+            "server-selection" => SavedServersList.GetVisualDescendants().OfType<Button>().FirstOrDefault()
+                ?? AddServerFromSelectionButton,
             "server" => (Control)ServerAddressTextBox,
             "gallery" => GalleryView.HomeNavigation,
             "loading" => LanguageButton,
@@ -521,11 +541,8 @@ public partial class MainWindow : Window
         {
             GalleryView.HomeNavigation.Focus(NavigationMethod.Directional);
         }
-        else if (_viewModel?.IsAuthenticatedVisible is true && !Shell.IsRailFocused)
-        {
-            Shell.FocusRail();
-        }
         else if (_viewModel?.IsSignInVisible is true
+            || _viewModel?.AreSavedSessionsVisible is true
             || _viewModel?.IsServerEntryVisible is true && _viewModel.SavedSessions.Count > 0)
         {
             if (_viewModel.BackToSessionsCommand.CanExecute(null))
@@ -533,7 +550,7 @@ public partial class MainWindow : Window
                 _viewModel.BackToSessionsCommand.Execute(null);
             }
         }
-        else if (_viewModel?.IsAuthenticatedVisible is true)
+        else if (_viewModel?.IsAuthenticatedVisible is true && Shell.Destination != "Home")
         {
             Shell.Navigate("Home");
         }
@@ -640,6 +657,42 @@ public partial class MainWindow : Window
         FocusModal();
     }
 
+    private void OnSelectServer(object? sender, RoutedEventArgs args)
+    {
+        if (_viewModel is not null
+            && sender is Button { DataContext: Cindara.Core.Models.ServerIdentity server }
+            && _viewModel.SelectServerCommand.CanExecute(server))
+        {
+            _viewModel.SelectServerCommand.Execute(server);
+        }
+    }
+
+    private async void OnUseSavedAccount(object? sender, RoutedEventArgs args)
+    {
+        if (_viewModel is not null
+            && sender is Button { DataContext: SessionProfile profile })
+        {
+            _viewModel.SelectedSavedSession = profile;
+            if (_viewModel.UseSavedSessionCommand.CanExecute(null))
+            {
+                await _viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+            }
+        }
+    }
+
+    private async void OnRemoveSavedAccount(object? sender, RoutedEventArgs args)
+    {
+        if (_viewModel is not null
+            && sender is Button { DataContext: SessionProfile profile })
+        {
+            _viewModel.SelectedSavedSession = profile;
+            if (_viewModel.RemoveSavedSessionCommand.CanExecute(null))
+            {
+                await _viewModel.RemoveSavedSessionCommand.ExecuteAsync(null);
+            }
+        }
+    }
+
     private void BeginModal(string title)
     {
         _navigation.Remember();
@@ -649,6 +702,14 @@ public partial class MainWindow : Window
         ModalActions.Children.Clear();
         ModalOverlay.IsVisible = true;
         MainSurface.IsEnabled = false;
+    }
+
+    private void BeginFullScreenModal(string title)
+    {
+        BeginModal(title);
+        ModalDialog.MaxWidth = double.PositiveInfinity;
+        ModalDialog.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        ModalDialog.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
     }
 
     private Button AddModalButton(string text, Action action)
@@ -676,6 +737,9 @@ public partial class MainWindow : Window
     private void ClearModal()
     {
         _diagnosticsOpen = false;
+        ModalDialog.MaxWidth = 1200;
+        ModalDialog.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        ModalDialog.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         if (_keyboardDraft is not null)
         {
             _keyboardDraft.Text = string.Empty;

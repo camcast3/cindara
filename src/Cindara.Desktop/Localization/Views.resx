@@ -6,6 +6,9 @@
   <data name="Brand.Monogram" xml:space="preserve"><value>C</value></data>
   <data name="Auth.Tagline" xml:space="preserve"><value>Your media. Native everywhere.</value></data>
   <data name="Auth.Server" xml:space="preserve"><value>Jellyfin server</value></data>
+  <data name="Auth.ChooseServer" xml:space="preserve"><value>Choose a Jellyfin server</value></data>
+  <data name="Auth.ChooseServerHelp" xml:space="preserve"><value>Select a saved server or add another one.</value></data>
+  <data name="Auth.ServerHelp" xml:space="preserve"><value>Enter the complete HTTPS address, including any Jellyfin base path.</value></data>
   <data name="Auth.ServerAddress" xml:space="preserve"><value>Jellyfin server address</value></data>
   <data name="Auth.ServerExample" xml:space="preserve"><value>https://jellyfin.example.com</value></data>
   <data name="Auth.Connect" xml:space="preserve"><value>Connect</value></data>
@@ -16,7 +19,14 @@
   <data name="Auth.PasswordName" xml:space="preserve"><value>Jellyfin password</value></data>
   <data name="Auth.Password" xml:space="preserve"><value>Password</value></data>
   <data name="Auth.SignIn" xml:space="preserve"><value>Sign in</value></data>
+  <data name="Auth.SignInHelp" xml:space="preserve"><value>Enter the account credentials for this server. The password is used only for this sign-in and is never saved.</value></data>
+  <data name="Auth.StepServer" xml:space="preserve"><value>Step 1 of 3 · Server</value></data>
+  <data name="Auth.StepAccount" xml:space="preserve"><value>Step 2 of 3 · Account</value></data>
+  <data name="Auth.StepSignIn" xml:space="preserve"><value>Step 3 of 3 · Sign in</value></data>
   <data name="Auth.ChooseSaved" xml:space="preserve"><value>Choose saved Jellyfin account</value></data>
+  <data name="Auth.ChooseAccount" xml:space="preserve"><value>Choose an account</value></data>
+  <data name="Auth.ChooseAccountHelp" xml:space="preserve"><value>Select a saved user for this server. Cindara will restore the protected session when possible.</value></data>
+  <data name="Auth.AddAccount" xml:space="preserve"><value>Add an account</value></data>
   <data name="Auth.RemoveSaved" xml:space="preserve"><value>Remove saved account</value></data>
   <data name="Auth.AddServer" xml:space="preserve"><value>Add another server</value></data>
   <data name="Auth.StorageNotice" xml:space="preserve"><value>Passwords are never saved. Tokens use your operating system's protected storage.</value></data>

@@ -155,8 +155,7 @@ public sealed class MainWindowNavigationTests
             fixture.Preview.LayoutLibraries = true;
             fixture.SignIn();
             File.WriteAllText(path, "Block creation of the settings directory.");
-            fixture.OpenSettings();
-            fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+            fixture.OpenLibraryLayoutSettings();
             fixture.ClickAutomationId("ConfigureHomeLibraries");
             fixture.ClickAutomationId("library-Home-tv-toggle");
             fixture.ClickAutomationId("SaveLibraryLayout");
@@ -194,8 +193,7 @@ public sealed class MainWindowNavigationTests
                     Assert.All(fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
                         .GetVisualDescendants().OfType<Button>(), button =>
                         Assert.Single(Assert.Single(button.GetVisualDescendants().OfType<TextBlock>()).TextLayout.TextLines));
-                    fixture.OpenSettings();
-                    fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+                    fixture.OpenLibraryLayoutSettings();
                     fixture.ClickAutomationId("ConfigureSidebarLibraries");
                     Assert.Equal(3, fixture.Modal.GetVisualDescendants().OfType<Button>()
                         .Count(button => AutomationProperties.GetAutomationId(button)?.EndsWith("-toggle", StringComparison.Ordinal) is true));
@@ -211,15 +209,14 @@ public sealed class MainWindowNavigationTests
                     Capture(fixture.Window, $"library-layout-sidebar-{cultureName}");
                     fixture.ClickAutomationId("SaveLibraryLayout");
                     Assert.False(fixture.IsModalVisible);
-                    fixture.Click(fixture.Shell.FindControl<Button>("BackHomeButton")!);
+                    fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
                     Assert.Equal(["tv", "anime"], fixture.Model.DesignGallery!.SidebarLibraries.Select(library => library.Id));
                     Assert.Equal(["tv", "movies", "anime"], fixture.Model.DesignGallery.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
                     var shortcuts = fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
                         .GetVisualDescendants().OfType<Button>().ToArray();
                     Assert.Equal(["TV", "Anime"], shortcuts.Select(AutomationProperties.GetName));
 
-                    fixture.OpenSettings();
-                    fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+                    fixture.OpenLibraryLayoutSettings();
                     fixture.ClickAutomationId("ConfigureHomeLibraries");
                     Assert.DoesNotContain(fixture.Modal.GetVisualDescendants().OfType<TextBlock>(),
                         text => text.Text is "Collections" or "People");
@@ -228,13 +225,12 @@ public sealed class MainWindowNavigationTests
                     Assert.Equal("library-Home-anime-toggle", AutomationProperties.GetAutomationId(Focused(fixture.Window)));
                     fixture.ClickAutomationId("library-Home-tv-toggle");
                     fixture.ClickAutomationId("SaveLibraryLayout");
-                    fixture.Click(fixture.Shell.FindControl<Button>("BackHomeButton")!);
+                    fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
                     Assert.Equal(["anime", "movies"], fixture.Model.DesignGallery!.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
                     Assert.Equal(["tv", "anime"], fixture.Model.DesignGallery.SidebarLibraries.Select(library => library.Id));
                     Assert.Equal(1, fixture.Preview.Calls);
 
-                    fixture.OpenSettings();
-                    fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+                    fixture.OpenLibraryLayoutSettings();
                     fixture.ClickAutomationId("ConfigureSidebarLibraries");
                     fixture.ClickAutomationId("library-Sidebar-tv-toggle");
                     fixture.Key(Key.Escape);
@@ -553,7 +549,7 @@ public sealed class MainWindowNavigationTests
             Assert.Equal(offset, scroll.Offset);
             Capture(fixture.Window, $"library-{cultureName}-{width}");
 
-            fixture.Click(fixture.Shell.FindControl<Button>("HomeNavigation")!);
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
             Assert.True(fixture.Model.IsDesignGalleryVisible);
             Assert.Same(homeLibrary, Focused(fixture.Window));
             fixture.Click(homeLibrary);
@@ -635,15 +631,20 @@ public sealed class MainWindowNavigationTests
             fixture.Window.WindowState = WindowState.Normal;
             fixture.Window.Width = width;
             fixture.Window.Height = width * 9 / 16;
+            Button launcher;
             if (signedIn)
             {
                 fixture.SignIn();
                 fixture.OpenSettings();
-                fixture.Window.FindControl<Button>("DiagnosticsButton")!.Focus();
-                Assert.Equal("DiagnosticsButton", Focused(fixture.Window).Name);
+                fixture.Click(fixture.Shell.FindControl<Button>("SettingsDiagnosticsCategory")!);
+                launcher = fixture.Shell.FindControl<Button>("OpenDiagnosticsButton")!;
+            }
+            else
+            {
+                launcher = fixture.Window.FindControl<Button>("DiagnosticsButton")!;
             }
 
-            fixture.Click("DiagnosticsButton");
+            fixture.Click(launcher);
             Assert.True(fixture.IsModalVisible);
             Assert.False(fixture.Window.FindControl<Grid>("MainSurface")!.IsEnabled);
             AssertInsideWindow(fixture.Window, Focused(fixture.Window));
@@ -671,7 +672,7 @@ public sealed class MainWindowNavigationTests
             fixture.ClickContent(Loc.Get("Action.Cancel"));
             fixture.Input.Press(ControllerAction.Back);
             Assert.False(fixture.IsModalVisible);
-            Assert.Equal("DiagnosticsButton", Focused(fixture.Window).Name);
+            Assert.Same(launcher, Focused(fixture.Window));
             Assert.DoesNotContain(diagnostics.Snapshot(), entry => entry.Action == DiagnosticAction.ExportBundle);
         }
         finally
@@ -751,16 +752,19 @@ public sealed class MainWindowNavigationTests
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
-        var homeFocus = Focused(fixture.Window);
         fixture.OpenSettings();
         Assert.Equal("Settings", fixture.Shell.Destination);
         Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
         var categories = fixture.Shell.FindControl<StackPanel>("SettingsCategories")!
             .Children.OfType<Button>().ToArray();
-        Assert.Equal(new[] { Loc.Get("Settings.Preferences"), Loc.Get("Settings.Application") },
+        Assert.Equal(new[]
+            {
+                Loc.Get("Settings.Preferences"), Loc.Get("LibraryLayout.Title"),
+                Loc.Get("Settings.Application"), Loc.Get("Diagnostics.Title"),
+            },
             categories.Select(button => button.Content));
         var actions = fixture.Shell.FindControl<StackPanel>("SettingsActions")!.Children.OfType<Button>().ToArray();
-        Assert.Equal(new[] { Loc.Get("Language.Selection"), Loc.Get("LibraryLayout.Title") },
+        Assert.Equal(new[] { Loc.Get("Language.Selection") },
             actions.Select(button => button.Content));
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
@@ -772,6 +776,8 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.NavigateLeft);
         Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("SettingsLibraryCategory", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateDown);
         Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("ExitButton", Focused(fixture.Window).Name);
@@ -781,7 +787,7 @@ public sealed class MainWindowNavigationTests
         fixture.Flush();
         Assert.True(fixture.Model.IsDesignGalleryVisible);
         Assert.Equal(1, fixture.Preview.Calls);
-        Assert.Same(homeFocus, Focused(fixture.Window));
+        Assert.Equal("GallerySettingsButton", Focused(fixture.Window).Name);
     });
 
     [Theory]
@@ -793,13 +799,15 @@ public sealed class MainWindowNavigationTests
         fixture.SignIn();
         fixture.OpenSettings();
         fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("SettingsLibraryCategory", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateDown);
         Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("ExitButton", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateLeft);
         Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateLeft);
-        Assert.Equal("SettingsNavigation", Focused(fixture.Window).Name);
+        Assert.Equal("DestinationBackButton", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
 
@@ -814,8 +822,10 @@ public sealed class MainWindowNavigationTests
         }
         else
         {
-            fixture.Click(fixture.Shell.FindControl<Button>("LibrariesNavigation")!);
-            fixture.Click(fixture.Shell.FindControl<Button>("SettingsNavigation")!);
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+            fixture.Click(fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!);
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+            fixture.OpenSettings();
         }
 
         Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
@@ -831,21 +841,10 @@ public sealed class MainWindowNavigationTests
         fixture.Preview.Pause = true;
         fixture.SignIn(waitForHome: false);
         Assert.Equal("CancelLoadingButton", Focused(fixture.Window).Name);
-
-        fixture.Input.Press(rtl ? ControllerAction.NavigateRight : ControllerAction.NavigateLeft);
-        for (var index = 0; index < 4; index++)
-        {
-            fixture.Input.Press(ControllerAction.NavigateUp);
-        }
-
-        Assert.Equal("HomeNavigation", Focused(fixture.Window).Name);
-        fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
-        Assert.Equal("CancelLoadingButton", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
         Assert.False(fixture.Model.IsBusy);
         Assert.Equal(Loc.Get("Status.PreviewCanceled"), fixture.Model.StatusMessage);
-        fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
         Assert.Equal("RetryHomeButton", Focused(fixture.Window).Name);
 
         fixture.Input.Press(ControllerAction.Accept);
@@ -917,22 +916,30 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
-    public Task NavigationDestinationsRemainAvailableAndDoNotAddBackToHomeButtons() => TestAppBuilder.Run(() =>
+    public Task NonHomeDestinationsUseOneFullScreenBackPathAndRestoreTheirHomeSource() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
-        fixture.OpenSettings();
         foreach (var destination in Destinations)
         {
-            fixture.Click(fixture.Shell.FindControl<Button>($"{destination}Navigation")!);
+            var source = destination switch
+            {
+                "Libraries" => fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!,
+                "Downloads" => fixture.Gallery.FindControl<Button>("GalleryDownloadsButton")!,
+                _ => fixture.Gallery.GetVisualDescendants().OfType<Button>()
+                    .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")),
+            };
+            fixture.Click(source);
             Assert.Equal(destination, fixture.Shell.Destination);
-            Assert.Equal(destination == "Search" ? "SearchTextBox" : $"{destination}Navigation",
-                Focused(fixture.Window).Name);
+            Assert.True(fixture.Shell.FindControl<Grid>("DestinationHeader")!.IsEffectivelyVisible);
+            Assert.Equal(Loc.Get($"Nav.{destination}"),
+                fixture.Shell.FindControl<TextBlock>("DestinationTitle")!.Text);
+            Assert.Null(fixture.Shell.FindControl<Control>("NavigationRail"));
             Assert.Null(fixture.Shell.FindControl<Button>("ReturnHomeButton"));
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+            Assert.True(fixture.Model.IsDesignGalleryVisible);
+            Assert.Same(source, Focused(fixture.Window));
         }
-
-        fixture.Click(fixture.Shell.FindControl<Button>("HomeNavigation")!);
-        Assert.True(fixture.Model.IsDesignGalleryVisible);
     });
 
     [Fact]
@@ -979,13 +986,18 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(selected, Focused(fixture.Window));
 
-        fixture.Click(fixture.Shell.FindControl<Button>("DownloadsNavigation")!);
-        fixture.Click(fixture.Shell.FindControl<Button>("SearchNavigation")!);
+        fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+        fixture.Click(fixture.Gallery.FindControl<Button>("GalleryDownloadsButton")!);
+        fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+        var searchSource = fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search"));
+        fixture.Click(searchSource);
         Assert.Equal("SPACE", query.Text);
         Assert.Same(selected, Focused(fixture.Window));
         Assert.Equal(offset, view.FindControl<ScrollViewer>("SearchViewportScroll")!.Offset);
         fixture.Input.Press(ControllerAction.Back);
-        Assert.Equal("SearchNavigation", Focused(fixture.Window).Name);
+        Assert.True(fixture.Model.IsDesignGalleryVisible);
+        Assert.Same(searchSource, Focused(fixture.Window));
     });
 
     [Theory]
@@ -1048,7 +1060,8 @@ public sealed class MainWindowNavigationTests
         Assert.False(searchView.IsKeyboardOpen);
         Assert.Same(query, Focused(fixture.Window));
 
-        fixture.Click(fixture.Shell.FindControl<Button>("LibrariesNavigation")!);
+        fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+        fixture.Click(fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!);
         var libraryView = fixture.Shell.LibraryView;
         fixture.Click(libraryView.FindControl<ItemsControl>("LibraryChoices")!
             .GetVisualDescendants().OfType<Button>().Single());
@@ -1061,13 +1074,15 @@ public sealed class MainWindowNavigationTests
         fixture.Flush();
         AssertInsideWindow(fixture.Window, libraryCards[^1]);
 
-        fixture.Click(fixture.Shell.FindControl<Button>("SettingsNavigation")!);
+        fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+        fixture.OpenSettings();
         Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         fixture.Input.Press(ControllerAction.NavigateLeft);
+        fixture.Input.Press(ControllerAction.NavigateDown);
         fixture.Input.Press(ControllerAction.NavigateDown);
         Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateRight);
@@ -1129,6 +1144,7 @@ public sealed class MainWindowNavigationTests
         var closed = false;
         fixture.Window.Closed += (_, _) => closed = true;
         fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Input.Press(ControllerAction.NavigateDown);
         Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("ExitButton", Focused(fixture.Window).Name);
@@ -1157,23 +1173,33 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
-    public Task SavedAccountPickerTrapsFocusAndSwitchingAccountsClearsPreviousHome() => TestAppBuilder.Run(() =>
+    public Task SavedServerAndAccountStepsRestoreSessionsAndClearPreviousHome() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
+        Assert.True(fixture.Model.IsServerSelectionVisible);
+        Assert.Equal(Loc.Get("Auth.StepServer"),
+            fixture.Window.FindControl<TextBlock>("AuthenticationProgress")!.Text);
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
-        fixture.Input.Press(ControllerAction.NavigateDown);
-        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(fixture.Model.AreSavedSessionsVisible);
+        Assert.Equal(Loc.Get("Auth.StepAccount"),
+            fixture.Window.FindControl<TextBlock>("AuthenticationProgress")!.Text);
+        var accountButtons = fixture.Window.FindControl<ItemsControl>("SavedAccountsList")!
+            .GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("settings-action")).ToArray();
+        Assert.Equal(2, accountButtons.Length);
+        Assert.Equal(2, fixture.Window.FindControl<ItemsControl>("SavedAccountsList")!
+            .GetVisualDescendants().OfType<Button>()
+            .Count(button => Equals(button.Content, Loc.Get("Auth.RemoveSaved"))));
+        fixture.Click(accountButtons.Single(button =>
+            button.DataContext is SessionProfile { UserId: "second" }));
         fixture.Flush();
         Assert.Equal("second", fixture.Model.SelectedSavedSession!.UserId);
-        Assert.Equal(LocaleFormat.SessionDisplayName(fixture.Model.SelectedSavedSession),
-            fixture.Window.FindControl<Button>("SavedAccountButton")!.Content);
-        Assert.Equal("SavedAccountButton", Focused(fixture.Window).Name);
-        fixture.SignIn();
+        Assert.True(fixture.Model.IsDesignGalleryVisible);
         var previous = fixture.Model.DesignGallery;
         fixture.Model.BackToSessionsCommand.Execute(null);
         fixture.Flush();
-        Assert.True(fixture.Model.AreSavedSessionsVisible);
+        Assert.True(fixture.Model.IsServerSelectionVisible);
         Assert.Null(fixture.Model.DesignGallery);
         fixture.SignIn();
         Assert.NotSame(previous, fixture.Model.DesignGallery);
@@ -1197,7 +1223,9 @@ public sealed class MainWindowNavigationTests
         if (savedAccounts)
         {
             fixture.Click(button);
-            Assert.Equal("SavedAccountButton", Focused(fixture.Window).Name);
+            Assert.True(fixture.Model.IsServerSelectionVisible);
+            Assert.IsType<Button>(Focused(fixture.Window));
+            Assert.Equal("Test library", AutomationProperties.GetName(Focused(fixture.Window)));
         }
         else
         {
@@ -1287,7 +1315,7 @@ public sealed class MainWindowNavigationTests
         Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         fixture.Input.Press(rtl ? ControllerAction.NavigateRight : ControllerAction.NavigateLeft);
-        Assert.Equal("SettingsNavigation", Focused(fixture.Window).Name);
+        Assert.Equal("DestinationBackButton", Focused(fixture.Window).Name);
         fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
         Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
@@ -1311,8 +1339,6 @@ public sealed class MainWindowNavigationTests
         fixture.Window.Height = height;
         fixture.SignIn();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
-        Assert.Equal(width >= 2560 ? 27 : 18,
-            fixture.Shell.FindControl<Button>("SettingsNavigation")!.FontSize);
         Capture(fixture.Window, $"media-home-{width}");
         fixture.OpenSettings();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
@@ -1351,7 +1377,15 @@ public sealed class MainWindowNavigationTests
 
         foreach (var destination in Destinations)
         {
-            fixture.Shell.Navigate(destination);
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+            var source = destination switch
+            {
+                "Libraries" => fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!,
+                "Downloads" => fixture.Gallery.FindControl<Button>("GalleryDownloadsButton")!,
+                _ => fixture.Gallery.GetVisualDescendants().OfType<Button>()
+                    .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")),
+            };
+            fixture.Click(source);
             fixture.Flush();
             AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         }
@@ -1495,6 +1529,16 @@ public sealed class MainWindowNavigationTests
 
         public void SignIn(bool waitForHome = true)
         {
+            if (Model.IsServerSelectionVisible)
+            {
+                var preferred = Model.SelectedSavedSession;
+                Model.SelectServerCommand.Execute(preferred?.Server ?? Model.SavedServers[0]);
+                if (preferred is not null && Model.ServerAccounts.Contains(preferred))
+                {
+                    Model.SelectedSavedSession = preferred;
+                }
+            }
+
             Model.UseSavedSessionCommand.Execute(null);
             Flush();
             Assert.True(Model.IsAuthenticatedVisible);
@@ -1505,6 +1549,12 @@ public sealed class MainWindowNavigationTests
         }
 
         public void OpenSettings() => Click(Gallery.FindControl<Button>("GallerySettingsButton")!);
+        public void OpenLibraryLayoutSettings()
+        {
+            OpenSettings();
+            Click(Shell.FindControl<Button>("SettingsLibraryCategory")!);
+            Click(Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+        }
         public void Click(string name) => Click(Window.FindControl<Button>(name)!);
         public void Click(Button button)
         {

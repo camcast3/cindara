@@ -114,6 +114,16 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <Button x:Name="GalleryDownloadsButton"
+                            Width="{DynamicResource Gallery.NavigationButtonSize}"
+                            AutomationProperties.Name="{loc:Tr Nav.Downloads}"
+                            Click="OnDownloadsClicked"
+                            Classes="nav"
+                            ToolTip.Tip="{loc:Tr Nav.Downloads}">
+                        <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
+                                  Height="{DynamicResource Gallery.NavigationIconSize}"
+                                  Data="M 10,2 L 14,2 L 14,12 L 20,12 L 12,20 L 4,12 L 10,12 Z M 2,22 L 22,22 L 22,24 L 2,24 Z" />
+                    </Button>
                 </StackPanel>
                 </ScrollViewer>
                 <Button x:Name="GallerySettingsButton" Grid.Row="2"

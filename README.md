@@ -7,14 +7,19 @@ the primary target. It is early-stage, public, and licensed under the
 
 ## Current vertical slice
 
-The Avalonia desktop shell validates a Jellyfin server, authenticates a user,
-and restores independent saved accounts across servers. Passwords are never
+The Avalonia desktop shell uses an ambient, step-by-step authentication flow:
+choose a saved server, choose a saved account for that server, then restore the
+protected session or sign in when credentials are required. New servers can be
+added from the first step. Passwords are never
 persisted. Access tokens are stored with Secret Service on Linux, DPAPI on
 Windows, or Keychain on macOS; rejected tokens remove only the affected
 account and return it to sign-in.
 
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
-Settings. Home includes a single Continue Watching row and recently added media
+Settings. Home keeps its existing sidebar, hero, and rows. Selecting any other
+destination opens a dedicated full-screen surface with one explicit Back path;
+non-Home surfaces do not repeat the Home sidebar. Home includes a single Continue
+Watching row and recently added media
 from the selected libraries, with no generic Libraries shortcut row. Open libraries
 from the sidebar or library chooser. Libraries open alphabetically sorted, bounded
 40-item pages presented as a focused-item metadata hero and horizontal poster rail,
@@ -42,16 +47,18 @@ for them. Previously saved selections cannot bring unsupported views back.
 Minimal account switching, logout, and fullscreen/windowed controls are tracked
 separately in [the settings feature request](https://github.com/camcast3/cindara/issues/27);
 expanded settings categories, input, and appearance preferences remain deferred.
-The separate login/shell footer **Diagnostics** action shows local technical
-details and sanitized errors, with an explicit support-bundle preview and export.
+The pre-login **Diagnostics** action and the signed-in Settings category open the
+same full-screen local technical view with sanitized errors and an explicit
+support-bundle preview/export.
 It makes no diagnostic network requests or uploads. Logs are capped at 1 MiB
 and retained for seven days; see [diagnostics and privacy](docs/diagnostics.md).
 D-pad/left stick or arrows navigate, Accept/Enter selects, and Back/Escape
-dismisses dialogs or returns to the navigation rail. Start/Options/+ or F11
+dismisses the deepest utility or returns from a full-screen destination to its
+exact Home source. Start/Options/+ or F11
 toggles fullscreen; **Settings → Exit** closes the app.
 Accept on authentication text fields opens a focus-trapped on-screen keyboard.
 Search uses an inline controller keyboard so results and query context remain visible.
-Saved accounts use the same focus-trapped choice dialog as the rest of the shell.
+Saved servers and accounts are controller-navigable steps rather than a modal picker.
 
 The login screen and **Settings** offer **Language: English**.
 English is the only supported UI language. Appearance controls are deferred;
