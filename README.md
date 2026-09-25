@@ -18,7 +18,9 @@ account and return it to sign-in.
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
 Settings. Home keeps its existing sidebar, hero, and rows. Selecting any other
 destination opens a dedicated full-screen surface with one explicit Back path;
-non-Home surfaces do not repeat the Home sidebar. Home includes a single Continue
+non-Home surfaces do not repeat the Home sidebar. All screens share Home's capped
+logical-viewport density model for typography, poster sizing, gutters, forms, and
+navigation actions; OS DPI is not applied twice. Home includes a single Continue
 Watching row and recently added media
 from the selected libraries, with no generic Libraries shortcut row. Open libraries
 from the sidebar or library chooser. Home library shortcuts use aligned TV, Movie,

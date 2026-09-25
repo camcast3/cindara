@@ -7,7 +7,9 @@
              x:DataType="vm:MainViewModel">
     <Grid RowDefinitions="Auto,*" RowSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}">
         <Grid x:Name="DestinationHeader" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="18">
-            <Button x:Name="DestinationBackButton" Width="56" Height="56"
+            <Button x:Name="DestinationBackButton"
+                    Width="{DynamicResource Cindara.Adaptive.NavigationActionSize}"
+                    Height="{DynamicResource Cindara.Adaptive.NavigationActionSize}"
                     AutomationProperties.Name="{loc:Tr Action.Back}"
                     Click="OnBackClicked">
                 <PathIcon Width="24" Height="24"

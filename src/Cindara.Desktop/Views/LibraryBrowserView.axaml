@@ -84,21 +84,21 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:LibraryGridRowViewModel">
                         <StackPanel Orientation="Horizontal"
-                                    Spacing="{DynamicResource Library.GridSpacing}"
-                                    Margin="0,0,0,24">
+                                    Spacing="{DynamicResource Cindara.Media.GridSpacing}"
+                                    Margin="{DynamicResource Cindara.Media.GridCardMargin}">
                             <ItemsControl ItemsSource="{Binding Items}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal"
-                                                    Spacing="{DynamicResource Library.GridSpacing}" />
+                                                    Spacing="{DynamicResource Cindara.Media.GridSpacing}" />
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
                                         <StackPanel Spacing="7"
-                                                    Width="{DynamicResource Library.CardWidth}">
+                                                    Width="{DynamicResource Cindara.Media.GridPosterWidth}">
                                             <Button Classes="card"
-                                                    Height="{DynamicResource Library.CardHeight}"
+                                                    Height="{DynamicResource Cindara.Media.GridPosterHeight}"
                                                     HorizontalAlignment="Stretch"
                                                     AutomationProperties.Name="{Binding Name}"
                                                     AutomationProperties.HelpText="{Binding Subtitle}"
@@ -130,8 +130,8 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <Button x:Name="RetryLoadingMore"
-                                    Width="{DynamicResource Library.CardWidth}"
-                                    Height="{DynamicResource Library.CardHeight}"
+                                    Width="{DynamicResource Cindara.Media.GridPosterWidth}"
+                                    Height="{DynamicResource Cindara.Media.GridPosterHeight}"
                                     IsVisible="{Binding HasRetry}"
                                     Content="{loc:Tr Library.RetryMore}"
                                     Click="OnRetryMoreClicked" />

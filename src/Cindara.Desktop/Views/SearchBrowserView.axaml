@@ -43,11 +43,12 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
-                        <StackPanel Margin="7" Spacing="7"
-                                    Width="{DynamicResource Search.CardWidth}"
+                        <StackPanel Margin="{DynamicResource Cindara.Media.GridCardMargin}"
+                                    Spacing="7"
+                                    Width="{DynamicResource Cindara.Media.GridPosterWidth}"
                                     HorizontalAlignment="Center">
                             <Button Classes="card search-card"
-                                    Height="{DynamicResource Search.CardHeight}"
+                                    Height="{DynamicResource Cindara.Media.GridPosterHeight}"
                                     HorizontalAlignment="Stretch"
                                     AutomationProperties.Name="{Binding Name}"
                                     AutomationProperties.HelpText="{Binding Subtitle}"

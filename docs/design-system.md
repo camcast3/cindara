@@ -164,6 +164,14 @@ while the rail itself ranges from 72 logical pixels on compact windows to 192
 at the 4K logical profile. Artwork/card density continues to follow width so
 posters are not made sparse merely because typography must shrink.
 
+`ResponsiveDensityProfile` promotes those same capped scales to every non-Home
+surface. Search/Library grid posters use a 270 x 405 reference size and 24-pixel
+gutters multiplied by Home's card scale. Destination typography and navigation
+actions use Home's height-derived scale, with 48 logical pixels as the minimum
+action target. Login cards, Settings categories/details, diagnostics, keyboard
+overlays, and future details therefore respond to the same logical viewport and
+do not maintain independent screen-specific size rules.
+
 | Logical viewport | Card scale | Hero text scale | Hero height |
 | --- | --- | --- | --- |
 | 1280x720 | 1 | 0.7 | 299.2 |

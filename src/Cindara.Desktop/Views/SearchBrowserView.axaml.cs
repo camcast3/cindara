@@ -13,7 +13,6 @@ namespace Cindara.Desktop.Views;
 
 public partial class SearchBrowserView : UserControl
 {
-    private const double ReferenceCardWidth = 180;
     private SearchBrowserViewModel? _model;
     private Button? _focusedCard;
     private Vector? _returnOffset;
@@ -21,8 +20,6 @@ public partial class SearchBrowserView : UserControl
 
     public SearchBrowserView()
     {
-        Resources["Search.CardWidth"] = ReferenceCardWidth;
-        Resources["Search.CardHeight"] = ReferenceCardWidth * 1.5;
         InitializeComponent();
         SizeChanged += (_, args) => UpdateAdaptiveLayout(args.NewSize);
         DataContextChanged += (_, _) =>
@@ -154,19 +151,17 @@ public partial class SearchBrowserView : UserControl
         SearchKeyboardButton.HorizontalAlignment =
             stackEntry ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
 
-        var columns = size.Width switch
-        {
-            < 560 => 2,
-            < 800 => 3,
-            < 1100 => 5,
-            < 1500 => 7,
-            < 2200 => 8,
-            _ => 9,
-        };
-        var maximumCardWidth = size.Width >= 2200 ? ReferenceCardWidth * 1.3 : ReferenceCardWidth;
-        var cardWidth = Math.Min(maximumCardWidth, Math.Max(112, (size.Width / columns) - 14));
-        Resources["Search.CardWidth"] = cardWidth;
-        Resources["Search.CardHeight"] = cardWidth * 1.5;
+        var topLevel = TopLevel.GetTopLevel(this);
+        var posterWidth = topLevel?.Resources["Cindara.Media.GridPosterWidth"] is double widthValue
+            ? widthValue
+            : 270;
+        var spacing = topLevel?.Resources["Cindara.Media.GridSpacing"] is double spacingValue
+            ? spacingValue
+            : 24;
+        var columns = Math.Clamp(
+            (int)Math.Floor((size.Width + spacing) / (posterWidth + spacing)),
+            2,
+            14);
         if (SearchCards.GetVisualDescendants().OfType<UniformGrid>().FirstOrDefault() is { } grid)
         {
             grid.Columns = columns;

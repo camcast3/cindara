@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.Localization;
 
 namespace Cindara.Desktop.Views;
@@ -249,9 +250,15 @@ public partial class ShellView : UserControl
         var textScale = TopLevel.GetTopLevel(this) is MainWindow window
             ? window.Preferences.TextScale
             : 1;
+        var densityScale = TopLevel.GetTopLevel(this) is MainWindow densityWindow
+            ? ResponsiveDensityProfile.Create(
+                densityWindow.ClientSize.Width,
+                densityWindow.ClientSize.Height).TypeScale
+            : 1;
         var categoryWidth = Math.Min(
-            420,
-            Math.Max(280, 250 * textScale * (Loc.IsPseudoLocalized ? 1.15 : 1)));
+            520,
+            Math.Max(280, 250 * textScale * densityScale
+                * (Loc.IsPseudoLocalized ? 1.15 : 1)));
         SettingsWorkspace.ColumnDefinitions = compact
             ? new ColumnDefinitions("*")
             : new ColumnDefinitions(

@@ -599,12 +599,18 @@ public partial class MainWindow : Window
         }
 
         var profile = AdaptiveLayoutProfile.Create(size.Width, size.Height);
+        var density = ResponsiveDensityProfile.Create(size.Width, size.Height);
         Resources["Cindara.Adaptive.SafeMargin"] = new Thickness(profile.SafeMargin);
         Resources["Cindara.Adaptive.ContentSpacing"] = profile.ContentSpacing;
-        Resources["Cindara.Adaptive.FormMaxWidth"] = 800 * profile.UiScale;
+        Resources["Cindara.Adaptive.FormMaxWidth"] = 800 * density.CardScale;
+        Resources["Cindara.Adaptive.NavigationActionSize"] = density.NavigationActionSize;
+        Resources["Cindara.Media.GridPosterWidth"] = density.GridPosterWidth;
+        Resources["Cindara.Media.GridPosterHeight"] = density.GridPosterHeight;
+        Resources["Cindara.Media.GridSpacing"] = density.GridSpacing;
+        Resources["Cindara.Media.GridCardMargin"] = new Thickness(density.GridSpacing / 2);
         Resources["Cindara.Adaptive.DialogMaxHeight"] =
             Math.Max(240, size.Height - (profile.SafeMargin * 2) - 96);
-        var typographyScale = Preferences.TextScale * profile.UiScale;
+        var typographyScale = Preferences.TextScale * density.TypeScale;
         Resources["Cindara.Type.Display"] = 48 * typographyScale;
         Resources["Cindara.Type.Title"] = 32 * typographyScale;
         Resources["Cindara.Type.Heading"] = 24 * typographyScale;

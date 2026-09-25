@@ -15,8 +15,6 @@ namespace Cindara.Desktop.Views;
 
 public partial class LibraryBrowserView : UserControl
 {
-    private const double ReferenceMaximumCardWidth = 270;
-    private const double GridSpacing = 24;
     private LibraryBrowserViewModel? _model;
     private Button? _focusedCard;
     private MediaPreviewCardViewModel? _focusedItem;
@@ -47,9 +45,6 @@ public partial class LibraryBrowserView : UserControl
 
     public LibraryBrowserView()
     {
-        Resources["Library.CardWidth"] = ReferenceMaximumCardWidth;
-        Resources["Library.CardHeight"] = ReferenceMaximumCardWidth * 1.5;
-        Resources["Library.GridSpacing"] = GridSpacing;
         InitializeComponent();
         BuildLetterChoices();
         SizeChanged += (_, args) => UpdateCardLayout(args.NewSize.Width);
@@ -99,17 +94,19 @@ public partial class LibraryBrowserView : UserControl
             return;
         }
 
-        var availableWidth = Math.Max(280, width - 64);
+        var topLevel = TopLevel.GetTopLevel(this);
+        var posterWidth = topLevel?.Resources["Cindara.Media.GridPosterWidth"] is double widthValue
+            ? widthValue
+            : 270;
+        var gridSpacing = topLevel?.Resources["Cindara.Media.GridSpacing"] is double spacingValue
+            ? spacingValue
+            : 24;
+        var availableWidth = Math.Max(posterWidth, width - 64);
         var columns = Math.Clamp(
-            (int)Math.Floor((availableWidth + GridSpacing)
-                / (ReferenceMaximumCardWidth + GridSpacing)),
+            (int)Math.Floor((availableWidth + gridSpacing)
+                / (posterWidth + gridSpacing)),
             2,
             14);
-        var cardWidth = Math.Min(
-            ReferenceMaximumCardWidth,
-            Math.Max(132, (availableWidth - (GridSpacing * (columns - 1))) / columns));
-        Resources["Library.CardWidth"] = cardWidth;
-        Resources["Library.CardHeight"] = cardWidth * 1.5;
         if (_columns != columns)
         {
             _columns = columns;

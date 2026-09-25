@@ -1530,14 +1530,15 @@ public sealed class MainWindowNavigationTests
         var focused = Focused(fixture.Window);
         var focusedItem = Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
         AssertInsideWindow(fixture.Window, focused);
-        Assert.Equal(270d,
-            (double)fixture.Shell.LibraryView.Resources["Library.CardWidth"]!,
+        var densityScale = Math.Clamp(width / 1600d, 1, 1.55);
+        Assert.Equal(270d * densityScale,
+            (double)fixture.Window.Resources["Cindara.Media.GridPosterWidth"]!,
             precision: 6);
-        Assert.Equal(405d,
-            (double)fixture.Shell.LibraryView.Resources["Library.CardHeight"]!,
+        Assert.Equal(405d * densityScale,
+            (double)fixture.Window.Resources["Cindara.Media.GridPosterHeight"]!,
             precision: 6);
-        Assert.Equal(24d,
-            (double)fixture.Shell.LibraryView.Resources["Library.GridSpacing"]!,
+        Assert.Equal(24d * densityScale,
+            (double)fixture.Window.Resources["Cindara.Media.GridSpacing"]!,
             precision: 6);
         if (width >= 2800)
         {
