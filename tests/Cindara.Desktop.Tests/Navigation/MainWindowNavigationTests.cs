@@ -1065,6 +1065,25 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
+    public Task InlineSearchKeyboardHonorsMaximumQueryLength() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        var view = fixture.Shell.SearchView;
+        var query = view.FindControl<TextBox>("SearchTextBox")!;
+        query.Text = new string('A', query.MaxLength);
+        query.CaretIndex = query.Text.Length;
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Click(view.FindControl<UniformGrid>("KeyboardKeys")!.Children.OfType<Button>()
+            .Single(button => Equals(button.Content, "B")));
+
+        Assert.Equal(query.MaxLength, query.Text.Length);
+        Assert.Equal(new string('A', query.MaxLength), query.Text);
+    });
+
+    [Fact]
     public Task LanguageDialogTrapsFocusAndRestoresItsSettingsLauncher() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();

@@ -192,8 +192,11 @@ public partial class SearchBrowserView : UserControl
             length = 0;
         }
 
-        SearchTextBox.Text = text.Remove(start, Math.Min(length, text.Length - start)).Insert(start, value);
-        SearchTextBox.CaretIndex = start + value.Length;
+        length = Math.Min(length, text.Length - start);
+        var available = Math.Max(0, SearchTextBox.MaxLength - (text.Length - length));
+        var insertion = value.Length <= available ? value : value[..available];
+        SearchTextBox.Text = text.Remove(start, length).Insert(start, insertion);
+        SearchTextBox.CaretIndex = start + insertion.Length;
         SearchTextBox.SelectionStart = SearchTextBox.SelectionEnd = SearchTextBox.CaretIndex;
     }
 
