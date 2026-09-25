@@ -7,7 +7,6 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Cindara.Core.Jellyfin;
 using Cindara.Desktop.Localization;
 using Cindara.Desktop.ViewModels;
 
@@ -72,16 +71,16 @@ public partial class LibraryBrowserView : UserControl
     }
 
     public event EventHandler<MediaPreviewCardViewModel>? ItemRequested;
+    public event EventHandler? FilterRequested;
+    public event EventHandler? SortRequested;
 
     public Control InitialFocus => _model?.IsLoading is true ? this
         : _model?.CanRetry is true ? RetryLibraryLoading
         : !_pageFocusPending && _focusedCard is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } ? _focusedCard
-        : Cards().FirstOrDefault() ?? Choices().FirstOrDefault() ?? (Control)this;
+        : Cards().FirstOrDefault() ?? (Control)FilterMenuButton;
 
     private Button[] Cards() => LibraryRows.GetVisualDescendants().OfType<Button>()
         .Where(button => button.Classes.Contains("card")).ToArray();
-
-    private Button[] Choices() => LibraryChoices.GetVisualDescendants().OfType<Button>().ToArray();
 
     private int Columns => _columns;
 
@@ -94,6 +93,12 @@ public partial class LibraryBrowserView : UserControl
         {
             return;
         }
+
+        var compact = width < 900;
+        Grid.SetColumn(LibraryItemCount, compact ? 0 : 1);
+        Grid.SetRow(LibraryItemCount, compact ? 1 : 0);
+        FilterMenuButton.MaxWidth = Math.Max(120, width - 12);
+        SortMenuButton.MaxWidth = Math.Max(120, width - 12);
 
         var topLevel = TopLevel.GetTopLevel(this);
         var posterWidth = topLevel?.Resources["Cindara.Media.GridPosterWidth"] is double widthValue
@@ -203,7 +208,7 @@ public partial class LibraryBrowserView : UserControl
         var next = index + step;
         if (next < 0)
         {
-            return Choices().FirstOrDefault()?.Focus(NavigationMethod.Directional) is true;
+            return FilterMenuButton.Focus(NavigationMethod.Directional);
         }
 
         if (next >= _model.Items.Count)
@@ -257,35 +262,11 @@ public partial class LibraryBrowserView : UserControl
         return true;
     }
 
-    private async void OnLibraryClicked(object? sender, RoutedEventArgs args)
-    {
-        if (sender is Button { DataContext: MediaLibrary library } && _model?.OpenLibraryCommand.CanExecute(library) is true)
-        {
-            await _model.OpenLibraryCommand.ExecuteAsync(library);
-        }
-    }
+    private void OnFilterMenuClicked(object? sender, RoutedEventArgs args) =>
+        FilterRequested?.Invoke(this, EventArgs.Empty);
 
-    private async void OnFilterClicked(object? sender, RoutedEventArgs args)
-    {
-        if (_model is not null
-            && sender is Button { Tag: string value }
-            && Enum.TryParse<MediaLibraryFilter>(value, out var filter)
-            && _model.SetFilterCommand.CanExecute(filter))
-        {
-            await _model.SetFilterCommand.ExecuteAsync(filter);
-        }
-    }
-
-    private async void OnSortClicked(object? sender, RoutedEventArgs args)
-    {
-        if (_model is not null
-            && sender is Button { Tag: string value }
-            && Enum.TryParse<MediaLibrarySortDirection>(value, out var direction)
-            && _model.SetSortDirectionCommand.CanExecute(direction))
-        {
-            await _model.SetSortDirectionCommand.ExecuteAsync(direction);
-        }
-    }
+    private void OnSortMenuClicked(object? sender, RoutedEventArgs args) =>
+        SortRequested?.Invoke(this, EventArgs.Empty);
 
     private async void OnLetterClicked(object? sender, RoutedEventArgs args)
     {
@@ -338,13 +319,6 @@ public partial class LibraryBrowserView : UserControl
             return;
         }
 
-        SetSelected(FilterAllButton, _model.SelectedFilter == MediaLibraryFilter.All);
-        SetSelected(FilterUnwatchedButton, _model.SelectedFilter == MediaLibraryFilter.Unwatched);
-        SetSelected(FilterFavoritesButton, _model.SelectedFilter == MediaLibraryFilter.Favorites);
-        SetSelected(SortAscendingButton,
-            _model.SelectedSortDirection == MediaLibrarySortDirection.Ascending);
-        SetSelected(SortDescendingButton,
-            _model.SelectedSortDirection == MediaLibrarySortDirection.Descending);
         foreach (var button in LetterChoices.Children.OfType<Button>())
         {
             var selected = _model.SelectedLetter?.ToString() == (string?)button.Tag
@@ -399,7 +373,7 @@ public partial class LibraryBrowserView : UserControl
 
     private void UpdateArtworkWindowFromRealizedCards()
     {
-        if (_model is null || _model.Items.Count == 0 || !IsEffectivelyVisible)
+        if (_model is null || _model.Items.Count == 0 || !IsEffectivelyVisible || !IsEffectivelyEnabled)
         {
             return;
         }
@@ -410,7 +384,7 @@ public partial class LibraryBrowserView : UserControl
             Dispatcher.UIThread.Post(() =>
             {
                 _loadMoreQueued = false;
-                if (IsEffectivelyVisible && _model?.LoadMoreCommand.CanExecute(null) is true
+                if (IsEffectivelyVisible && IsEffectivelyEnabled && _model?.LoadMoreCommand.CanExecute(null) is true
                     && IsLoadBoundaryVisible())
                 {
                     _model.LoadMoreCommand.Execute(null);

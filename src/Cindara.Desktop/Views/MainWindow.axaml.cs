@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cindara.Core.Authentication;
 using Cindara.Core.Diagnostics;
+using Cindara.Core.Jellyfin;
 using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.Input;
@@ -95,6 +96,7 @@ public partial class MainWindow : Window
         Shell.ExitRequested += (_, _) => Close();
         Shell.LanguageRequested += (_, _) => ShowLanguage();
         Shell.LibraryLayoutRequested += (_, _) => ShowLibraryLayout();
+        Shell.LibrarySwitcherRequested += (_, _) => ShowLibrarySwitcher();
         Shell.DiagnosticsRequested += (_, _) => ShowDiagnostics();
         GalleryView.SettingsRequested += (_, _) =>
         {
@@ -117,6 +119,8 @@ public partial class MainWindow : Window
         GalleryView.LibraryRequested += OnLibraryRequested;
         GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        Shell.LibraryView.FilterRequested += (_, _) => ShowLibraryFilter();
+        Shell.LibraryView.SortRequested += (_, _) => ShowLibrarySort();
         Shell.SearchView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.SearchView.KeyboardRequested += (_, target) => ShowKeyboard(target, fullScreen: true);
         GalleryView.NavigationWidthChanged += (_, _) => UpdateGalleryFooter();
@@ -157,6 +161,87 @@ public partial class MainWindow : Window
 
         AddModalButton(Loc.Get("Action.Back"), DismissModal);
         FocusModal();
+    }
+
+    private void ShowLibrarySwitcher()
+    {
+        if (_viewModel?.LibraryBrowser is { CanChooseLibrary: true } browser)
+        {
+            ShowLibraryMenu(Loc.Get("Library.Switch"), browser.Libraries,
+                library => library.Name,
+                library => library == browser.SelectedLibrary,
+                library => browser.OpenLibraryCommand.ExecuteAsync(library));
+        }
+    }
+
+    private void ShowLibraryFilter()
+    {
+        if (_viewModel?.LibraryBrowser is { } browser
+            && browser.SetFilterCommand.CanExecute(browser.SelectedFilter))
+        {
+            ShowLibraryMenu(Loc.Get("Library.Filter.Title"), Enum.GetValues<MediaLibraryFilter>(),
+                filter => Loc.Get($"Library.Filter.{filter}"),
+                filter => filter == browser.SelectedFilter,
+                filter => browser.SetFilterCommand.ExecuteAsync(filter));
+        }
+    }
+
+    private void ShowLibrarySort()
+    {
+        if (_viewModel?.LibraryBrowser is { } browser
+            && browser.SetSortDirectionCommand.CanExecute(browser.SelectedSortDirection))
+        {
+            ShowLibraryMenu(Loc.Get("Library.Sort.Title"), Enum.GetValues<MediaLibrarySortDirection>(),
+                direction => Loc.Get($"Library.Sort.{direction}"),
+                direction => direction == browser.SelectedSortDirection,
+                direction => browser.SetSortDirectionCommand.ExecuteAsync(direction));
+        }
+    }
+
+    private void ShowLibraryMenu<T>(
+        string title,
+        IEnumerable<T> choices,
+        Func<T, string> label,
+        Func<T, bool> isSelected,
+        Func<T, Task> select)
+    {
+        if (ModalOverlay.IsVisible)
+        {
+            return;
+        }
+
+        BeginModal(title);
+        ModalDialog.MaxWidth = 620 * ResponsiveDensityProfile.Create(ClientSize.Width, ClientSize.Height).CardScale;
+        Button? initial = null;
+        foreach (var choice in choices)
+        {
+            var button = new Button
+            {
+                Content = label(choice),
+                Tag = choice,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            };
+            if (isSelected(choice))
+            {
+                button.Classes.Add("selected");
+                AutomationProperties.SetItemStatus(button, Loc.Get("State.Selected"));
+                initial = button;
+            }
+
+            button.Click += async (_, _) =>
+            {
+                var unchanged = isSelected(choice);
+                DismissModal();
+                if (!unchanged)
+                {
+                    await select(choice);
+                }
+            };
+            ModalActions.Children.Add(button);
+        }
+
+        AddModalButton(Loc.Get("Action.Back"), DismissModal);
+        FocusModal(initial);
     }
 
     private async void OnOpened(object? sender, EventArgs eventArgs)

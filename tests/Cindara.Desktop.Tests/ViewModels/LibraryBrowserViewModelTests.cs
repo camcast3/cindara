@@ -293,15 +293,18 @@ public sealed class LibraryBrowserViewModelTests
         Assert.Equal(MediaLibraryFilter.All, model.SelectedFilter);
         Assert.Same(original, model.Items);
         Assert.True(model.CanRetry);
+        Assert.Equal(Loc.Get("Library.Filter.All"), model.FilterLabel);
         client.Error = null;
         await model.RetryPageCommand.ExecuteAsync(null);
         Assert.Equal(MediaLibraryFilter.Favorites, model.SelectedFilter);
+        Assert.Equal(Loc.Get("Library.Filter.Favorites"), model.FilterLabel);
 
         await model.SetSortDirectionCommand.ExecuteAsync(MediaLibrarySortDirection.Descending);
         await model.SetLetterCommand.ExecuteAsync("M");
 
         Assert.Equal(MediaLibrarySortDirection.Descending, model.SelectedSortDirection);
         Assert.Equal('M', model.SelectedLetter);
+        Assert.Equal(Loc.Get("Library.Sort.Descending"), model.SortLabel);
         Assert.Equal(
             new MediaLibraryQuery(
                 Filter: MediaLibraryFilter.Favorites,

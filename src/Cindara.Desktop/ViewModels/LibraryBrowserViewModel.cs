@@ -56,11 +56,21 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     public string PageDescription => SelectedLibrary is null
         ? string.Empty
         : Loc.Format("Library.Loaded", Items.Count, _totalRecordCount);
+    public string LibraryName => SelectedLibrary?.Name ?? Loc.Get("Library.Switch");
+    public bool CanChooseLibrary => CanOpenLibrary() && HasLibraries;
+    public string FilterLabel => Loc.Get($"Library.Filter.{SelectedFilter}");
+    public string SortLabel => Loc.Get($"Library.Sort.{SelectedSortDirection}");
+    public string FilterAccessibleName => Loc.Format("Library.Filter.Action", FilterLabel);
+    public string SortAccessibleName => Loc.Format("Library.Sort.Action", SortLabel);
+    public string ItemCountDescription => SelectedLibrary is null || (IsLoading && Items.Count == 0)
+        ? string.Empty
+        : Loc.Format("Library.Count", _totalRecordCount);
     public bool IsAnyLoading => IsLoading || IsLoadingMore;
     public int ColumnCount => _columnCount;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(LoadPageCommand))]
+    [NotifyPropertyChangedFor(nameof(LibraryName))]
     private MediaLibrary? _selectedLibrary;
 
     [ObservableProperty]
@@ -72,9 +82,13 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     private MediaPreviewCardViewModel? _selectedItem;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilterLabel))]
+    [NotifyPropertyChangedFor(nameof(FilterAccessibleName))]
     private MediaLibraryFilter _selectedFilter;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SortLabel))]
+    [NotifyPropertyChangedFor(nameof(SortAccessibleName))]
     private MediaLibrarySortDirection _selectedSortDirection;
 
     [ObservableProperty]
@@ -94,6 +108,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     [NotifyCanExecuteChangedFor(nameof(RetryPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadMoreCommand))]
     [NotifyPropertyChangedFor(nameof(IsAnyLoading))]
+    [NotifyPropertyChangedFor(nameof(CanChooseLibrary))]
     private bool _isLoading;
 
     [ObservableProperty]
@@ -105,6 +120,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     [NotifyCanExecuteChangedFor(nameof(RetryPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadMoreCommand))]
     [NotifyPropertyChangedFor(nameof(IsAnyLoading))]
+    [NotifyPropertyChangedFor(nameof(CanChooseLibrary))]
     [NotifyPropertyChangedFor(nameof(HasMore))]
     private bool _isLoadingMore;
 
@@ -618,6 +634,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         OnPropertyChanged(nameof(NextIndex));
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(PageDescription));
+        OnPropertyChanged(nameof(ItemCountDescription));
     }
 
     private void ClearPage()
@@ -653,6 +670,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         SetLetterCommand.NotifyCanExecuteChanged();
         RetryPageCommand.NotifyCanExecuteChanged();
         LoadMoreCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanChooseLibrary));
     }
 }
 

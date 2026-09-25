@@ -19,6 +19,21 @@
                 <TextBlock x:Name="DestinationEyebrow" Classes="caption"
                            Text="{loc:Tr Brand.Name}" />
                 <TextBlock x:Name="DestinationTitle" Classes="display" />
+                <Button x:Name="LibrarySwitcher" Classes="library-title"
+                        HorizontalAlignment="Left" HorizontalContentAlignment="Stretch"
+                        IsEnabled="{Binding LibraryBrowser.CanChooseLibrary, FallbackValue=False}"
+                        AutomationProperties.Name="{Binding LibraryBrowser.LibraryName}"
+                        AutomationProperties.HelpText="{loc:Tr Library.Switch.Help}"
+                        Click="OnLibrarySwitcherClicked">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                        <TextBlock x:Name="LibraryTitle" Classes="display"
+                                   Text="{Binding LibraryBrowser.LibraryName, FallbackValue={loc:Tr Library.Switch}, TargetNullValue={loc:Tr Library.Switch}}"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                        <PathIcon Grid.Column="1" Width="20" Height="20"
+                                  VerticalAlignment="Center"
+                                  Data="M 2,6 L 10,14 L 18,6 L 20,8 L 10,18 L 0,8 Z" />
+                    </Grid>
+                </Button>
             </StackPanel>
             <TextBlock x:Name="DestinationBrand" Grid.Column="2" Classes="heading"
                        VerticalAlignment="Center"

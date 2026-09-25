@@ -137,7 +137,14 @@
   <data name="Library.Canceled" xml:space="preserve"><value>Loading canceled. Retry to load this page.</value></data>
   <data name="Library.Empty" xml:space="preserve"><value>This library is empty.</value></data>
   <data name="Library.Retry" xml:space="preserve"><value>Retry loading page</value></data>
-  <data name="Library.Filter.All" xml:space="preserve"><value>All</value></data>
+  <data name="Library.Switch" xml:space="preserve"><value>Choose a library</value></data>
+  <data name="Library.Switch.Help" xml:space="preserve"><value>Change the library being viewed.</value></data>
+  <data name="Library.Filter.Title" xml:space="preserve"><value>Filter titles</value></data>
+  <data name="Library.Filter.Action" xml:space="preserve"><value>Filter: {0}</value></data>
+  <data name="Library.Sort.Title" xml:space="preserve"><value>Sort titles</value></data>
+  <data name="Library.Sort.Action" xml:space="preserve"><value>Sort: {0}</value></data>
+  <data name="Library.Count" xml:space="preserve"><value>{0:N0} titles</value></data>
+  <data name="Library.Filter.All" xml:space="preserve"><value>All titles</value></data>
   <data name="Library.Filter.Unwatched" xml:space="preserve"><value>Unwatched</value></data>
   <data name="Library.Filter.Favorites" xml:space="preserve"><value>Favorites</value></data>
   <data name="Library.Sort.Ascending" xml:space="preserve"><value>Title A–Z</value></data>

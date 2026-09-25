@@ -29,8 +29,9 @@ rails. Full details and playback remain assigned to the remaining #5 batches and
 Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
 There is no intermediate preview launcher or redundant Home-screen back button.
-Libraries opens incrementally loaded virtualized poster-grid browsing with
-implemented filter, sort, and A–Z title controls. Search preserves one combined result grid, query, selected
+Each library opens incrementally loaded virtualized poster-grid browsing headed
+by its actual name, with a library switcher, compact filter/sort menus, and A–Z
+title controls. Search preserves one combined result grid, query, selected
 item, and offsets; Downloads retains an honest unavailable state. Settings exposes
 Language: English, Library layout, Exit, and Back to Home through a category/detail
 split without implying unimplemented settings features. Initial focus is
@@ -347,13 +348,21 @@ shows credentials only for a new or rejected session. Passwords remain ephemeral
 ### Library
 
 ```text
-[Back]  Library name
-        [All / Unwatched / Favorites] [Title A–Z / Z–A] [Item range / total]
+[Back]  Anime [v]
+        [All titles v] [Title A–Z v]                   [95 titles]
         [Poster] [Poster] [Poster] [Poster] ...
         [Poster] [Poster] [Poster] [Poster] ... [All / A–Z rail]
 ```
 
-Initial focus: first poster, library choice if empty, Back while loading, or
+The heading uses the current server-provided library name, not "Libraries".
+Selecting it opens a controller-friendly library menu. The filter menu contains
+All titles, Unwatched, and Favorites; the sort menu contains Title A–Z and Title
+Z–A. Each launcher displays its active value, and menus focus and mark the current
+choice. Back/Escape closes a menu and restores its launcher without changing the
+query or grid position. Selecting the current choice does not fetch again.
+Small viewports wrap the toolbar and place the quiet total below its controls;
+long library names truncate visually but retain their full accessible name.
+Initial focus: first poster, filter menu if empty, Back while loading, or
 Retry after a failed/canceled metadata request. Artwork loads silently in each
 poster without disabling the grid; failures offer an artwork-only retry.
 Directional navigation follows the live responsive column count. Entering the

@@ -24,9 +24,12 @@ navigation actions; OS DPI is not applied twice. Home includes a single Continue
 Watching row and recently added media
 from the selected libraries, with no generic Libraries shortcut row. Open libraries
 from the sidebar or library chooser. Home library shortcuts use aligned TV, Movie,
-and Anime icons with accessible names. Libraries open a virtualized poster grid
-with All/Unwatched/Favorites filters, Title A–Z/Z–A ordering, and All/A–Z title
-filtering. Metadata loads in bounded 40-item batches as focus or scrolling reaches
+and Anime icons with accessible names. A library opens a virtualized poster grid
+headed by its actual name; the heading opens a library switcher. Compact filter
+and sort menus show the active All titles/Unwatched/Favorites and Title A–Z/Z–A
+choices, alongside the total title count. The All/A–Z rail remains directly
+accessible. Menus focus the current choice and Back restores the launcher without
+changing the grid. Metadata loads in bounded 40-item batches as focus or scrolling reaches
 the final loaded row. A rolling buffer of 60 blank poster slots (capped to the
 remaining titles) is present before the next request; responses fill those slots
 in place and extend only the far end. Poster and metadata heights stay stable.

@@ -30,6 +30,7 @@ public partial class ShellView : UserControl
     public event EventHandler? ExitRequested;
     public event EventHandler? LanguageRequested;
     public event EventHandler? LibraryLayoutRequested;
+    public event EventHandler? LibrarySwitcherRequested;
     public event EventHandler? DiagnosticsRequested;
     public string Destination => _destination;
     public Control? HomeLoadingAction { get; set; }
@@ -94,6 +95,8 @@ public partial class ShellView : UserControl
         PageScroll.IsVisible = destination is "Home" or "Downloads" or "Settings";
         PlaceholderPage.IsVisible = destination == "Downloads";
         DestinationTitle.Text = Loc.Get($"Nav.{destination}");
+        DestinationTitle.IsVisible = destination != "Libraries";
+        LibrarySwitcher.IsVisible = destination == "Libraries";
         DestinationMessage.Text = destination == "Downloads"
             ? Loc.Get("Placeholder.Downloads")
             : string.Empty;
@@ -116,6 +119,35 @@ public partial class ShellView : UserControl
         if (_destination == "Settings" && TryMoveSettings(focused, direction))
         {
             return true;
+        }
+
+        if (_destination == "Libraries")
+        {
+            if (ReferenceEquals(focused, DestinationBackButton)
+                && direction == NavigationDirection.Right && LibrarySwitcher.IsEffectivelyEnabled)
+            {
+                return LibrarySwitcher.Focus(NavigationMethod.Directional);
+            }
+
+            if (ReferenceEquals(focused, LibrarySwitcher))
+            {
+                if (direction == NavigationDirection.Left)
+                {
+                    return DestinationBackButton.Focus(NavigationMethod.Directional);
+                }
+
+                if (direction == NavigationDirection.Down)
+                {
+                    return LibraryView.FilterMenuButton.Focus(NavigationMethod.Directional);
+                }
+            }
+
+            if ((ReferenceEquals(focused, LibraryView.FilterMenuButton)
+                || ReferenceEquals(focused, LibraryView.SortMenuButton))
+                && direction == NavigationDirection.Up)
+            {
+                return LibrarySwitcher.Focus(NavigationMethod.Directional);
+            }
         }
 
         if (ReferenceEquals(focused, DestinationBackButton)
@@ -148,6 +180,8 @@ public partial class ShellView : UserControl
         LanguageRequested?.Invoke(this, EventArgs.Empty);
     private void OnLibraryLayoutClicked(object? sender, RoutedEventArgs args) =>
         LibraryLayoutRequested?.Invoke(this, EventArgs.Empty);
+    private void OnLibrarySwitcherClicked(object? sender, RoutedEventArgs args) =>
+        LibrarySwitcherRequested?.Invoke(this, EventArgs.Empty);
     private void OnDiagnosticsClicked(object? sender, RoutedEventArgs args) =>
         DiagnosticsRequested?.Invoke(this, EventArgs.Empty);
 

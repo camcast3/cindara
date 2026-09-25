@@ -968,8 +968,17 @@ public sealed class MainWindowNavigationTests
             fixture.Click(source);
             Assert.Equal(destination, fixture.Shell.Destination);
             Assert.True(fixture.Shell.FindControl<Grid>("DestinationHeader")!.IsEffectivelyVisible);
-            Assert.Equal(Loc.Get($"Nav.{destination}"),
-                fixture.Shell.FindControl<TextBlock>("DestinationTitle")!.Text);
+            if (destination == "Libraries")
+            {
+                Assert.False(fixture.Shell.FindControl<TextBlock>("DestinationTitle")!.IsEffectivelyVisible);
+                Assert.Equal(fixture.Model.LibraryBrowser!.SelectedLibrary!.Name,
+                    fixture.Shell.FindControl<TextBlock>("LibraryTitle")!.Text);
+            }
+            else
+            {
+                Assert.Equal(Loc.Get($"Nav.{destination}"),
+                    fixture.Shell.FindControl<TextBlock>("DestinationTitle")!.Text);
+            }
             Assert.Null(fixture.Shell.FindControl<Control>("NavigationRail"));
             Assert.Null(fixture.Shell.FindControl<Button>("ReturnHomeButton"));
             fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
@@ -1101,8 +1110,6 @@ public sealed class MainWindowNavigationTests
         fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
         fixture.Click(FirstLibraryShortcut(fixture));
         var libraryView = fixture.Shell.LibraryView;
-        fixture.Click(libraryView.FindControl<ItemsControl>("LibraryChoices")!
-            .GetVisualDescendants().OfType<Button>().Single());
         await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
         fixture.Flush();
         var libraryCards = libraryView.GetVisualDescendants().OfType<Button>()
@@ -1163,15 +1170,15 @@ public sealed class MainWindowNavigationTests
         fixture.SignIn();
         fixture.Click(FirstLibraryShortcut(fixture));
         var view = fixture.Shell.LibraryView;
-        fixture.Click(view.FindControl<ItemsControl>("LibraryChoices")!
-            .GetVisualDescendants().OfType<Button>().Single());
         await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
         fixture.Flush();
         var model = fixture.Model.LibraryBrowser;
 
-        fixture.Click(view.FindControl<Button>("FilterFavoritesButton")!);
+        fixture.Click(view.FindControl<Button>("FilterMenuButton")!);
+        fixture.ClickContent(Loc.Get("Library.Filter.Favorites"));
         await model.SetFilterCommand.ExecutionTask!;
-        fixture.Click(view.FindControl<Button>("SortDescendingButton")!);
+        fixture.Click(view.FindControl<Button>("SortMenuButton")!);
+        fixture.ClickContent(Loc.Get("Library.Sort.Descending"));
         await model.SetSortDirectionCommand.ExecutionTask!;
         var letters = view.FindControl<StackPanel>("LetterChoices")!
             .Children.OfType<Button>().ToArray();
@@ -1183,10 +1190,11 @@ public sealed class MainWindowNavigationTests
         Assert.Equal(MediaLibraryFilter.Favorites, model.SelectedFilter);
         Assert.Equal(MediaLibrarySortDirection.Descending, model.SelectedSortDirection);
         Assert.Equal('M', model.SelectedLetter);
-        Assert.Equal(Loc.Get("State.Selected"),
-            AutomationProperties.GetItemStatus(view.FindControl<Button>("FilterFavoritesButton")!));
-        Assert.Equal(Loc.Get("State.Selected"),
-            AutomationProperties.GetItemStatus(view.FindControl<Button>("SortDescendingButton")!));
+        Assert.Equal(Loc.Format("Library.Filter.Action", Loc.Get("Library.Filter.Favorites")),
+            AutomationProperties.GetName(view.FindControl<Button>("FilterMenuButton")!));
+        Assert.Equal(Loc.Format("Library.Sort.Action", Loc.Get("Library.Sort.Descending")),
+            AutomationProperties.GetName(view.FindControl<Button>("SortMenuButton")!));
+        Assert.Null(view.FindControl<ItemsControl>("LibraryChoices"));
         Assert.Equal(Loc.Get("State.Selected"),
             AutomationProperties.GetItemStatus(letters.Single(button => Equals(button.Tag, "M"))));
         var cards = view.GetVisualDescendants().OfType<Button>()
@@ -1201,6 +1209,116 @@ public sealed class MainWindowNavigationTests
         cards[columns - 1].Focus();
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("M", Assert.IsType<Button>(Focused(fixture.Window)).Tag);
+    });
+
+    [Theory]
+    [InlineData("FilterMenuButton")]
+    [InlineData("SortMenuButton")]
+    public Task LibraryMenusCancelWithoutChangingGridAndMarkCurrentChoices(string name) => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var view = fixture.Shell.LibraryView;
+        var rows = view.FindControl<ListBox>("LibraryRows")!;
+        rows.ScrollIntoView(2);
+        fixture.Flush();
+        var scroll = rows.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var originalItems = model.Items;
+        var calls = fixture.Preview.LibraryCalls;
+
+        var launcher = view.FindControl<Button>(name)!;
+        fixture.Click(launcher);
+        var offset = scroll.Offset;
+        Assert.True(fixture.IsModalVisible);
+        var selected = Assert.IsType<Button>(Focused(fixture.Window));
+        Assert.Equal(Loc.Get("State.Selected"), AutomationProperties.GetItemStatus(selected));
+        fixture.Key(Key.Tab, RawInputModifiers.Shift);
+        Assert.Equal(Loc.Get("Action.Back"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
+        fixture.Key(Key.Tab);
+        Assert.Same(selected, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Input.Press(ControllerAction.Back);
+        fixture.Flush();
+        Assert.False(fixture.IsModalVisible);
+        Assert.Same(launcher, Focused(fixture.Window));
+        Assert.Equal(offset, scroll.Offset);
+        Assert.Same(originalItems, model.Items);
+        Assert.Equal(calls, fixture.Preview.LibraryCalls);
+        Assert.Equal(MediaLibraryFilter.All, model.SelectedFilter);
+        Assert.Equal(MediaLibrarySortDirection.Ascending, model.SelectedSortDirection);
+
+        fixture.Click(launcher);
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        Assert.False(fixture.IsModalVisible);
+        Assert.Same(launcher, Focused(fixture.Window));
+        Assert.Equal(calls, fixture.Preview.LibraryCalls);
+    });
+
+    [Theory]
+    [InlineData("en", 1920, 1080, 1, false)]
+    [InlineData("qps-ploc", 1280, 800, 1.5, false)]
+    [InlineData("qps-plocm", 720, 480, 1.5, true)]
+    public Task LibraryNameSwitcherAndMenusFitAndSupportControllerNavigation(
+        string culture, int width, int height, double scale, bool longName) => TestAppBuilder.Run(async () =>
+    {
+        using var scope = new CultureScope(culture);
+        using var fixture = new ShellFixture(preferences: new PresentationPreferences(TextScale: scale));
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.Preview.LayoutLibraries = true;
+        fixture.Preview.LongLibraryName = longName;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var switcher = fixture.Shell.FindControl<Button>("LibrarySwitcher")!;
+        var title = fixture.Shell.FindControl<TextBlock>("LibraryTitle")!;
+        var filter = fixture.Shell.LibraryView.FindControl<Button>("FilterMenuButton")!;
+        var sort = fixture.Shell.LibraryView.FindControl<Button>("SortMenuButton")!;
+        fixture.Shell.FocusBack();
+        fixture.Input.Press(culture == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Same(switcher, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(fixture.IsModalVisible);
+        var choices = fixture.Modal.Children.OfType<Button>().Where(button => button.Tag is MediaLibrary).ToArray();
+        Assert.Equal(["tv", "movies", "anime"], choices.Select(button => ((MediaLibrary)button.Tag!).Id));
+        Assert.Same(choices[0], Focused(fixture.Window));
+        Assert.Equal(Loc.Get("State.Selected"), AutomationProperties.GetItemStatus(choices[0]));
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Same(choices[2], Focused(fixture.Window));
+        AssertInsideWindow(fixture.Window, choices[2]);
+        fixture.Input.Press(ControllerAction.Accept);
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.Equal("anime", model.SelectedLibrary!.Id);
+        Assert.Equal(model.SelectedLibrary.Name, title.Text);
+        Assert.Equal(model.SelectedLibrary.Name, AutomationProperties.GetName(switcher));
+        Assert.False(fixture.Shell.FindControl<TextBlock>("DestinationTitle")!.IsEffectivelyVisible);
+        Assert.Equal(Loc.Format("Library.Count", 47),
+            fixture.Shell.LibraryView.FindControl<TextBlock>("LibraryItemCount")!.Text);
+        AssertInsideWindow(fixture.Window, switcher);
+        AssertInsideWindow(fixture.Window, filter);
+        AssertInsideWindow(fixture.Window, sort);
+        Assert.True(title.Bounds.Width <= switcher.Bounds.Width);
+        switcher.Focus();
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Same(filter, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(switcher, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.Equal("anime", Assert.IsType<MediaLibrary>(Assert.IsType<Button>(Focused(fixture.Window)).Tag).Id);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(switcher, Focused(fixture.Window));
     });
 
     [Fact]
@@ -1617,7 +1735,7 @@ public sealed class MainWindowNavigationTests
         Assert.Equal(100, slots.Length);
         Assert.Equal(60, slots.Count(slot => slot.IsPlaceholder));
         var view = fixture.Shell.LibraryView;
-        var filter = view.FindControl<Button>("FilterAllButton")!;
+        var filter = view.FindControl<Button>("FilterMenuButton")!;
         filter.Focus();
         var rows = view.FindControl<ListBox>("LibraryRows")!;
         var scroll = rows.GetVisualDescendants().OfType<ScrollViewer>().First();
@@ -1928,6 +2046,7 @@ public sealed class MainWindowNavigationTests
         public bool PauseLibrary { get; set; }
         public int LibraryTotal { get; set; } = 47;
         public bool LongLibraryTitles { get; set; }
+        public bool LongLibraryName { get; set; }
         public TaskCompletionSource<bool>? LibraryGate { get; set; }
         public int SearchCalls { get; private set; }
         public Task<MediaSearchPage> SearchAsync(AuthenticatedSession session, string query, int startIndex,
@@ -2003,7 +2122,8 @@ public sealed class MainWindowNavigationTests
                 MediaLibrary[] libraries =
                 [
                     new("tv", "TV", "tvshows"), new("collections", "Collections", "boxsets"),
-                    new("movies", "Movies", "movies"), new("people", "People", "people"), new("anime", "Anime", "tvshows"),
+                    new("movies", "Movies", "movies"), new("people", "People", "people"),
+                    new("anime", LongLibraryName ? string.Concat(Enumerable.Repeat("Anime ", 30)) : "Anime", "tvshows"),
                 ];
                 return new MediaPreviewHome(item, [item],
                     libraries.Select(library => new MediaPreviewRail(library.Id, library.Name,
