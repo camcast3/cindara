@@ -12,6 +12,7 @@ public partial class ShellView : UserControl
 {
     private readonly Dictionary<string, Control> _contentMemory = [];
     private string _destination = "Home";
+    private string _settingsCategory = "Preferences";
 
     public ShellView()
     {
@@ -19,6 +20,7 @@ public partial class ShellView : UserControl
         SetSelected(HomeNavigation, true);
         AddHandler(GotFocusEvent, OnShellFocused);
         AddHandler(LostFocusEvent, (_, _) => UpdateRail());
+        SizeChanged += (_, args) => UpdateWorkspaceLayout(args.NewSize.Width);
         NavigationRail.PointerEntered += (_, _) => UpdateRail();
         NavigationRail.PointerExited += (_, _) => UpdateRail();
     }
@@ -36,7 +38,7 @@ public partial class ShellView : UserControl
     {
         "Home" when IsHomeLoading => HomeLoadingAction!,
         "Home" => RetryHomeButton.IsEffectivelyVisible && RetryHomeButton.IsEffectivelyEnabled ? RetryHomeButton : HomeNavigation,
-        "Settings" => SettingsLanguageButton,
+        "Settings" => SettingsPreferencesCategory,
         "Libraries" => LibraryView.IsEffectivelyVisible && LibraryView.InitialFocus != LibraryView
             ? LibraryView.InitialFocus : LibrariesNavigation,
         "Search" => SearchView.IsEffectivelyVisible ? SearchView.InitialFocus : SearchNavigation,
@@ -59,9 +61,11 @@ public partial class ShellView : UserControl
             throw new ArgumentOutOfRangeException(nameof(destination));
         }
 
-        if (destination == "Settings" && _destination != "Settings")
+        var resetSettingsFocus = destination == "Settings" && _destination != "Settings";
+        if (resetSettingsFocus)
         {
             _contentMemory.Remove("Settings");
+            ShowSettingsCategory("Preferences");
         }
 
         if (destination != "Libraries")
@@ -80,6 +84,10 @@ public partial class ShellView : UserControl
         SearchPage.IsVisible = destination == "Search";
         PageScroll.IsVisible = !LibrariesPage.IsVisible && !SearchPage.IsVisible;
         PlaceholderPage.IsVisible = destination == "Downloads";
+        if (resetSettingsFocus)
+        {
+            _contentMemory["Settings"] = SettingsPreferencesCategory;
+        }
         DestinationTitle.Text = Loc.Get($"Nav.{destination}");
         DestinationMessage.Text = destination switch
         {
@@ -107,6 +115,11 @@ public partial class ShellView : UserControl
         }
 
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
+        if (_destination == "Settings" && TryMoveSettings(focused, direction))
+        {
+            return true;
+        }
+
         var buttons = NavigationButtons.GetVisualDescendants().OfType<Button>().ToArray();
         var index = Array.FindIndex(buttons, button => button == focused);
         if (index >= 0)
@@ -173,6 +186,24 @@ public partial class ShellView : UserControl
         }
     }
 
+    private void UpdateWorkspaceLayout(double width)
+    {
+        if (width <= 0)
+        {
+            return;
+        }
+
+        var compact = width < 960;
+        SettingsWorkspace.ColumnDefinitions = compact
+            ? new ColumnDefinitions("*")
+            : new ColumnDefinitions("220,*");
+        SettingsWorkspace.RowDefinitions = compact
+            ? new RowDefinitions("Auto,Auto")
+            : new RowDefinitions("Auto");
+        Grid.SetColumn(SettingsDetail, compact ? 0 : 1);
+        Grid.SetRow(SettingsDetail, compact ? 1 : 0);
+    }
+
     private void OnDestinationClicked(object? sender, RoutedEventArgs args) => Navigate((string)((Button)sender!).Tag!);
     private void OnHomeClicked(object? sender, RoutedEventArgs args) => Navigate("Home");
 
@@ -184,6 +215,73 @@ public partial class ShellView : UserControl
 
     private void OnLibraryLayoutClicked(object? sender, RoutedEventArgs args) =>
         LibraryLayoutRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnSettingsCategoryClicked(object? sender, RoutedEventArgs args)
+    {
+        if (sender is Button { Tag: string category })
+        {
+            ShowSettingsCategory(category);
+        }
+    }
+
+    private void OnSettingsCategoryFocused(object? sender, RoutedEventArgs args) =>
+        OnSettingsCategoryClicked(sender, args);
+
+    private void ShowSettingsCategory(string category)
+    {
+        _settingsCategory = category;
+        SettingsPreferencesPanel.IsVisible = category == "Preferences";
+        SettingsApplicationPanel.IsVisible = category == "Application";
+        SetSelected(SettingsPreferencesCategory, category == "Preferences");
+        SetSelected(SettingsApplicationCategory, category == "Application");
+    }
+
+    private bool TryMoveSettings(Control? focused, NavigationDirection direction)
+    {
+        var categories = SettingsCategories.Children.OfType<Button>().ToArray();
+        var categoryIndex = Array.IndexOf(categories, focused);
+        if (categoryIndex >= 0)
+        {
+            if (direction is NavigationDirection.Up or NavigationDirection.Down)
+            {
+                var next = Math.Clamp(
+                    categoryIndex + (direction == NavigationDirection.Up ? -1 : 1),
+                    0,
+                    categories.Length - 1);
+                categories[next].Focus(NavigationMethod.Directional);
+                return true;
+            }
+
+            if (direction == NavigationDirection.Right)
+            {
+                if (ActiveSettingsActions().FirstOrDefault() is { } action)
+                {
+                    action.Focus(NavigationMethod.Directional);
+                    action.BringIntoView();
+                }
+                return true;
+            }
+
+            return false;
+        }
+
+        if (focused is not null && ActiveSettingsActions().Contains(focused)
+            && direction == NavigationDirection.Left)
+        {
+            var category = categories.Single(button => Equals(button.Tag, _settingsCategory));
+            category.Focus(NavigationMethod.Directional);
+            category.BringIntoView();
+            return true;
+        }
+
+        return false;
+    }
+
+    private Button[] ActiveSettingsActions() =>
+        (_settingsCategory == "Preferences" ? SettingsPreferencesPanel : SettingsApplicationPanel)
+        .GetVisualDescendants().OfType<Button>()
+        .Where(button => button.IsEffectivelyVisible && button.IsEffectivelyEnabled)
+        .ToArray();
 
     private void OnLibraryClicked(object? sender, RoutedEventArgs args)
     {

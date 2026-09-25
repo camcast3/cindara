@@ -13,7 +13,7 @@ namespace Cindara.Desktop.Views;
 
 public partial class LibraryBrowserView : UserControl
 {
-    private const double ReferenceMaximumCardWidth = 247.2;
+    private const double ReferenceMaximumCardWidth = 180;
     private LibraryBrowserViewModel? _model;
     private Button? _focusedCard;
     private bool _pageFocusPending = true;
@@ -40,6 +40,8 @@ public partial class LibraryBrowserView : UserControl
     {
         Resources["Library.CardWidth"] = ReferenceMaximumCardWidth;
         Resources["Library.CardHeight"] = ReferenceMaximumCardWidth * 1.5;
+        Resources["Library.HeroPosterWidth"] = 120d;
+        Resources["Library.HeroPosterHeight"] = 180d;
         InitializeComponent();
         SizeChanged += (_, args) => UpdateCardLayout(args.NewSize.Width);
         DataContextChanged += (_, _) =>
@@ -74,7 +76,7 @@ public partial class LibraryBrowserView : UserControl
 
     private Button[] Choices() => LibraryChoices.GetVisualDescendants().OfType<Button>().ToArray();
 
-    private int Columns => LibraryCards.GetVisualDescendants().OfType<UniformGrid>().FirstOrDefault()?.Columns ?? 1;
+    private int Columns => Math.Max(1, Cards().Length);
 
     private void UpdateCardLayout(double width)
     {
@@ -83,23 +85,14 @@ public partial class LibraryBrowserView : UserControl
             return;
         }
 
-        var columns = width switch
-        {
-            < 560 => 2,
-            < 820 => 3,
-            < 1080 => 4,
-            _ => 5,
-        };
         var maximumCardWidth = width >= 2200
             ? ReferenceMaximumCardWidth * 1.5
             : ReferenceMaximumCardWidth;
-        var cardWidth = Math.Min(maximumCardWidth, Math.Max(120, (width / columns) - 16));
+        var cardWidth = Math.Min(maximumCardWidth, Math.Max(120, width / (width < 960 ? 3.3 : 6.5)));
         Resources["Library.CardWidth"] = cardWidth;
         Resources["Library.CardHeight"] = cardWidth * 1.5;
-        if (LibraryCards.GetVisualDescendants().OfType<UniformGrid>().FirstOrDefault() is { } grid)
-        {
-            grid.Columns = columns;
-        }
+        Resources["Library.HeroPosterWidth"] = Math.Clamp(cardWidth * 0.65, 84, 120);
+        Resources["Library.HeroPosterHeight"] = Math.Clamp(cardWidth * 0.65, 84, 120) * 1.5;
     }
 
     private void OnModelChanged(object? sender, PropertyChangedEventArgs args)
@@ -189,6 +182,11 @@ public partial class LibraryBrowserView : UserControl
 
     private void OnCardFocused(object? sender, RoutedEventArgs args)
     {
+        if (sender is Button { DataContext: MediaPreviewCardViewModel item })
+        {
+            _model!.SelectedItem = item;
+        }
+
         if (_rememberFocus)
         {
             _focusedCard = sender as Button;

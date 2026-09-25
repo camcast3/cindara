@@ -59,6 +59,10 @@
   <data name="Search.Group.Episode" xml:space="preserve"><value>Episodes</value></data>
   <data name="Placeholder.Downloads" xml:space="preserve"><value>Offline media is not available yet. Downloads keeps its place in your navigation.</value></data>
   <data name="Settings.Account" xml:space="preserve"><value>Account</value></data>
+  <data name="Settings.Preferences" xml:space="preserve"><value>Preferences</value></data>
+  <data name="Settings.Application" xml:space="preserve"><value>Application</value></data>
+  <data name="Settings.PreferencesHelp" xml:space="preserve"><value>Choose Cindara's language and arrange the libraries shown in navigation and Home.</value></data>
+  <data name="Settings.ApplicationHelp" xml:space="preserve"><value>Return to your media or exit Cindara.</value></data>
   <data name="Settings.Display" xml:space="preserve"><value>Display</value></data>
   <data name="Settings.Controls" xml:space="preserve"><value>Controls</value></data>
   <data name="Settings.SessionReady" xml:space="preserve"><value>Your secure Jellyfin session is ready.</value></data>

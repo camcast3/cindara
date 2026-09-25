@@ -112,7 +112,6 @@ public partial class MainWindow : Window
         GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.SearchView.ItemRequested += (_, item) => ShowMediaSummary(item);
-        Shell.SearchView.KeyboardRequested += (_, target) => ShowKeyboard(target);
         GalleryView.NavigationWidthChanged += (_, _) => UpdateGalleryFooter();
         UpdateGalleryFooter();
     }
@@ -480,6 +479,9 @@ public partial class MainWindow : Window
             case Button button when button.IsEffectivelyEnabled:
                 ((IInvokeProvider)new ButtonAutomationPeer(button)).Invoke();
                 break;
+            case TextBox textBox when Shell.SearchView.IsEffectivelyVisible
+                && Shell.SearchView.TryActivateTextBox(textBox):
+                break;
             case TextBox textBox when textBox != _keyboardDraft:
                 ShowKeyboard(textBox);
                 break;
@@ -507,6 +509,9 @@ public partial class MainWindow : Window
         else if (_viewModel?.LibraryBrowser?.IsLoading is true)
         {
             _viewModel.LibraryBrowser.CancelLoading();
+        }
+        else if (Shell.SearchView.IsEffectivelyVisible && Shell.SearchView.TryGoBack())
+        {
         }
         else if (_viewModel?.SearchBrowser?.IsLoading is true)
         {

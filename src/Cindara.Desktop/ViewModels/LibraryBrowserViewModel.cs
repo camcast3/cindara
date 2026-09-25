@@ -58,6 +58,9 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     private IReadOnlyList<MediaPreviewCardViewModel> _items = [];
 
     [ObservableProperty]
+    private MediaPreviewCardViewModel? _selectedItem;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]
     private string _message = string.Empty;
 
@@ -155,6 +158,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
             ClearPage();
             _page = page;
             Items = cards;
+            SelectedItem = cards.FirstOrDefault();
             created.Clear();
             Message = string.Empty;
             loaded = true;
@@ -344,6 +348,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         ArtworkMessage = string.Empty;
         var previous = Items;
         Items = [];
+        SelectedItem = null;
         _page = null;
         foreach (var card in previous)
         {

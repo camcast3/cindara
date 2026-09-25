@@ -28,26 +28,58 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
-            <StackPanel x:Name="SettingsPage" IsVisible="False" Spacing="32"
-                        MaxWidth="{DynamicResource Cindara.Adaptive.FormMaxWidth}"
+            <StackPanel x:Name="SettingsPage" IsVisible="False" Spacing="24"
                         HorizontalAlignment="Stretch">
                 <TextBlock Classes="display" Text="{loc:Tr Nav.Settings}" />
-                <Border Classes="settings-card">
-                    <StackPanel x:Name="SettingsActions" Spacing="16">
-                        <Button x:Name="SettingsLanguageButton" Classes="settings-action"
-                                HorizontalAlignment="Stretch"
-                                Content="{loc:Tr Language.Selection}" Click="OnLanguageClicked" />
-                        <Button x:Name="SettingsLibraryLayoutButton" Classes="settings-action"
-                                HorizontalAlignment="Stretch" IsEnabled="{Binding HasLibraryLayout}"
-                                Content="{loc:Tr LibraryLayout.Title}" Click="OnLibraryLayoutClicked" />
-                        <Button x:Name="ExitButton" Classes="settings-action"
-                                HorizontalAlignment="Stretch"
-                                Content="{loc:Tr Action.Exit}" Click="OnExitClicked" />
-                        <Button x:Name="BackHomeButton" Classes="settings-action"
-                                HorizontalAlignment="Stretch"
-                                Content="{loc:Tr Nav.BackHome}" Click="OnHomeClicked" />
-                    </StackPanel>
-                </Border>
+                <Grid x:Name="SettingsWorkspace" ColumnDefinitions="220,*"
+                      ColumnSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}">
+                    <Border Classes="settings-card">
+                        <StackPanel x:Name="SettingsCategories" Spacing="12">
+                            <Button x:Name="SettingsPreferencesCategory" Classes="settings-action"
+                                    HorizontalAlignment="Stretch"
+                                    Content="{loc:Tr Settings.Preferences}"
+                                    Click="OnSettingsCategoryClicked"
+                                    GotFocus="OnSettingsCategoryFocused" Tag="Preferences" />
+                            <Button x:Name="SettingsApplicationCategory" Classes="settings-action"
+                                    HorizontalAlignment="Stretch"
+                                    Content="{loc:Tr Settings.Application}"
+                                    Click="OnSettingsCategoryClicked"
+                                    GotFocus="OnSettingsCategoryFocused" Tag="Application" />
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="SettingsDetail" Grid.Column="1" Classes="settings-card">
+                        <StackPanel>
+                            <StackPanel x:Name="SettingsPreferencesPanel" Spacing="16">
+                                <TextBlock Classes="heading" Text="{loc:Tr Settings.Preferences}" />
+                                <TextBlock Classes="secondary" Text="{loc:Tr Settings.PreferencesHelp}"
+                                           TextWrapping="Wrap" />
+                                <StackPanel x:Name="SettingsActions" Spacing="16">
+                                    <Button x:Name="SettingsLanguageButton" Classes="settings-action"
+                                            HorizontalAlignment="Stretch"
+                                            Content="{loc:Tr Language.Selection}"
+                                            Click="OnLanguageClicked" />
+                                    <Button x:Name="SettingsLibraryLayoutButton" Classes="settings-action"
+                                            HorizontalAlignment="Stretch"
+                                            IsEnabled="{Binding HasLibraryLayout}"
+                                            Content="{loc:Tr LibraryLayout.Title}"
+                                            Click="OnLibraryLayoutClicked" />
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel x:Name="SettingsApplicationPanel" Spacing="16"
+                                        IsVisible="False">
+                                <TextBlock Classes="heading" Text="{loc:Tr Settings.Application}" />
+                                <TextBlock Classes="secondary" Text="{loc:Tr Settings.ApplicationHelp}"
+                                           TextWrapping="Wrap" />
+                                <Button x:Name="ExitButton" Classes="settings-action"
+                                        HorizontalAlignment="Stretch"
+                                        Content="{loc:Tr Action.Exit}" Click="OnExitClicked" />
+                                <Button x:Name="BackHomeButton" Classes="settings-action"
+                                        HorizontalAlignment="Stretch"
+                                        Content="{loc:Tr Nav.BackHome}" Click="OnHomeClicked" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </StackPanel>
         </Grid>
         </ScrollViewer>

@@ -20,19 +20,22 @@ Libraries, and Settings. The product owner removed the speculative
 Home/Trending/Activity/Profile top bar. Home focuses the media content and Settings
 opens the signed-in settings. Libraries use the account's actual server-provided
 entries rather than hard-coded TV/Movie/Anime shortcuts. Search leads to its
-explicit unavailable state. Full details and playback remain assigned to #5 and #4.
+inline controller keyboard, focused-result context, and grouped horizontal result
+rails. Full details and playback remain assigned to the remaining #5 batches and #4.
 
 ## Implemented shell navigation
 
 `ShellView` owns the production frame, not browsing data. Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
 There is no intermediate preview launcher or redundant Home-screen back button.
-Libraries opens paged browsing; Search and Downloads show honest unavailable-content
-states and retain rail focus. Settings exposes Language: English, Library layout, Exit, and Back to Home;
-initial focus is Language. Up/down traverses these actions, and left
-returns to the rail. Button labels are centered with consistent padding.
-Entering Settings from another screen resets focus to Language; moving between
-its actions, language dialog, and rail preserves focus within the same visit.
+Libraries opens bounded paged browsing with a focused-item metadata hero and a
+horizontal poster rail. Search preserves query, grouped result rails, selected
+item, and offsets; Downloads retains an honest unavailable state. Settings exposes
+Language: English, Library layout, Exit, and Back to Home through a category/detail
+split without implying unimplemented settings features. Initial focus is
+Preferences. Up/down changes category, right enters its detail actions, and left
+returns through the category to the rail. Button labels are centered with
+consistent padding.
 Minimal account/window controls are tracked separately in [#27](https://github.com/camcast3/cindara/issues/27);
 expanded settings remain deferred.
 
@@ -126,10 +129,11 @@ logical dimensions:
 | Wide | width 1440-2559 | 32 | 32 |
 | Ten-foot | width 2560 or greater | 48 | 40 |
 
-The library grid independently follows its available content width: two columns
-below 560, three below 820, four below 1080, and five otherwise. Poster width is
-computed from the available column and capped at the approved 247.2 logical
-pixels, or 370.8 at the ten-foot breakpoint; its 2:3 ratio is preserved.
+Library and Search result rails independently follow their available content
+width. Poster width is computed from the actual destination width, remains at
+least 120 logical pixels, and is capped at the approved couch-readable density;
+its 2:3 ratio is preserved. Horizontal scrolling reveals additional bounded page
+results without squeezing cards or clipping the client area.
 Ten-foot typography and bounded forms use a capped 1.5 density scale. This is
 separate from OS display scaling: a physical 4K display at 200% still supplies a
 1920x1080 logical viewport and does not receive the density scale twice.
@@ -173,9 +177,10 @@ All inputs are Avalonia logical dimensions. A physical 3840x2160 TV at 200%
 OS scaling therefore uses the 1920x1080 row; the OS applies the remaining 2x,
 not the gallery. Overscan-safe margins remain the production shell's target.
 
-Poster cards use a 2:3 ratio; landscape cards use 16:9. Home rails reveal part
-of the next card as an affordance. Library grids maximize complete columns
-inside the safe area. Hero artwork carries a dark Cindara gradient so text
+Poster cards use a 2:3 ratio; landscape cards use 16:9. Home, Library, and Search
+rails reveal additional cards through horizontal movement. Library and Search
+heroes update from the focused card without mutating playback state. Hero artwork
+carries a dark Cindara gradient so text
 remains readable. Dialogs dim, but do not blur, the context. Toasts do not take
 focus. Skeletons preserve final geometry and respect reduced motion.
 
@@ -320,19 +325,19 @@ discard the cache. HTTP responses are capped at 8 MiB.
 
 ```text
 [Rail]  Libraries
-        [Library choices]
+        [Horizontal library choices]
+        [Focused-item metadata hero]
         [Selected library / loading or error state]
-        [Poster] [Poster] [Poster] [Poster] [Poster]
+        [Bounded horizontal poster rail]
         [Previous page] [Item range / total] [Next page]
 ```
 
 Initial focus: first poster, library choice if empty, Cancel while loading, or
 Retry after a failed/canceled metadata request. Artwork loading does not disable
-the grid or pagination; it has separate loading/cancel/retry controls.
-Left/right stays within a grid row; up/down
-moves five cards. Up from row one reaches the library choices; left from column
-one enters Libraries in the rail (mirrored for RTL). Paging focuses the first
-card of the new page. The grid keeps only the current page's decoded artwork.
+the rail or pagination; it has separate loading/cancel/retry controls.
+Left/right moves within the poster rail; up returns to library choices and down
+reaches paging. The focused card updates the hero. Paging focuses the first card
+of the new page. Only the current page's decoded artwork is retained.
 Selecting a card opens a read-only metadata summary; Back restores the exact
 card and scroll position. Returning from Home or Settings reuses the page.
 Sorting is alphabetical; configurable filters/sorting are not exposed.
@@ -353,29 +358,32 @@ with an explanation.
 ### Search
 
 ```text
-[Rail]  [Search field] [Clear]
-        [Suggested/result grid]
+[Rail]  [Search field] [Inline keyboard toggle]
+        [Inline controller keyboard when requested]
+        [Focused-result metadata hero]
+        [Movie / Series / Season / Episode result rails]
+        [Previous] [Item range / total] [Next]
 ```
 
-Initial focus: search field. Down enters the first result; right reaches Clear
-when text exists. Controller text entry invokes the platform keyboard. Results
-use library-grid navigation. An empty query shows suggestions; no results shows
-an explanatory empty state and returns up to the field.
+Initial focus: search field. Controller Accept opens the inline keyboard without
+hiding query or result context; Back closes it before leaving Search. Physical
+keyboard input remains direct. Results are grouped into supported Jellyfin types
+and use horizontal rail navigation. Focus updates the metadata hero. Empty,
+loading, canceled, retry, paging, and expired-session states are explicit.
 
 ### Settings
 
 ```text
 [Rail]  Settings
-        [Language: English]
-        [Library layout]
-        [Exit]
-        [Back to Home]
+        [Preferences]  [Language: English / Library layout]
+        [Application]  [Exit / Back to Home]
 ```
 
-Initial focus: Language. Up/down moves between the actions; left returns
-to the rail. The language picker traps focus until selection or Back and currently
-offers English only. Exit closes the app, while Back to Home restores media
-without a new load. No category navigation or expanded settings are exposed yet.
+Initial focus: Preferences. Up/down changes category and its detail pane, right
+enters the visible actions, and left returns through category to the rail. The
+language picker traps focus until selection or Back and currently offers English
+only. Exit closes the app, while Back to Home restores media without a new load.
+The category composition does not add new settings features.
 
 Library layout opens a choice between Sidebar libraries and Home libraries.
 Each editor has explicit Hide/Show and Move up/down actions for every available

@@ -49,6 +49,9 @@ public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposab
     private IReadOnlyList<SearchResultGroupViewModel> _groups = [];
 
     [ObservableProperty]
+    private MediaPreviewCardViewModel? _selectedItem;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]
     private string _message = Loc.Get("Search.Prompt");
 
@@ -152,6 +155,7 @@ public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposab
             ClearResults();
             _page = page;
             Groups = groups;
+            SelectedItem = groups.SelectMany(group => group.Items).FirstOrDefault();
             Message = page.TotalRecordCount == 0 ? Loc.Get("Search.Empty") : string.Empty;
             operation?.Complete();
             NotifyPageChanged();
@@ -302,6 +306,7 @@ public sealed partial class SearchBrowserViewModel : ObservableObject, IDisposab
     {
         var previous = Groups;
         Groups = [];
+        SelectedItem = null;
         _page = null;
         foreach (var group in previous)
         {

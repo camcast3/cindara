@@ -16,14 +16,18 @@ account and return it to sign-in.
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
 Settings. Home includes a single Continue Watching row and recently added media
 from the selected libraries, with no generic Libraries shortcut row. Open libraries
-from the sidebar or library chooser. Libraries open alphabetically sorted, 40-item
-poster pages with explicit Previous/Next controls rather than loading the
-entire collection. Selecting a card opens a read-only summary; Back restores
-the card and scroll position. Full details, episode navigation, search, and
-downloads remain deferred to their roadmap work. Signing in opens media Home directly, without
+from the sidebar or library chooser. Libraries open alphabetically sorted, bounded
+40-item pages presented as a focused-item metadata hero and horizontal poster rail,
+with explicit Previous/Next controls rather than loading the entire collection.
+Selecting a card opens a read-only summary; Back restores the exact card and rail
+position. Search supports debounced physical-keyboard input and an inline controller
+keyboard, grouped movie/series/season/episode rails, bounded paging, cancellation,
+and exact query/focus/scroll restoration. Full details and episode navigation remain
+deferred to the remaining issue #5 batches; downloads remain deferred. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
-Settings contains **Language: English**, **Library layout**, **Exit**, and **Back to Home**.
+Settings uses a controller-first category/detail layout while retaining only
+**Language: English**, **Library layout**, **Exit**, and **Back to Home**.
 Library layout has independent ordered selections for sidebar shortcuts and Home
 libraries. Use each library's Hide/Show and Move up/Move down buttons, then Save layout; Cancel
 discards the draft. Defaults are TV libraries, Movies, then Anime. Choices are
@@ -45,8 +49,9 @@ and retained for seven days; see [diagnostics and privacy](docs/diagnostics.md).
 D-pad/left stick or arrows navigate, Accept/Enter selects, and Back/Escape
 dismisses dialogs or returns to the navigation rail. Start/Options/+ or F11
 toggles fullscreen; **Settings → Exit** closes the app.
-Accept on a text field opens an on-screen keyboard. Saved accounts use the same
-focus-trapped choice dialog as the rest of the shell.
+Accept on authentication text fields opens a focus-trapped on-screen keyboard.
+Search uses an inline controller keyboard so results and query context remain visible.
+Saved accounts use the same focus-trapped choice dialog as the rest of the shell.
 
 The login screen and **Settings** offer **Language: English**.
 English is the only supported UI language. Appearance controls are deferred;
