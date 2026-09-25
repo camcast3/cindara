@@ -63,7 +63,7 @@
         </StackPanel>
 
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-            <ListBox x:Name="LibraryRows" ItemsSource="{Binding Rows}"
+            <ListBox x:Name="LibraryRows" Classes="library-grid" ItemsSource="{Binding Rows}"
                      SelectionMode="Single" IsEnabled="{Binding !IsLoading}">
                 <ListBox.Styles>
                     <Style Selector="ListBoxItem">

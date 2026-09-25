@@ -24,5 +24,11 @@ public sealed class CardFocusStyleTests
         var border = Assert.Single(focusStyle.Elements(xaml + "Setter"),
             setter => (string?)setter.Attribute("Property") == "BorderThickness");
         Assert.Equal("4", (string?)border.Attribute("Value"));
+        var hoverStyle = Assert.Single(styles,
+            style => (string?)style.Attribute("Selector")
+                == "Button.card:pointerover /template/ ContentPresenter");
+        Assert.Contains(hoverStyle.Elements(xaml + "Setter"),
+            setter => (string?)setter.Attribute("Property") == "BorderThickness"
+                && (string?)setter.Attribute("Value") == "2");
     }
 }
