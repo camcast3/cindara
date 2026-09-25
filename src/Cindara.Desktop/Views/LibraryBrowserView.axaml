@@ -80,7 +80,7 @@
                         <StackPanel Orientation="Horizontal"
                                     Spacing="{DynamicResource Cindara.Media.GridSpacing}"
                                     Margin="{DynamicResource Cindara.Media.GridCardMargin}">
-                            <ItemsControl ItemsSource="{Binding Items}">
+                            <ItemsControl ItemsSource="{Binding Slots}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal"
@@ -88,64 +88,59 @@
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
-                                        <StackPanel Spacing="7"
-                                                    Width="{DynamicResource Cindara.Media.GridPosterWidth}">
-                                            <Button Classes="card"
-                                                    Height="{DynamicResource Cindara.Media.GridPosterHeight}"
-                                                    HorizontalAlignment="Stretch"
-                                                    AutomationProperties.Name="{Binding Name}"
-                                                    AutomationProperties.HelpText="{Binding Subtitle}"
-                                                    GotFocus="OnCardFocused"
-                                                    Click="OnCardClicked">
-                                                <Border ClipToBounds="True"
-                                                        CornerRadius="{DynamicResource Cindara.Radius.Medium}">
-                                                    <Grid>
-                                                        <Border IsVisible="{Binding IsArtworkLoading}"
-                                                                Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
-                                                                Opacity="0.55" />
-                                                        <TextBlock Text="{Binding ArtworkPlaceholder}"
-                                                                   IsVisible="{Binding ShowArtworkPlaceholder}"
-                                                                   TextWrapping="Wrap"
-                                                                   HorizontalAlignment="Center"
-                                                                   VerticalAlignment="Center"
-                                                                   Margin="12" />
-                                                        <Image Source="{Binding Artwork}"
-                                                               Stretch="UniformToFill" />
-                                                    </Grid>
-                                                </Border>
-                                            </Button>
-                                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
-                                                       Opacity="{Binding MetadataOpacity}"
-                                                       MaxLines="2"
-                                                       TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Classes="caption"
-                                                       Text="{Binding Subtitle}"
-                                                       Opacity="{Binding MetadataOpacity}"
-                                                       TextWrapping="Wrap" MaxLines="1"
-                                                       TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <ItemsControl ItemsSource="{Binding PlaceholderSlots}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal"
-                                                    Spacing="{DynamicResource Cindara.Media.GridSpacing}" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Spacing="7"
-                                                    Width="{DynamicResource Cindara.Media.GridPosterWidth}">
+                                    <DataTemplate x:DataType="vm:LibraryGridSlotViewModel">
+                                        <Grid Width="{DynamicResource Cindara.Media.GridPosterWidth}">
+                                            <ContentControl Content="{Binding Item}"
+                                                            IsVisible="{Binding HasItem}">
+                                                <ContentControl.ContentTemplate>
+                                                    <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
+                                                        <StackPanel Spacing="7">
+                                                            <Button Classes="card"
+                                                                    Height="{DynamicResource Cindara.Media.GridPosterHeight}"
+                                                                    HorizontalAlignment="Stretch"
+                                                                    AutomationProperties.Name="{Binding Name}"
+                                                                    AutomationProperties.HelpText="{Binding Subtitle}"
+                                                                    GotFocus="OnCardFocused"
+                                                                    Click="OnCardClicked">
+                                                                <Border ClipToBounds="True"
+                                                                        CornerRadius="{DynamicResource Cindara.Radius.Medium}">
+                                                                    <Grid>
+                                                                        <Border IsVisible="{Binding IsArtworkLoading}"
+                                                                                Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
+                                                                                Opacity="0.55" />
+                                                                        <TextBlock Text="{Binding ArtworkPlaceholder}"
+                                                                                   IsVisible="{Binding ShowArtworkPlaceholder}"
+                                                                                   TextWrapping="Wrap"
+                                                                                   HorizontalAlignment="Center"
+                                                                                   VerticalAlignment="Center"
+                                                                                   Margin="12" />
+                                                                        <Image Source="{Binding Artwork}"
+                                                                               Stretch="UniformToFill" />
+                                                                    </Grid>
+                                                                </Border>
+                                                            </Button>
+                                                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                                                       Opacity="{Binding MetadataOpacity}"
+                                                                       MaxLines="2"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Classes="caption"
+                                                                       Text="{Binding Subtitle}"
+                                                                       Opacity="{Binding MetadataOpacity}"
+                                                                       TextWrapping="Wrap" MaxLines="1"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ContentControl.ContentTemplate>
+                                            </ContentControl>
+                                            <StackPanel Spacing="7" IsVisible="{Binding IsPlaceholder}">
                                             <Border Height="{DynamicResource Cindara.Media.GridPosterHeight}"
                                                     Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
                                                     CornerRadius="{DynamicResource Cindara.Radius.Medium}"
                                                     Opacity="0.55" />
                                             <Border Height="20" Background="Transparent" />
                                             <Border Height="16" Background="Transparent" />
-                                        </StackPanel>
+                                            </StackPanel>
+                                        </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

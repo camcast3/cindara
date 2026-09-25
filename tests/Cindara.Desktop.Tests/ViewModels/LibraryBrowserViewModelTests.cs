@@ -347,6 +347,10 @@ public sealed class LibraryBrowserViewModelTests
         Assert.Equal(MediaLibraryPage.PageSize,
             model.Rows.Sum(row => row.PlaceholderSlots.Count));
         Assert.Empty(model.Message);
+        var finalLoadedRow = model.Rows[6];
+        Assert.Equal(6, finalLoadedRow.Slots.Count);
+        Assert.Equal(4, finalLoadedRow.Slots.Count(slot => slot.HasItem));
+        Assert.Equal(2, finalLoadedRow.Slots.Count(slot => slot.IsPlaceholder));
         client.Pending.SetException(new MediaPreviewException(MediaPreviewError.Network, "Load more failed."));
         await loading;
 

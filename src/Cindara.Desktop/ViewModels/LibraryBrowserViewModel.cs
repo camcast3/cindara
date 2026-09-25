@@ -667,6 +667,7 @@ public sealed partial class LibraryGridRowViewModel : ObservableObject
 
     public ObservableCollection<MediaPreviewCardViewModel> Items { get; } = [];
     public ObservableCollection<int> PlaceholderSlots { get; } = [];
+    public ObservableCollection<LibraryGridSlotViewModel> Slots { get; } = [];
 
     [ObservableProperty]
     private bool _hasRetry;
@@ -682,5 +683,33 @@ public sealed partial class LibraryGridRowViewModel : ObservableObject
         {
             PlaceholderSlots.Add(PlaceholderSlots.Count);
         }
+
+        var desired = Items
+            .Select(item => new LibraryGridSlotViewModel(item))
+            .Concat(PlaceholderSlots.Select(_ => new LibraryGridSlotViewModel(null)))
+            .ToArray();
+        while (Slots.Count > desired.Length)
+        {
+            Slots.RemoveAt(Slots.Count - 1);
+        }
+
+        for (var index = 0; index < desired.Length; index++)
+        {
+            if (index >= Slots.Count)
+            {
+                Slots.Add(desired[index]);
+            }
+            else if (!ReferenceEquals(Slots[index].Item, desired[index].Item))
+            {
+                Slots[index] = desired[index];
+            }
+        }
     }
+}
+
+public sealed class LibraryGridSlotViewModel(MediaPreviewCardViewModel? item)
+{
+    public MediaPreviewCardViewModel? Item { get; } = item;
+    public bool HasItem => Item is not null;
+    public bool IsPlaceholder => Item is null;
 }
