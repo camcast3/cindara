@@ -16,7 +16,7 @@ public partial class MainWindow
             return;
         }
 
-        BeginModal(Loc.Get("LibraryLayout.Title"));
+        BeginFullScreenModal(Loc.Get("LibraryLayout.Title"));
         ModalActions.Children.Add(new TextBlock { Text = Loc.Get("LibraryLayout.Scope"), TextWrapping = TextWrapping.Wrap });
         if (!string.IsNullOrEmpty(layout.Status))
         {

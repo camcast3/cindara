@@ -64,6 +64,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [NotifyCanExecuteChangedFor(nameof(InitializeCommand))]
     [NotifyCanExecuteChangedFor(nameof(ShowDesignGalleryCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenHomeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SelectServerCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddAccountCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -84,6 +86,23 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         ? LocaleFormat.SessionDisplayName(profile) : string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ServerAccounts))]
+    private ServerIdentity? _selectedSavedServer;
+
+    public IReadOnlyList<ServerIdentity> SavedServers => SavedSessions
+        .GroupBy(profile => ServerKey(profile.Server))
+        .Select(group => group.First().Server)
+        .OrderBy(server => server.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+        .ThenBy(server => server.BaseUri.AbsoluteUri, StringComparer.Ordinal)
+        .ToArray();
+
+    public IReadOnlyList<SessionProfile> ServerAccounts => SelectedSavedServer is { } server
+        ? SavedSessions.Where(profile => SameServer(profile.Server, server))
+            .OrderBy(profile => profile.Username, StringComparer.CurrentCultureIgnoreCase)
+            .ToArray()
+        : [];
+
+    [ObservableProperty]
     private string _statusMessage = Loc.Get("Status.LoadingSessions");
 
     [ObservableProperty]
@@ -91,6 +110,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private bool _isServerEntryVisible;
+
+    [ObservableProperty]
+    private bool _isServerSelectionVisible;
 
     [ObservableProperty]
     private bool _isSignInVisible;
@@ -115,6 +137,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private LibraryBrowserViewModel? _libraryBrowser;
 
     public bool HasLibraryBrowser => LibraryBrowser is not null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSearchBrowser))]
+    private SearchBrowserViewModel? _searchBrowser;
+
+    public bool HasSearchBrowser => SearchBrowser is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasLibraryLayout))]
@@ -279,6 +307,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var selectedServer = SelectedSavedServer;
         IsBusy = true;
         using var operation = _diagnostics?.Begin(DiagnosticArea.Storage, DiagnosticAction.RemoveSession);
         try
@@ -286,7 +315,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             await _authenticationService.RemoveAsync(profile, cancellationToken);
             await RefreshSavedSessionsAsync(cancellationToken);
             StatusMessage = Loc.Format("Status.RemovedAccount", LocaleFormat.SessionDisplayName(profile));
-            ShowSavedSessionsOrServerEntry(false);
+            if (selectedServer is not null)
+            {
+                SelectedSavedServer = SavedServers.FirstOrDefault(server => SameServer(server, selectedServer));
+            }
+
+            if (SelectedSavedServer is not null && ServerAccounts.Count > 0)
+            {
+                SelectedSavedSession = ServerAccounts[0];
+                SetVisibleState(savedSessions: true);
+            }
+            else
+            {
+                ShowSavedSessionsOrServerEntry(false);
+            }
             operation?.Complete();
         }
         catch (AuthenticationException exception)
@@ -346,6 +388,39 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private bool CanNavigate() => !IsBusy;
 
+    [RelayCommand(CanExecute = nameof(CanNavigate))]
+    private void SelectServer(ServerIdentity server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        if (!SavedServers.Any(saved => SameServer(saved, server)))
+        {
+            throw new ArgumentException("The server is not available in saved sessions.", nameof(server));
+        }
+
+        SelectedSavedServer = server;
+        CurrentServer = server;
+        ServerAddress = server.BaseUri.ToString();
+        SelectedSavedSession = ServerAccounts[0];
+        Password = string.Empty;
+        SetVisibleState(savedSessions: true);
+        StatusMessage = Loc.Get("Status.ChooseAccount");
+    }
+
+    [RelayCommand(CanExecute = nameof(CanNavigate))]
+    private void AddAccount()
+    {
+        if (SelectedSavedServer is not { } server)
+        {
+            throw new InvalidOperationException("Choose a server before adding an account.");
+        }
+
+        CurrentServer = server;
+        Username = string.Empty;
+        Password = string.Empty;
+        ShowSignIn();
+        StatusMessage = Loc.Format("Status.Connected", server.DisplayName);
+    }
+
     private bool CanShowDesignGallery() =>
         !_disposed && !IsBusy && _currentSession is not null && _mediaPreviewClient is not null;
 
@@ -396,6 +471,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             ClearDesignGallery();
             DesignGallery = gallery;
             LibraryBrowser = new LibraryBrowserViewModel(_mediaPreviewClient, session, home.Libraries,
+                exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
+            SearchBrowser = new SearchBrowserViewModel(_mediaPreviewClient, session,
                 exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
             if (_libraryLayoutStore is not null)
             {
@@ -491,6 +568,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         SavedSessions.Remove(profile);
         SelectedSavedSession = SavedSessions.FirstOrDefault();
         CurrentServer = profile.Server;
+        SelectedSavedServer = profile.Server;
         ServerAddress = profile.Server.BaseUri.ToString();
         Username = profile.Username;
         Password = string.Empty;
@@ -503,6 +581,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void AddServer()
     {
         CurrentServer = null;
+        SelectedSavedServer = null;
         ServerAddress = string.Empty;
         ShowServerEntry();
         StatusMessage = Loc.Get("Status.EnterServer");
@@ -512,7 +591,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void BackToSessions()
     {
         Password = string.Empty;
-        ShowSavedSessionsOrServerEntry();
+        if (IsSignInVisible && SelectedSavedServer is not null && ServerAccounts.Count > 0)
+        {
+            SetVisibleState(savedSessions: true);
+            StatusMessage = Loc.Get("Status.ChooseAccount");
+        }
+        else
+        {
+            ShowSavedSessionsOrServerEntry();
+        }
     }
 
     private async Task RefreshSavedSessionsAsync(CancellationToken cancellationToken)
@@ -525,6 +612,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         SelectedSavedSession = SavedSessions.FirstOrDefault();
+        OnPropertyChanged(nameof(SavedServers));
+        OnPropertyChanged(nameof(ServerAccounts));
     }
 
     private void ShowSavedSessionsOrServerEntry(bool updateStatus = true)
@@ -539,10 +628,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            SetVisibleState(savedSessions: true);
+            SelectedSavedServer = SavedServers[0];
+            SetVisibleState(serverSelection: true);
             if (updateStatus)
             {
-                StatusMessage = Loc.Get("Status.ChooseAccount");
+                StatusMessage = Loc.Get("Status.ChooseServer");
             }
         }
     }
@@ -564,11 +654,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void SetVisibleState(
         bool serverEntry = false,
+        bool serverSelection = false,
         bool signIn = false,
         bool savedSessions = false,
         bool authenticated = false)
     {
         IsServerEntryVisible = serverEntry;
+        IsServerSelectionVisible = serverSelection;
         IsSignInVisible = signIn;
         AreSavedSessionsVisible = savedSessions;
         IsAuthenticatedVisible = authenticated;
@@ -598,6 +690,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var browser = LibraryBrowser;
         LibraryBrowser = null;
         browser?.Dispose();
+        var search = SearchBrowser;
+        SearchBrowser = null;
+        search?.Dispose();
     }
 
     public void Dispose()
@@ -608,4 +703,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _mediaPreviewClient?.ClearImageCache();
         GC.SuppressFinalize(this);
     }
+
+    private static (string Id, string BaseUri) ServerKey(ServerIdentity server) =>
+        (server.Id, server.BaseUri.AbsoluteUri);
+
+    private static bool SameServer(ServerIdentity left, ServerIdentity right) =>
+        ServerKey(left) == ServerKey(right);
 }

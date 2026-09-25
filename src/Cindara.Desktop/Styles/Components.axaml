@@ -7,6 +7,12 @@
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Background}" />
     </Style>
 
+    <Style Selector="Button.library-title">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Padding" Value="8,0" />
+    </Style>
+
     <Style Selector="TextBlock">
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
@@ -148,6 +154,8 @@
     </Style>
     <Style Selector="Button.card:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource Cindara.Brush.SurfaceRaised}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Accent}" />
+        <Setter Property="BorderThickness" Value="2" />
     </Style>
     <Style Selector="Button.card:focus /template/ ContentPresenter">
         <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.AccentStrong}" />
@@ -166,6 +174,21 @@
     <Style Selector="Button.card.error /template/ ContentPresenter">
         <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Error}" />
         <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="ListBox.library-grid ListBoxItem /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBox.library-grid ListBoxItem:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBox.library-grid ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style Selector="Border.hero">

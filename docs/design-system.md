@@ -9,39 +9,42 @@ branding, exact layout, or proprietary interaction.
 ## Information architecture
 
 The production information architecture exposes **Home**, **Libraries**, **Search**,
-**Downloads**, and **Settings** in that order. It is collapsed to icons during
-browsing and expands when focused. Downloads is a visible placeholder until
-offline media ships so later work does not destabilize navigation order.
-Details are entered from content rather than added to the rail. Playback is a
-temporary full-screen layer.
+**Downloads**, and **Settings**. Home alone owns the persistent icon rail, hero,
+and media rows. Selecting a non-Home destination opens a dedicated full-screen
+surface with an explicit Back action; it does not repeat the Home rail. Downloads
+is a visible placeholder until offline media ships. Details are entered from
+content, and playback is a temporary full-screen layer.
 
 The authenticated Home uses a compact icon rail with Search, Home,
 Libraries, and Settings. The product owner removed the speculative
 Home/Trending/Activity/Profile top bar. Home focuses the media content and Settings
 opens the signed-in settings. Libraries use the account's actual server-provided
 entries rather than hard-coded TV/Movie/Anime shortcuts. Search leads to its
-explicit unavailable state. Full details and playback remain assigned to #5 and #4.
+inline controller keyboard, focused-result context, and grouped horizontal result
+rails. Full details and playback remain assigned to the remaining #5 batches and #4.
 
 ## Implemented shell navigation
 
-`ShellView` owns the production frame, not browsing data. Sign-in opens media
+`ShellView` owns the full-screen non-Home destination frame, not browsing data.
+Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
 There is no intermediate preview launcher or redundant Home-screen back button.
-Libraries opens paged browsing; Search and Downloads show honest unavailable-content
-states and retain rail focus. Settings exposes Language: English, Library layout, Exit, and Back to Home;
-initial focus is Language. Up/down traverses these actions, and left
-returns to the rail. Button labels are centered with consistent padding.
-Entering Settings from another screen resets focus to Language; moving between
-its actions, language dialog, and rail preserves focus within the same visit.
+Each library opens incrementally loaded virtualized poster-grid browsing headed
+by its actual name, with a library switcher, compact filter/sort menus, and A–Z
+title controls. Search preserves one combined result grid, query, selected
+item, and offsets; Downloads retains an honest unavailable state. Settings exposes
+Language: English, Library layout, Exit, and Back to Home through a category/detail
+split without implying unimplemented settings features. Initial focus is
+Preferences. Up/down changes category, right enters its detail actions, and left
+returns through the category to the rail. Button labels are centered with
+consistent padding.
 Minimal account/window controls are tracked separately in [#27](https://github.com/camcast3/cindara/issues/27);
 expanded settings remain deferred.
 
-The rail expands on focus or hover and collapses to original vector icons when
-content is focused. Up/down follows Home, Libraries, Search, Downloads, Settings
-without wrapping. Accept opens the focused destination. Right returns to remembered
-content in the current destination; left or Back from content enters its selected
-rail item. Back from the settings rail returns to media Home without reloading it.
-Exit closes the app; Back to Home restores media and focus without reloading.
+The Home rail expands on focus or hover and collapses to original vector icons
+when content is focused. Accept opens the focused destination. Non-Home Back
+returns directly to the exact source action or library shortcut on Home without
+reloading it. Exit closes the app; Back to Home restores media and focus.
 The login screen offers only the English language selector alongside authentication.
 
 `FocusNavigationService` scopes navigation to the active screen or dialog.
@@ -126,10 +129,11 @@ logical dimensions:
 | Wide | width 1440-2559 | 32 | 32 |
 | Ten-foot | width 2560 or greater | 48 | 40 |
 
-The library grid independently follows its available content width: two columns
-below 560, three below 820, four below 1080, and five otherwise. Poster width is
-computed from the available column and capped at the approved 247.2 logical
-pixels, or 370.8 at the ten-foot breakpoint; its 2:3 ratio is preserved.
+Library and Search grids independently follow their available content width.
+Poster width is computed from the actual destination width, remains at
+least 120 logical pixels, and is capped at the approved couch-readable density;
+its 2:3 ratio is preserved. Library metadata appends in bounded batches while
+virtualized rows prevent the complete library from realizing controls at once.
 Ten-foot typography and bounded forms use a capped 1.5 density scale. This is
 separate from OS display scaling: a physical 4K display at 200% still supplies a
 1920x1080 logical viewport and does not receive the density scale twice.
@@ -161,6 +165,14 @@ while the rail itself ranges from 72 logical pixels on compact windows to 192
 at the 4K logical profile. Artwork/card density continues to follow width so
 posters are not made sparse merely because typography must shrink.
 
+`ResponsiveDensityProfile` promotes those same capped scales to every non-Home
+surface. Search/Library grid posters use a 270 x 405 reference size and 24-pixel
+gutters multiplied by Home's card scale. Destination typography and navigation
+actions use Home's height-derived scale, with 48 logical pixels as the minimum
+action target. Login cards, Settings categories/details, diagnostics, keyboard
+overlays, and future details therefore respond to the same logical viewport and
+do not maintain independent screen-specific size rules.
+
 | Logical viewport | Card scale | Hero text scale | Hero height |
 | --- | --- | --- | --- |
 | 1280x720 | 1 | 0.7 | 299.2 |
@@ -173,17 +185,19 @@ All inputs are Avalonia logical dimensions. A physical 3840x2160 TV at 200%
 OS scaling therefore uses the 1920x1080 row; the OS applies the remaining 2x,
 not the gallery. Overscan-safe margins remain the production shell's target.
 
-Poster cards use a 2:3 ratio; landscape cards use 16:9. Home rails reveal part
-of the next card as an affordance. Library grids maximize complete columns
-inside the safe area. Hero artwork carries a dark Cindara gradient so text
+Poster cards use a 2:3 ratio; landscape cards use 16:9. Home rails reveal
+additional cards through horizontal movement; Library and Search use vertically
+scrolling multi-row grids. Hero artwork
+carries a dark Cindara gradient so text
 remains readable. Dialogs dim, but do not blur, the context. Toasts do not take
 focus. Skeletons preserve final geometry and respect reduced motion.
 
-Media cards are 20% wider and taller than the initial browsing slice. Before
+Home media cards are 20% wider and taller than the initial browsing slice. Before
 viewport scaling, Home landscape cards are 348 x 195.6 and Home posters are
-187.2 x 280.8 logical pixels. Library-grid posters are 247.2 x 372 logical
-pixels in the existing shell coordinate system. Text sizes, spacing, and viewport
-scaling remain unchanged. Short windows reduce the hero's height to leave room
+187.2 x 280.8 logical pixels. The dedicated Library grid targets 270 x 405
+logical-pixel posters with 24-pixel horizontal and vertical gutters, reducing the
+responsive column count rather than shrinking below the approved couch size.
+Text sizes and viewport scaling remain unchanged. Short windows reduce the hero's height to leave room
 for a full poster, its labels, and input hints; 1080p/ultrawide/4K hero geometry
 is unchanged.
 
@@ -288,9 +302,10 @@ Startup uses the OS-selected display rather than persisting a display preference
 
 This gallery intentionally caps rows at 20 items and preloads a bounded subset
 of recently-added backdrops, falling back to card artwork elsewhere. Library
-destinations publish at most 40 metadata cards per page without waiting for
-artwork or preloading backdrops. Six background workers progressively fill the
-existing cards, preserving focus. Poster requests keep a 15-second timeout;
+destinations append metadata in 40-item batches without waiting for artwork or
+preloading backdrops. Only nearby virtualized rows retain decoded posters. Six
+background workers progressively fill the active artwork window, preserving focus.
+Poster requests keep a 15-second timeout;
 failure leaves the grid usable and offers an explicit artwork-only retry.
 Playback and mutations are not implemented here. Metadata and artwork overlap under a six-request cap,
 images are deduplicated within the request, and a 30-second deadline prevents
@@ -316,26 +331,55 @@ so recently inserted images may expire sooner; there is no per-image minimum
 lifetime. Per-image expiry is deferred to #10. Authentication boundaries also
 discard the cache. HTTP responses are capped at 8 MiB.
 
+### Login
+
+```text
+[Ambient Cindara background]
+          Step 1: [Saved server / Add server]
+          Step 2: [Saved account / Add account]
+          Step 3: [Restore or username/password sign-in]
+[Language]          [Progress]          [Diagnostics]
+```
+
+Each step has one primary decision. Saved sessions are grouped by canonical
+server, then user. Selecting a saved user attempts protected restoration and
+shows credentials only for a new or rejected session. Passwords remain ephemeral.
+
 ### Library
 
 ```text
-[Rail]  Libraries
-        [Library choices]
-        [Selected library / loading or error state]
-        [Poster] [Poster] [Poster] [Poster] [Poster]
-        [Previous page] [Item range / total] [Next page]
+[Back]  Anime [v]
+        [All titles v] [Title A–Z v]                   [95 titles]
+        [Poster] [Poster] [Poster] [Poster] ...
+        [Poster] [Poster] [Poster] [Poster] ... [All / A–Z rail]
 ```
 
-Initial focus: first poster, library choice if empty, Cancel while loading, or
-Retry after a failed/canceled metadata request. Artwork loading does not disable
-the grid or pagination; it has separate loading/cancel/retry controls.
-Left/right stays within a grid row; up/down
-moves five cards. Up from row one reaches the library choices; left from column
-one enters Libraries in the rail (mirrored for RTL). Paging focuses the first
-card of the new page. The grid keeps only the current page's decoded artwork.
+The heading uses the current server-provided library name, not "Libraries".
+Selecting it opens a controller-friendly library menu. The filter menu contains
+All titles, Unwatched, and Favorites; the sort menu contains Title A–Z and Title
+Z–A. Each launcher displays its active value, and menus focus and mark the current
+choice. Back/Escape closes a menu and restores its launcher without changing the
+query or grid position. Selecting the current choice does not fetch again.
+Small viewports wrap the toolbar and place the quiet total below its controls;
+long library names truncate visually but retain their full accessible name.
+Initial focus: first poster, filter menu if empty, Back while loading, or
+Retry after a failed/canceled metadata request. Artwork loads silently in each
+poster without disabling the grid; failures offer an artwork-only retry.
+Directional navigation follows the live responsive column count. Entering the
+final loaded row by focus or scrolling requests the next 40 metadata items once.
+After the first batch, 60 blank slots stay ahead of loaded items, capped to the
+remaining library count. Responses fill existing slots and replenish the buffer
+only at its far end; starting a request does not insert rows. Loaded and blank
+slots reserve identical poster, two-line title, and year geometry at every text scale.
+The title rail filters to All or titles beginning with A–Z and resets loaded items.
+Filter/sort changes commit only after a successful first batch. A failed incremental
+batch preserves posters and the buffer, replacing its first blank with a
+Retry loading more tile until explicitly retried. Lightweight
+metadata is retained; decoded artwork outside nearby rows is disposed and can reload
+through the session byte cache.
 Selecting a card opens a read-only metadata summary; Back restores the exact
-card and scroll position. Returning from Home or Settings reuses the page.
-Sorting is alphabetical; configurable filters/sorting are not exposed.
+card, loaded batches, and scroll position. Returning from Home or Settings reuses
+the grid.
 
 ### Details
 
@@ -353,29 +397,34 @@ with an explanation.
 ### Search
 
 ```text
-[Rail]  [Search field] [Clear]
-        [Suggested/result grid]
+[Back]  [Search field] [Controller keyboard]
+        [Poster] [Poster] [Poster] [Poster] ...
+        [Poster] [Poster] [Poster] [Poster] ...
+        [Previous] [Item range / total] [Next]
 ```
 
-Initial focus: search field. Down enters the first result; right reaches Clear
-when text exists. Controller text entry invokes the platform keyboard. Results
-use library-grid navigation. An empty query shows suggestions; no results shows
-an explanatory empty state and returns up to the field.
+Initial focus: search field. Controller Accept opens a temporary full-screen
+keyboard overlay; Done restores the exact grid focus/offset and Back dismisses
+the keyboard before leaving Search. Physical keyboard input remains direct.
+Supported Jellyfin types share one combined poster grid with title/year; richer
+metadata appears only after opening details. Empty, loading, canceled, retry,
+paging, and expired-session states are explicit.
 
 ### Settings
 
 ```text
-[Rail]  Settings
-        [Language: English]
-        [Library layout]
-        [Exit]
-        [Back to Home]
+[Back]  Settings
+        [Preferences]    [Language: English]
+        [Library layout] [Configure sidebar / Home order]
+        [Application]    [Exit / Back to Home]
+        [Diagnostics]    [Open local diagnostics]
 ```
 
-Initial focus: Language. Up/down moves between the actions; left returns
-to the rail. The language picker traps focus until selection or Back and currently
-offers English only. Exit closes the app, while Back to Home restores media
-without a new load. No category navigation or expanded settings are exposed yet.
+Initial focus: Preferences. Up/down changes category and its detail pane, right
+enters the visible actions, and left returns through category to Back. The
+language picker traps focus until selection or Back and currently offers English
+only. Exit closes the app, while Back to Home restores media without a new load.
+The category composition does not add new settings features.
 
 Library layout opens a choice between Sidebar libraries and Home libraries.
 Each editor has explicit Hide/Show and Move up/down actions for every available

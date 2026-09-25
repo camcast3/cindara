@@ -6,6 +6,9 @@
   <data name="Brand.Monogram" xml:space="preserve"><value>C</value></data>
   <data name="Auth.Tagline" xml:space="preserve"><value>Your media. Native everywhere.</value></data>
   <data name="Auth.Server" xml:space="preserve"><value>Jellyfin server</value></data>
+  <data name="Auth.ChooseServer" xml:space="preserve"><value>Choose a Jellyfin server</value></data>
+  <data name="Auth.ChooseServerHelp" xml:space="preserve"><value>Select a saved server or add another one.</value></data>
+  <data name="Auth.ServerHelp" xml:space="preserve"><value>Enter the complete HTTPS address, including any Jellyfin base path.</value></data>
   <data name="Auth.ServerAddress" xml:space="preserve"><value>Jellyfin server address</value></data>
   <data name="Auth.ServerExample" xml:space="preserve"><value>https://jellyfin.example.com</value></data>
   <data name="Auth.Connect" xml:space="preserve"><value>Connect</value></data>
@@ -16,7 +19,14 @@
   <data name="Auth.PasswordName" xml:space="preserve"><value>Jellyfin password</value></data>
   <data name="Auth.Password" xml:space="preserve"><value>Password</value></data>
   <data name="Auth.SignIn" xml:space="preserve"><value>Sign in</value></data>
+  <data name="Auth.SignInHelp" xml:space="preserve"><value>Enter the account credentials for this server. The password is used only for this sign-in and is never saved.</value></data>
+  <data name="Auth.StepServer" xml:space="preserve"><value>Step 1 of 3 · Server</value></data>
+  <data name="Auth.StepAccount" xml:space="preserve"><value>Step 2 of 3 · Account</value></data>
+  <data name="Auth.StepSignIn" xml:space="preserve"><value>Step 3 of 3 · Sign in</value></data>
   <data name="Auth.ChooseSaved" xml:space="preserve"><value>Choose saved Jellyfin account</value></data>
+  <data name="Auth.ChooseAccount" xml:space="preserve"><value>Choose an account</value></data>
+  <data name="Auth.ChooseAccountHelp" xml:space="preserve"><value>Select a saved user for this server. Cindara will restore the protected session when possible.</value></data>
+  <data name="Auth.AddAccount" xml:space="preserve"><value>Add an account</value></data>
   <data name="Auth.RemoveSaved" xml:space="preserve"><value>Remove saved account</value></data>
   <data name="Auth.AddServer" xml:space="preserve"><value>Add another server</value></data>
   <data name="Auth.StorageNotice" xml:space="preserve"><value>Passwords are never saved. Tokens use your operating system's protected storage.</value></data>
@@ -39,8 +49,30 @@
   <data name="Home.Preview" xml:space="preserve"><value>Preview my media</value></data>
   <data name="Placeholder.Libraries" xml:space="preserve"><value>Library browsing is coming next. Your saved Jellyfin account is ready.</value></data>
   <data name="Placeholder.Search" xml:space="preserve"><value>Search and media details will arrive after library browsing.</value></data>
+  <data name="Search.Name" xml:space="preserve"><value>Search your Jellyfin library</value></data>
+  <data name="Search.Placeholder" xml:space="preserve"><value>Movie, series, season, or episode</value></data>
+  <data name="Search.Help" xml:space="preserve"><value>Type with a physical keyboard, or select this field with a controller to open the on-screen keyboard.</value></data>
+  <data name="Search.Keyboard" xml:space="preserve"><value>On-screen keyboard</value></data>
+  <data name="Search.Prompt" xml:space="preserve"><value>Enter a title to search your available movie and TV libraries.</value></data>
+  <data name="Search.Waiting" xml:space="preserve"><value>Waiting for you to finish typing...</value></data>
+  <data name="Search.Loading" xml:space="preserve"><value>Searching your library...</value></data>
+  <data name="Search.Canceled" xml:space="preserve"><value>Search canceled. Your query is still available.</value></data>
+  <data name="Search.Empty" xml:space="preserve"><value>No matching movies, series, seasons, or episodes were found.</value></data>
+  <data name="Search.Unavailable" xml:space="preserve"><value>Search is unavailable until Home finishes loading your authenticated library session.</value></data>
+  <data name="Search.Retry" xml:space="preserve"><value>Retry search</value></data>
+  <data name="Search.Previous" xml:space="preserve"><value>Previous results</value></data>
+  <data name="Search.Next" xml:space="preserve"><value>Next results</value></data>
+  <data name="Search.Page" xml:space="preserve"><value>{0:N0}-{1:N0} of {2:N0} results</value></data>
+  <data name="Search.Group.Movie" xml:space="preserve"><value>Movies</value></data>
+  <data name="Search.Group.Series" xml:space="preserve"><value>Series</value></data>
+  <data name="Search.Group.Season" xml:space="preserve"><value>Seasons</value></data>
+  <data name="Search.Group.Episode" xml:space="preserve"><value>Episodes</value></data>
   <data name="Placeholder.Downloads" xml:space="preserve"><value>Offline media is not available yet. Downloads keeps its place in your navigation.</value></data>
   <data name="Settings.Account" xml:space="preserve"><value>Account</value></data>
+  <data name="Settings.Preferences" xml:space="preserve"><value>Preferences</value></data>
+  <data name="Settings.Application" xml:space="preserve"><value>Application</value></data>
+  <data name="Settings.PreferencesHelp" xml:space="preserve"><value>Choose Cindara's language and arrange the libraries shown in navigation and Home.</value></data>
+  <data name="Settings.ApplicationHelp" xml:space="preserve"><value>Return to your media or exit Cindara.</value></data>
   <data name="Settings.Display" xml:space="preserve"><value>Display</value></data>
   <data name="Settings.Controls" xml:space="preserve"><value>Controls</value></data>
   <data name="Settings.SessionReady" xml:space="preserve"><value>Your secure Jellyfin session is ready.</value></data>
@@ -101,18 +133,27 @@
   <data name="Action.Exit" xml:space="preserve"><value>Exit</value></data>
   <data name="Home.Empty" xml:space="preserve"><value>No media in your Home rows yet. Choose a library to browse.</value></data>
   <data name="Library.NoLibraries" xml:space="preserve"><value>No supported movie or TV libraries are available to this account. Check library types and account access on your server.</value></data>
-  <data name="Library.Loading" xml:space="preserve"><value>Loading library...</value></data>
+  <data name="Library.RetryMore" xml:space="preserve"><value>Retry loading more</value></data>
   <data name="Library.Canceled" xml:space="preserve"><value>Loading canceled. Retry to load this page.</value></data>
   <data name="Library.Empty" xml:space="preserve"><value>This library is empty.</value></data>
   <data name="Library.Retry" xml:space="preserve"><value>Retry loading page</value></data>
-  <data name="Library.Previous" xml:space="preserve"><value>Previous page</value></data>
-  <data name="Library.Next" xml:space="preserve"><value>Next page</value></data>
-  <data name="Library.Page" xml:space="preserve"><value>{0:N0}-{1:N0} of {2:N0}</value></data>
+  <data name="Library.Switch" xml:space="preserve"><value>Choose a library</value></data>
+  <data name="Library.Switch.Help" xml:space="preserve"><value>Change the library being viewed.</value></data>
+  <data name="Library.Filter.Title" xml:space="preserve"><value>Filter titles</value></data>
+  <data name="Library.Filter.Action" xml:space="preserve"><value>Filter: {0}</value></data>
+  <data name="Library.Sort.Title" xml:space="preserve"><value>Sort titles</value></data>
+  <data name="Library.Sort.Action" xml:space="preserve"><value>Sort: {0}</value></data>
+  <data name="Library.Count" xml:space="preserve"><value>{0:N0} titles</value></data>
+  <data name="Library.Filter.All" xml:space="preserve"><value>All titles</value></data>
+  <data name="Library.Filter.Unwatched" xml:space="preserve"><value>Unwatched</value></data>
+  <data name="Library.Filter.Favorites" xml:space="preserve"><value>Favorites</value></data>
+  <data name="Library.Sort.Ascending" xml:space="preserve"><value>Title A–Z</value></data>
+  <data name="Library.Sort.Descending" xml:space="preserve"><value>Title Z–A</value></data>
+  <data name="Library.Letter.All" xml:space="preserve"><value>All titles</value></data>
+  <data name="Library.Loaded" xml:space="preserve"><value>{0:N0} of {1:N0} loaded</value></data>
   <data name="Library.ArtworkUnavailable" xml:space="preserve"><value>Artwork unavailable</value></data>
-  <data name="Library.LoadingArtwork" xml:space="preserve"><value>Loading artwork...</value></data>
   <data name="Library.ArtworkFailed" xml:space="preserve"><value>Some artwork could not be loaded. You can still browse or retry the missing artwork.</value></data>
   <data name="Library.ArtworkCanceled" xml:space="preserve"><value>Artwork loading canceled. You can still browse or retry the missing artwork.</value></data>
-  <data name="Library.CancelArtwork" xml:space="preserve"><value>Cancel artwork loading</value></data>
   <data name="Library.RetryArtwork" xml:space="preserve"><value>Retry missing artwork</value></data>
   <data name="LibraryLayout.Title" xml:space="preserve"><value>Library layout</value></data>
   <data name="LibraryLayout.Scope" xml:space="preserve"><value>Choose and order libraries separately for the sidebar and Home. Saved for this account and server on this device.</value></data>

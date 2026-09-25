@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using Cindara.Core.Authentication;
 using Cindara.Core.Diagnostics;
 using Cindara.Core.Jellyfin;
@@ -10,14 +11,22 @@ namespace Cindara.Desktop.ViewModels;
 
 public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposable
 {
+    private const int PlaceholderBufferSize = 60;
     private readonly IJellyfinMediaPreviewClient _client;
     private readonly AuthenticatedSession _session;
     private readonly Func<MediaPreviewException, Task> _onAccessDenied;
     private readonly Func<MediaPreviewItem, MediaPreviewCardViewModel> _createCard;
     private readonly Func<byte[], PreviewImage> _decodeArtwork;
     private readonly LocalDiagnostics? _diagnostics;
+    private readonly List<MediaPreviewItem> _sources = [];
     private bool _disposed;
-    private MediaLibraryPage? _page;
+    private MediaLibraryQuery _activeQuery = new();
+    private MediaLibraryQuery? _retryQuery;
+    private bool _retryAppend;
+    private int _totalRecordCount;
+    private int _columnCount = 6;
+    private (int Start, int End) _artworkWindow;
+    private long _artworkWindowGeneration;
 
     internal LibraryBrowserViewModel(
         IJellyfinMediaPreviewClient client,
@@ -39,23 +48,51 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
 
     public IReadOnlyList<MediaLibrary> Libraries { get; }
     public bool HasLibraries => Libraries.Count > 0;
-    public bool HasPreviousPage => !IsLoading && _page?.StartIndex > 0;
-    public bool HasNextPage => !IsLoading && _page?.HasNextPage is true;
-    public int PreviousIndex => Math.Max(0, (_page?.StartIndex ?? 0) - MediaLibraryPage.PageSize);
-    public int NextIndex => (_page?.StartIndex ?? 0) + Items.Count;
-    public bool IsEmpty => !IsLoading && _page is { TotalRecordCount: 0 };
+    public bool HasMore => !IsLoadingMore && Items.Count < _totalRecordCount;
+    public int NextIndex => Items.Count;
+    public bool IsEmpty => !IsLoading && _totalRecordCount == 0 && SelectedLibrary is not null;
     public bool HasMessage => !string.IsNullOrEmpty(Message);
-    public bool HasArtworkMessage => !string.IsNullOrEmpty(ArtworkMessage);
-    public string PageDescription => _page is null ? string.Empty
-        : Loc.Format("Library.Page", Items.Count == 0 ? 0 : _page.StartIndex + 1,
-            Items.Count == 0 ? 0 : _page.StartIndex + Items.Count, _page.TotalRecordCount);
+    public bool HasArtworkError => CanRetryArtwork && !string.IsNullOrEmpty(ArtworkMessage);
+    public string PageDescription => SelectedLibrary is null
+        ? string.Empty
+        : Loc.Format("Library.Loaded", Items.Count, _totalRecordCount);
+    public string LibraryName => SelectedLibrary?.Name ?? Loc.Get("Library.Switch");
+    public bool CanChooseLibrary => CanOpenLibrary() && HasLibraries;
+    public string FilterLabel => Loc.Get($"Library.Filter.{SelectedFilter}");
+    public string SortLabel => Loc.Get($"Library.Sort.{SelectedSortDirection}");
+    public string FilterAccessibleName => Loc.Format("Library.Filter.Action", FilterLabel);
+    public string SortAccessibleName => Loc.Format("Library.Sort.Action", SortLabel);
+    public string ItemCountDescription => SelectedLibrary is null || (IsLoading && Items.Count == 0)
+        ? string.Empty
+        : Loc.Format("Library.Count", _totalRecordCount);
+    public bool IsAnyLoading => IsLoading || IsLoadingMore;
+    public int ColumnCount => _columnCount;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(LoadPageCommand))]
+    [NotifyPropertyChangedFor(nameof(LibraryName))]
     private MediaLibrary? _selectedLibrary;
 
     [ObservableProperty]
-    private IReadOnlyList<MediaPreviewCardViewModel> _items = [];
+    private ObservableCollection<MediaPreviewCardViewModel> _items = [];
+
+    public ObservableCollection<LibraryGridRowViewModel> Rows { get; } = [];
+
+    [ObservableProperty]
+    private MediaPreviewCardViewModel? _selectedItem;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilterLabel))]
+    [NotifyPropertyChangedFor(nameof(FilterAccessibleName))]
+    private MediaLibraryFilter _selectedFilter;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SortLabel))]
+    [NotifyPropertyChangedFor(nameof(SortAccessibleName))]
+    private MediaLibrarySortDirection _selectedSortDirection;
+
+    [ObservableProperty]
+    private char? _selectedLetter;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]
@@ -65,7 +102,27 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     [NotifyCanExecuteChangedFor(nameof(OpenLibraryCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadPageCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadArtworkCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetFilterCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetSortDirectionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetLetterCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RetryPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadMoreCommand))]
+    [NotifyPropertyChangedFor(nameof(IsAnyLoading))]
+    [NotifyPropertyChangedFor(nameof(CanChooseLibrary))]
     private bool _isLoading;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenLibraryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetFilterCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetSortDirectionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetLetterCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RetryPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadMoreCommand))]
+    [NotifyPropertyChangedFor(nameof(IsAnyLoading))]
+    [NotifyPropertyChangedFor(nameof(CanChooseLibrary))]
+    [NotifyPropertyChangedFor(nameof(HasMore))]
+    private bool _isLoadingMore;
 
     [ObservableProperty]
     private bool _canRetry;
@@ -74,16 +131,24 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     private int _retryIndex;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasArtworkMessage))]
+    private bool _canRetryMore;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasArtworkError))]
     private string _artworkMessage = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasArtworkError))]
     private bool _canRetryArtwork;
 
-    private bool CanOpenLibrary() => !_disposed && !IsLoading;
+    private bool CanOpenLibrary() => !_disposed && !IsAnyLoading;
     private bool CanLoadPage() => CanOpenLibrary() && SelectedLibrary is not null;
-    private bool CanLoadArtwork() => CanOpenLibrary() && _page is not null
-        && _page.Items.Zip(Items).Any(pair => pair.First.ArtworkItemId is not null && !pair.Second.HasArtwork);
+    private bool CanLoadMore() => CanLoadPage() && HasMore && !CanRetryMore;
+    private bool CanLoadArtwork() => !_disposed && _sources.Count > 0
+        && Enumerable.Range(_artworkWindow.Start, Math.Max(0, _artworkWindow.End - _artworkWindow.Start))
+            .Any(index => index < _sources.Count
+                && _sources[index].ArtworkItemId is not null
+                && !Items[index].HasArtwork);
 
     [RelayCommand(CanExecute = nameof(CanOpenLibrary))]
     private async Task OpenLibraryAsync(MediaLibrary library)
@@ -94,12 +159,13 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
             throw new ArgumentException("The library does not belong to this account.", nameof(library));
         }
 
-        if (SelectedLibrary == library && _page is not null)
+        if (SelectedLibrary == library && Items.Count > 0)
         {
             return;
         }
 
         ClearPage();
+        SetActiveQuery(new());
         SelectedLibrary = library;
         await LoadPageCommand.ExecuteAsync(0);
     }
@@ -107,20 +173,87 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     [RelayCommand(CanExecute = nameof(CanLoadPage), IncludeCancelCommand = true)]
     private async Task LoadPageAsync(int startIndex, CancellationToken cancellationToken)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        await LoadQueryAsync(
+            _activeQuery with { StartIndex = startIndex },
+            append: startIndex > 0,
+            cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadMore))]
+    private async Task LoadMoreAsync(CancellationToken cancellationToken)
+    {
+        await LoadQueryAsync(
+            _activeQuery with { StartIndex = Items.Count },
+            append: true,
+            cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadPage))]
+    private async Task SetFilterAsync(MediaLibraryFilter filter, CancellationToken cancellationToken)
+    {
+        await LoadQueryAsync(
+            _activeQuery with { StartIndex = 0, Filter = filter },
+            append: false,
+            cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadPage))]
+    private async Task SetSortDirectionAsync(
+        MediaLibrarySortDirection sortDirection,
+        CancellationToken cancellationToken)
+    {
+        await LoadQueryAsync(
+            _activeQuery with { StartIndex = 0, SortDirection = sortDirection },
+            append: false,
+            cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadPage))]
+    private async Task SetLetterAsync(string? letter, CancellationToken cancellationToken)
+    {
+        char? startsWith = string.IsNullOrEmpty(letter) ? null : char.ToUpperInvariant(letter[0]);
+        await LoadQueryAsync(
+            _activeQuery with { StartIndex = 0, StartsWith = startsWith },
+            append: false,
+            cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadPage))]
+    private async Task RetryPageAsync(CancellationToken cancellationToken)
+    {
+        if (_retryQuery is null)
+        {
+            return;
+        }
+
+        await LoadQueryAsync(_retryQuery, _retryAppend, cancellationToken);
+    }
+
+    private async Task LoadQueryAsync(
+        MediaLibraryQuery query,
+        bool append,
+        CancellationToken cancellationToken)
+    {
+        query.Validate();
         if (SelectedLibrary is not { } library)
         {
             throw new InvalidOperationException("Choose a library before loading a page.");
         }
 
-        IsLoading = true;
+        IsLoading = !append;
+        IsLoadingMore = append;
         CanRetry = false;
-        RetryIndex = startIndex;
-        Message = Loc.Get("Library.Loading");
+        CanRetryMore = false;
+        RetryIndex = query.StartIndex;
+        _retryQuery = query;
+        _retryAppend = append;
+        Message = string.Empty;
+        RebuildRows();
         NotifyPageChanged();
         using var operation = _diagnostics?.Begin(DiagnosticArea.Network, DiagnosticAction.LoadLibrary);
         var created = new List<MediaPreviewCardViewModel>();
         var loaded = false;
+        var loadedCount = 0;
         try
         {
             LoadArtworkCommand.Cancel();
@@ -130,7 +263,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var page = await _client.GetLibraryPageAsync(_session, library, startIndex, cancellationToken);
+            var page = await _client.GetLibraryPageAsync(_session, library, query, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (_disposed)
             {
@@ -152,25 +285,42 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
             }
 
             var cards = created.ToArray();
-            ClearPage();
-            _page = page;
-            Items = cards;
+            loadedCount = cards.Length;
+            if (!append)
+            {
+                ClearPage();
+                Items = [];
+            }
+
+            foreach (var card in cards)
+            {
+                Items.Add(card);
+            }
+
+            _sources.AddRange(page.Items);
+            _totalRecordCount = page.TotalRecordCount;
+            SelectedItem ??= cards.FirstOrDefault();
+            SetActiveQuery(query with { StartIndex = 0 });
+            _retryQuery = null;
             created.Clear();
             Message = string.Empty;
             loaded = true;
             operation?.Complete();
         }
+
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
             operation?.Fail(exception);
-            Message = Loc.Get("Library.Canceled");
-            CanRetry = true;
+            Message = append ? string.Empty : Loc.Get("Library.Canceled");
+            CanRetry = !append;
+            CanRetryMore = append;
         }
         catch (MediaPreviewException exception)
         {
             operation?.Fail(exception);
-            Message = LocalizedErrors.Get(exception);
-            CanRetry = true;
+            Message = append ? string.Empty : LocalizedErrors.Get(exception);
+            CanRetry = !append;
+            CanRetryMore = append;
             if (exception.Error == MediaPreviewError.AccessDenied && !_disposed && !cancellationToken.IsCancellationRequested)
             {
                 await _onAccessDenied(exception);
@@ -184,27 +334,173 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
             }
 
             IsLoading = false;
+            IsLoadingMore = false;
+            RebuildRows();
             NotifyPageChanged();
         }
 
-        if (loaded && LoadArtworkCommand.CanExecute(null))
+        if (loaded)
+        {
+            var focusIndex = Math.Max(0, Items.Count - loadedCount);
+            await SetArtworkWindowAsync(focusIndex, _columnCount);
+        }
+    }
+
+    private void SetActiveQuery(MediaLibraryQuery query)
+    {
+        _activeQuery = query;
+        SelectedFilter = query.Filter;
+        SelectedSortDirection = query.SortDirection;
+        SelectedLetter = query.StartsWith;
+    }
+
+    public void SetColumnCount(int columns)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
+        if (_columnCount != columns)
+        {
+            _columnCount = columns;
+            RebuildRows();
+        }
+    }
+
+    public async Task SetArtworkWindowAsync(int focusedIndex, int columns)
+    {
+        if (Items.Count == 0)
+        {
+            return;
+        }
+
+        var start = Math.Max(0, focusedIndex - (columns * 2));
+        var end = Math.Min(Items.Count, focusedIndex + (columns * 4));
+        if (_artworkWindow == (start, end))
+        {
+            return;
+        }
+
+        var generation = Interlocked.Increment(ref _artworkWindowGeneration);
+        _artworkWindow = (start, end);
+        for (var index = 0; index < Items.Count; index++)
+        {
+            if ((index < start || index >= end) && Items[index].HasArtwork)
+            {
+                Items[index].SetArtwork(null);
+            }
+        }
+
+        var previous = LoadArtworkCommand.ExecutionTask;
+        LoadArtworkCommand.Cancel();
+        if (previous is not null)
+        {
+            await previous;
+        }
+
+        if (!_disposed
+            && generation == Volatile.Read(ref _artworkWindowGeneration)
+            && LoadArtworkCommand.CanExecute(null))
         {
             LoadArtworkCommand.Execute(null);
         }
     }
 
+    private void RebuildRows()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var desiredItems = Items
+            .Select((item, index) => (item, index))
+            .Chunk(_columnCount)
+            .Select(chunk => chunk.Select(entry => entry.item).ToArray())
+            .ToList();
+        var remaining = Items.Count == 0
+            ? IsLoading ? MediaLibraryPage.PageSize : 0
+            : Math.Clamp(_totalRecordCount - Items.Count, 0, PlaceholderBufferSize);
+        if (CanRetryMore)
+        {
+            remaining = Math.Max(1, remaining);
+        }
+
+        if (desiredItems.Count == 0 && remaining > 0)
+        {
+            desiredItems.Add([]);
+        }
+
+        var placeholderCounts = Enumerable.Repeat(0, desiredItems.Count).ToList();
+        var placeholderRowIndex = Math.Max(0, desiredItems.Count - 1);
+        while (remaining > 0)
+        {
+            if (placeholderRowIndex >= desiredItems.Count)
+            {
+                desiredItems.Add([]);
+                placeholderCounts.Add(0);
+            }
+
+            var capacity = _columnCount - desiredItems[placeholderRowIndex].Length;
+            var count = Math.Min(remaining, capacity);
+            placeholderCounts[placeholderRowIndex] = count;
+            remaining -= count;
+            placeholderRowIndex++;
+        }
+
+        while (Rows.Count > desiredItems.Count)
+        {
+            Rows.RemoveAt(Rows.Count - 1);
+        }
+
+        for (var rowIndex = 0; rowIndex < desiredItems.Count; rowIndex++)
+        {
+            var rowItems = desiredItems[rowIndex];
+            if (rowIndex >= Rows.Count)
+            {
+                Rows.Add(new(rowItems));
+            }
+            else if (!Rows[rowIndex].Items.SequenceEqual(
+                         rowItems.Take(Rows[rowIndex].Items.Count)))
+            {
+                Rows[rowIndex] = new(rowItems);
+            }
+            else
+            {
+                while (Rows[rowIndex].Items.Count > rowItems.Length)
+                {
+                    Rows[rowIndex].Items.RemoveAt(Rows[rowIndex].Items.Count - 1);
+                }
+
+                for (var itemIndex = Rows[rowIndex].Items.Count;
+                     itemIndex < rowItems.Length;
+                     itemIndex++)
+                {
+                    Rows[rowIndex].Items.Add(rowItems[itemIndex]);
+                }
+            }
+
+            Rows[rowIndex].HasRetry = CanRetryMore && rowIndex == Items.Count / _columnCount;
+            Rows[rowIndex].SetPlaceholderCount(placeholderCounts[rowIndex]);
+        }
+
+        NotifyPageChanged();
+    }
+
     [RelayCommand(CanExecute = nameof(CanLoadArtwork), IncludeCancelCommand = true)]
     private async Task LoadArtworkAsync(CancellationToken cancellationToken)
     {
-        if (_page is null)
+        if (_sources.Count == 0)
         {
             throw new InvalidOperationException("Load a library page before loading artwork.");
         }
 
-        var pending = _page.Items.Zip(Items)
-            .Where(pair => pair.First.ArtworkItemId is not null && !pair.Second.HasArtwork).ToArray();
+        var pending = Enumerable.Range(
+                _artworkWindow.Start,
+                Math.Max(0, _artworkWindow.End - _artworkWindow.Start))
+            .Where(index => index < _sources.Count && index < Items.Count)
+            .Select(index => (Source: _sources[index], Card: Items[index]))
+            .Where(pair => pair.Source.ArtworkItemId is not null && !pair.Card.HasArtwork)
+            .ToArray();
         CanRetryArtwork = false;
-        ArtworkMessage = Loc.Get("Library.LoadingArtwork");
+        ArtworkMessage = string.Empty;
         foreach (var (_, card) in pending)
         {
             card.IsArtworkLoading = true;
@@ -225,7 +521,7 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
 
             if (!_disposed)
             {
-                CanRetryArtwork = pending.Any(pair => !pair.Second.HasArtwork);
+                CanRetryArtwork = pending.Any(pair => !pair.Card.HasArtwork);
                 ArtworkMessage = CanRetryArtwork
                     ? Loc.Get(cancellationToken.IsCancellationRequested ? "Library.ArtworkCanceled" : "Library.ArtworkFailed")
                     : string.Empty;
@@ -324,17 +620,21 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
     public void CancelLoading()
     {
         LoadPageCommand.Cancel();
+        SetFilterCommand.Cancel();
+        SetSortDirectionCommand.Cancel();
+        SetLetterCommand.Cancel();
+        RetryPageCommand.Cancel();
+        LoadMoreCommand.Cancel();
         LoadArtworkCommand.Cancel();
     }
 
     private void NotifyPageChanged()
     {
-        OnPropertyChanged(nameof(HasPreviousPage));
-        OnPropertyChanged(nameof(HasNextPage));
-        OnPropertyChanged(nameof(PreviousIndex));
+        OnPropertyChanged(nameof(HasMore));
         OnPropertyChanged(nameof(NextIndex));
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(PageDescription));
+        OnPropertyChanged(nameof(ItemCountDescription));
     }
 
     private void ClearPage()
@@ -344,7 +644,13 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         ArtworkMessage = string.Empty;
         var previous = Items;
         Items = [];
-        _page = null;
+        Rows.Clear();
+        _sources.Clear();
+        _totalRecordCount = 0;
+        _artworkWindow = default;
+        Interlocked.Increment(ref _artworkWindowGeneration);
+        CanRetryMore = false;
+        SelectedItem = null;
         foreach (var card in previous)
         {
             card.Dispose();
@@ -359,5 +665,74 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
         OpenLibraryCommand.NotifyCanExecuteChanged();
         LoadPageCommand.NotifyCanExecuteChanged();
         LoadArtworkCommand.NotifyCanExecuteChanged();
+        SetFilterCommand.NotifyCanExecuteChanged();
+        SetSortDirectionCommand.NotifyCanExecuteChanged();
+        SetLetterCommand.NotifyCanExecuteChanged();
+        RetryPageCommand.NotifyCanExecuteChanged();
+        LoadMoreCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanChooseLibrary));
     }
+}
+
+public sealed partial class LibraryGridRowViewModel : ObservableObject
+{
+    public LibraryGridRowViewModel(IEnumerable<MediaPreviewCardViewModel> items)
+    {
+        foreach (var item in items)
+        {
+            Items.Add(item);
+        }
+    }
+
+    public ObservableCollection<MediaPreviewCardViewModel> Items { get; } = [];
+    public ObservableCollection<int> PlaceholderSlots { get; } = [];
+    public ObservableCollection<LibraryGridSlotViewModel> Slots { get; } = [];
+
+    [ObservableProperty]
+    private bool _hasRetry;
+
+    public void SetPlaceholderCount(int count)
+    {
+        while (PlaceholderSlots.Count > count)
+        {
+            PlaceholderSlots.RemoveAt(PlaceholderSlots.Count - 1);
+        }
+
+        while (PlaceholderSlots.Count < count)
+        {
+            PlaceholderSlots.Add(PlaceholderSlots.Count);
+        }
+
+        var desiredCount = Items.Count + count;
+        while (Slots.Count > desiredCount)
+        {
+            Slots.RemoveAt(Slots.Count - 1);
+        }
+
+        for (var index = 0; index < desiredCount; index++)
+        {
+            if (index >= Slots.Count)
+            {
+                Slots.Add(new());
+            }
+
+            Slots[index].Item = index < Items.Count ? Items[index] : null;
+            Slots[index].IsRetry = HasRetry && index == Items.Count;
+        }
+    }
+}
+
+public sealed partial class LibraryGridSlotViewModel : ObservableObject
+{
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasItem))]
+    [NotifyPropertyChangedFor(nameof(IsPlaceholder))]
+    private MediaPreviewCardViewModel? _item;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPlaceholder))]
+    private bool _isRetry;
+
+    public bool HasItem => Item is not null;
+    public bool IsPlaceholder => Item is null && !IsRetry;
 }

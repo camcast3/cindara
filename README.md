@@ -7,23 +7,43 @@ the primary target. It is early-stage, public, and licensed under the
 
 ## Current vertical slice
 
-The Avalonia desktop shell validates a Jellyfin server, authenticates a user,
-and restores independent saved accounts across servers. Passwords are never
+The Avalonia desktop shell uses an ambient, step-by-step authentication flow:
+choose a saved server, choose a saved account for that server, then restore the
+protected session or sign in when credentials are required. New servers can be
+added from the first step. Passwords are never
 persisted. Access tokens are stored with Secret Service on Linux, DPAPI on
 Windows, or Keychain on macOS; rejected tokens remove only the affected
 account and return it to sign-in.
 
 The controller-first shell exposes Home, Libraries, Search, Downloads, and
-Settings. Home includes a single Continue Watching row and recently added media
+Settings. Home keeps its existing sidebar, hero, and rows. Selecting any other
+destination opens a dedicated full-screen surface with one explicit Back path;
+non-Home surfaces do not repeat the Home sidebar. All screens share Home's capped
+logical-viewport density model for typography, poster sizing, gutters, forms, and
+navigation actions; OS DPI is not applied twice. Home includes a single Continue
+Watching row and recently added media
 from the selected libraries, with no generic Libraries shortcut row. Open libraries
-from the sidebar or library chooser. Libraries open alphabetically sorted, 40-item
-poster pages with explicit Previous/Next controls rather than loading the
-entire collection. Selecting a card opens a read-only summary; Back restores
-the card and scroll position. Full details, episode navigation, search, and
-downloads remain deferred to their roadmap work. Signing in opens media Home directly, without
+from the sidebar or library chooser. Home library shortcuts use aligned TV, Movie,
+and Anime icons with accessible names. A library opens a virtualized poster grid
+headed by its actual name; the heading opens a library switcher. Compact filter
+and sort menus show the active All titles/Unwatched/Favorites and Title A–Z/Z–A
+choices, alongside the total title count. The All/A–Z rail remains directly
+accessible. Menus focus the current choice and Back restores the launcher without
+changing the grid. Metadata loads in bounded 40-item batches as focus or scrolling reaches
+the final loaded row. A rolling buffer of 60 blank poster slots (capped to the
+remaining titles) is present before the next request; responses fill those slots
+in place and extend only the far end. Poster and metadata heights stay stable.
+There are no visible pages or replacements of earlier items. Selecting a
+card opens a read-only summary; Back restores the exact card, query controls, loaded
+batches, and grid position. Search supports debounced physical-keyboard
+input, a temporary full-screen controller keyboard, one combined movie/series/season/
+episode poster grid, bounded paging, cancellation, and exact query/focus/scroll
+restoration. Full details and episode navigation remain
+deferred to the remaining issue #5 batches; downloads remain deferred. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
-Settings contains **Language: English**, **Library layout**, **Exit**, and **Back to Home**.
+Settings uses a controller-first category/detail layout while retaining only
+**Language: English**, **Library layout**, **Exit**, and **Back to Home**.
 Library layout has independent ordered selections for sidebar shortcuts and Home
 libraries. Use each library's Hide/Show and Move up/Move down buttons, then Save layout; Cancel
 discards the draft. Defaults are TV libraries, Movies, then Anime. Choices are
@@ -38,15 +58,18 @@ for them. Previously saved selections cannot bring unsupported views back.
 Minimal account switching, logout, and fullscreen/windowed controls are tracked
 separately in [the settings feature request](https://github.com/camcast3/cindara/issues/27);
 expanded settings categories, input, and appearance preferences remain deferred.
-The separate login/shell footer **Diagnostics** action shows local technical
-details and sanitized errors, with an explicit support-bundle preview and export.
+The pre-login **Diagnostics** action and the signed-in Settings category open the
+same full-screen local technical view with sanitized errors and an explicit
+support-bundle preview/export.
 It makes no diagnostic network requests or uploads. Logs are capped at 1 MiB
 and retained for seven days; see [diagnostics and privacy](docs/diagnostics.md).
 D-pad/left stick or arrows navigate, Accept/Enter selects, and Back/Escape
-dismisses dialogs or returns to the navigation rail. Start/Options/+ or F11
+dismisses the deepest utility or returns from a full-screen destination to its
+exact Home source. Start/Options/+ or F11
 toggles fullscreen; **Settings → Exit** closes the app.
-Accept on a text field opens an on-screen keyboard. Saved accounts use the same
-focus-trapped choice dialog as the rest of the shell.
+Accept on authentication text fields opens a focus-trapped on-screen keyboard.
+Search uses an inline controller keyboard so results and query context remain visible.
+Saved servers and accounts are controller-navigable steps rather than a modal picker.
 
 The login screen and **Settings** offer **Language: English**.
 English is the only supported UI language. Appearance controls are deferred;
@@ -60,12 +83,13 @@ limitations, validation, and the keyboard/screen-reader release checklist.
 Home loads metadata and artwork with at most six requests in flight and a
 30-second overall deadline. Library metadata has the same deadline, but the
 grid appears immediately without waiting for posters. Up to six poster requests
-then run in the background, each with a 15-second request timeout; navigation,
-card summaries, and paging remain available. Failed/missing posters show an
-explicit placeholder and **Retry missing artwork**, without discarding the page.
-Leaving the library, paging, or changing accounts cancels the old artwork work.
-Library pages do not eagerly fetch hero backdrops. Duplicate images share a
-request within each load.
+then run in the background, each with a 15-second request timeout; navigation and
+card summaries remain available. Only nearby virtualized rows retain decoded images;
+moving away disposes them while the bounded byte cache can serve a later reload.
+Failed/missing posters show an explicit placeholder and **Retry missing artwork**.
+Leaving the library, changing the query/account, or loading another batch cancels
+superseded artwork work. Library batches do not eagerly fetch hero backdrops.
+Duplicate images share a request within each artwork window.
 An in-memory LRU artwork cache holds at most 128 entries / 32 MiB and uses a
 five-minute **cache-wide expiry window**, checked on lookup. The first lookup
 after the deadline clears the cache and starts a new window; an image added near
@@ -97,10 +121,8 @@ loads use that lookup directly. All lookups share the existing six-request cap
 and 30-second Home deadline. The candidate set is not trimmed before ranking.
 **Cancel loading** or Back/Escape cancels the request; failures retain sign-in and
 offer Retry (except a rejected session, which returns to sign-in). An unsuccessful
-page change keeps the previous page and retries the failed offset. This includes
-a library shrinking so the requested page is now past its end; Previous page
-remains available to recover without replacing the last useful page with an empty
-result. Empty libraries
+incremental load keeps every loaded poster and the reserved buffer, replacing the
+first blank with a **Retry loading more** tile for the failed offset. Empty libraries
 and missing artwork have visible states. Returning
 from Settings reuses the current account's loaded Home instead of downloading
 it again. Account switching and sign-out clear that data.

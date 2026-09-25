@@ -3,6 +3,8 @@
         xmlns:automation="using:Avalonia.Automation"
         xmlns:vm="using:Cindara.Desktop.ViewModels"
         xmlns:views="using:Cindara.Desktop.Views"
+        xmlns:models="using:Cindara.Core.Models"
+        xmlns:auth="using:Cindara.Core.Authentication"
         xmlns:loc="using:Cindara.Desktop.Localization"
         x:Class="Cindara.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
@@ -13,6 +15,11 @@
         <x:Double x:Key="Cindara.Adaptive.ContentSpacing">24</x:Double>
         <x:Double x:Key="Cindara.Adaptive.DialogMaxHeight">640</x:Double>
         <x:Double x:Key="Cindara.Adaptive.FormMaxWidth">800</x:Double>
+        <x:Double x:Key="Cindara.Adaptive.NavigationActionSize">56</x:Double>
+        <x:Double x:Key="Cindara.Media.GridPosterWidth">270</x:Double>
+        <x:Double x:Key="Cindara.Media.GridPosterHeight">405</x:Double>
+        <x:Double x:Key="Cindara.Media.GridSpacing">24</x:Double>
+        <Thickness x:Key="Cindara.Media.GridCardMargin">12</Thickness>
     </Window.Resources>
     <Grid>
         <Grid x:Name="MainSurface">
@@ -21,53 +28,161 @@
                           RowSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}">
                         <Grid>
                             <ScrollViewer x:Name="AuthenticationSurface"
-                                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                                <Border MaxWidth="{DynamicResource Cindara.Adaptive.FormMaxWidth}"
-                                        Padding="{DynamicResource Cindara.Adaptive.SafeMargin}"
-                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                        Background="{DynamicResource Cindara.Brush.Surface}"
-                                        CornerRadius="{DynamicResource Cindara.Radius.Large}">
-                                    <StackPanel Spacing="18">
-                                        <TextBlock Classes="display" Text="{loc:Tr Brand.Name}" />
-                                        <TextBlock Classes="secondary" Text="{loc:Tr Auth.Tagline}" />
-                                        <StackPanel x:Name="ServerEntry" IsVisible="{Binding IsServerEntryVisible}" Spacing="16">
-                                            <TextBlock Classes="label" Text="{loc:Tr Auth.Server}" />
-                                            <TextBox x:Name="ServerAddressTextBox"
-                                                     AutomationProperties.Name="{loc:Tr Auth.ServerAddress}"
-                                                     FlowDirection="LeftToRight"
-                                                     PlaceholderText="{loc:Tr Auth.ServerExample}"
-                                                     Text="{Binding ServerAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                            <Button Classes="primary" Command="{Binding ConnectCommand}" Content="{loc:Tr Auth.Connect}" />
-                                            <Button x:Name="BackToSavedAccountsButton"
-                                                    IsVisible="{Binding !!SavedSessions.Count}"
-                                                    Command="{Binding BackToSessionsCommand}" Content="{loc:Tr Auth.SavedAccounts}" />
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto">
+                                <Grid MinHeight="620">
+                                    <Border CornerRadius="{DynamicResource Cindara.Radius.Large}">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                                <GradientStop Color="#142C3A" Offset="0" />
+                                                <GradientStop Color="#0A111E" Offset="0.45" />
+                                                <GradientStop Color="#111D2E" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+                                    <TextBlock Text="{loc:Tr Brand.Name}" Classes="heading"
+                                               Margin="36" HorizontalAlignment="Left"
+                                               VerticalAlignment="Top" />
+                                    <Border x:Name="AuthenticationCard"
+                                            MaxWidth="{DynamicResource Cindara.Adaptive.FormMaxWidth}"
+                                            Padding="{DynamicResource Cindara.Adaptive.SafeMargin}"
+                                            Margin="{DynamicResource Cindara.Adaptive.SafeMargin}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Background="#F0111A29"
+                                            BorderBrush="{DynamicResource Cindara.Brush.Border}"
+                                            BorderThickness="1"
+                                            CornerRadius="{DynamicResource Cindara.Radius.Large}">
+                                        <StackPanel Spacing="18">
+                                            <TextBlock x:Name="AuthenticationProgress"
+                                                       Classes="caption" />
+
+                                            <StackPanel x:Name="ServerSelection"
+                                                        IsVisible="{Binding IsServerSelectionVisible}"
+                                                        Spacing="16">
+                                                <TextBlock Classes="title"
+                                                           Text="{loc:Tr Auth.ChooseServer}" />
+                                                <TextBlock Classes="secondary"
+                                                           Text="{loc:Tr Auth.ChooseServerHelp}"
+                                                           TextWrapping="Wrap" />
+                                                <ItemsControl x:Name="SavedServersList"
+                                                              ItemsSource="{Binding SavedServers}"
+                                                              IsEnabled="{Binding !IsBusy}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Spacing="10" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:ServerIdentity">
+                                                            <Button Classes="settings-action"
+                                                                    HorizontalAlignment="Stretch"
+                                                                    Click="OnSelectServer"
+                                                                    AutomationProperties.Name="{Binding DisplayName}">
+                                                                <StackPanel>
+                                                                    <TextBlock Text="{Binding DisplayName}" />
+                                                                    <TextBlock Classes="caption"
+                                                                               Text="{Binding BaseUri}" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <Button x:Name="AddServerFromSelectionButton"
+                                                        Command="{Binding AddServerCommand}"
+                                                        Content="{loc:Tr Auth.AddServer}" />
+                                            </StackPanel>
+
+                                            <StackPanel x:Name="ServerEntry"
+                                                        IsVisible="{Binding IsServerEntryVisible}"
+                                                        Spacing="16">
+                                                <TextBlock Classes="title"
+                                                           Text="{loc:Tr Auth.Server}" />
+                                                <TextBlock Classes="secondary"
+                                                           Text="{loc:Tr Auth.ServerHelp}"
+                                                           TextWrapping="Wrap" />
+                                                <TextBox x:Name="ServerAddressTextBox"
+                                                         AutomationProperties.Name="{loc:Tr Auth.ServerAddress}"
+                                                         FlowDirection="LeftToRight"
+                                                         PlaceholderText="{loc:Tr Auth.ServerExample}"
+                                                         Text="{Binding ServerAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                <Button Classes="primary"
+                                                        Command="{Binding ConnectCommand}"
+                                                        Content="{loc:Tr Auth.Connect}" />
+                                                <Button x:Name="BackToSavedAccountsButton"
+                                                        IsVisible="{Binding !!SavedSessions.Count}"
+                                                        Command="{Binding BackToSessionsCommand}"
+                                                        Content="{loc:Tr Action.Back}" />
+                                            </StackPanel>
+
+                                            <StackPanel x:Name="SavedAccounts"
+                                                        IsVisible="{Binding AreSavedSessionsVisible}"
+                                                        Spacing="16">
+                                                <TextBlock Classes="title"
+                                                           Text="{loc:Tr Auth.ChooseAccount}" />
+                                                <TextBlock Classes="secondary"
+                                                           Text="{loc:Tr Auth.ChooseAccountHelp}"
+                                                           TextWrapping="Wrap" />
+                                                <ItemsControl x:Name="SavedAccountsList"
+                                                              ItemsSource="{Binding ServerAccounts}"
+                                                              IsEnabled="{Binding !IsBusy}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Spacing="10" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="auth:SessionProfile">
+                                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                                                <Button Classes="settings-action"
+                                                                        HorizontalAlignment="Stretch"
+                                                                        Click="OnUseSavedAccount"
+                                                                        AutomationProperties.Name="{Binding Username}"
+                                                                        Content="{Binding Username}" />
+                                                                <Button Grid.Column="1"
+                                                                        Click="OnRemoveSavedAccount"
+                                                                        AutomationProperties.Name="{loc:Tr Auth.RemoveSaved}"
+                                                                        AutomationProperties.HelpText="{Binding Username}"
+                                                                        Content="{loc:Tr Auth.RemoveSaved}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <Button x:Name="AddAccountButton"
+                                                        Command="{Binding AddAccountCommand}"
+                                                        Content="{loc:Tr Auth.AddAccount}" />
+                                                <Button Command="{Binding BackToSessionsCommand}"
+                                                        Content="{loc:Tr Action.Back}" />
+                                            </StackPanel>
+
+                                            <StackPanel x:Name="SignIn"
+                                                        IsVisible="{Binding IsSignInVisible}"
+                                                        Spacing="16">
+                                                <TextBlock Classes="title"
+                                                           Text="{loc:Tr Auth.SignInHeading}" />
+                                                <TextBlock Classes="secondary"
+                                                           Text="{loc:Tr Auth.SignInHelp}"
+                                                           TextWrapping="Wrap" />
+                                                <TextBox x:Name="UsernameTextBox"
+                                                         AutomationProperties.Name="{loc:Tr Auth.UsernameName}"
+                                                         PlaceholderText="{loc:Tr Auth.Username}"
+                                                         Text="{Binding Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                <TextBox AutomationProperties.Name="{loc:Tr Auth.PasswordName}"
+                                                         PasswordChar="*"
+                                                         PlaceholderText="{loc:Tr Auth.Password}"
+                                                         Text="{Binding Password, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                <Button Classes="primary"
+                                                        Command="{Binding SignInCommand}"
+                                                        Content="{loc:Tr Auth.SignIn}" />
+                                                <Button Command="{Binding BackToSessionsCommand}"
+                                                        Content="{loc:Tr Action.Back}" />
+                                            </StackPanel>
+
+                                            <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                       Text="{loc:Tr Auth.StorageNotice}" />
                                         </StackPanel>
-                                        <StackPanel x:Name="SignIn" IsVisible="{Binding IsSignInVisible}" Spacing="16">
-                                            <TextBlock Classes="label" Text="{loc:Tr Auth.SignInHeading}" />
-                                            <TextBox x:Name="UsernameTextBox" AutomationProperties.Name="{loc:Tr Auth.UsernameName}"
-                                                     PlaceholderText="{loc:Tr Auth.Username}"
-                                                     Text="{Binding Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                            <TextBox AutomationProperties.Name="{loc:Tr Auth.PasswordName}" PasswordChar="*"
-                                                     PlaceholderText="{loc:Tr Auth.Password}"
-                                                     Text="{Binding Password, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                            <Button Classes="primary" Command="{Binding SignInCommand}" Content="{loc:Tr Auth.SignIn}" />
-                                            <Button Command="{Binding BackToSessionsCommand}" Content="{loc:Tr Action.Back}" />
-                                        </StackPanel>
-                                        <StackPanel x:Name="SavedAccounts" IsVisible="{Binding AreSavedSessionsVisible}" Spacing="16">
-                                            <TextBlock Classes="label" Text="{loc:Tr Auth.SavedAccounts}" />
-                                            <Button x:Name="SavedAccountButton" Click="OnChooseAccount"
-                                                    IsEnabled="{Binding !IsBusy}"
-                                                    AutomationProperties.Name="{loc:Tr Auth.ChooseSaved}"
-                                                    AutomationProperties.HelpText="{Binding SelectedSavedSessionDisplayName}"
-                                                    Content="{Binding SelectedSavedSessionDisplayName}" />
-                                            <Button Classes="primary" Command="{Binding UseSavedSessionCommand}" Content="{loc:Tr Action.Continue}" />
-                                            <Button Command="{Binding RemoveSavedSessionCommand}" Content="{loc:Tr Auth.RemoveSaved}" />
-                                            <Button Command="{Binding AddServerCommand}" Content="{loc:Tr Auth.AddServer}" />
-                                        </StackPanel>
-                                        <TextBlock Classes="caption" TextWrapping="Wrap"
-                                                   Text="{loc:Tr Auth.StorageNotice}" />
-                                    </StackPanel>
-                                </Border>
+                                    </Border>
+                                </Grid>
                             </ScrollViewer>
                             <views:ShellView x:Name="Shell" IsVisible="False" />
                         </Grid>

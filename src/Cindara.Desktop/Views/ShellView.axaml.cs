@@ -1,9 +1,12 @@
+using System.Globalization;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Cindara.Core.Jellyfin;
+using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.Localization;
 
 namespace Cindara.Desktop.Views;
@@ -12,38 +15,45 @@ public partial class ShellView : UserControl
 {
     private readonly Dictionary<string, Control> _contentMemory = [];
     private string _destination = "Home";
+    private string _settingsCategory = "Preferences";
 
     public ShellView()
     {
         InitializeComponent();
-        SetSelected(HomeNavigation, true);
         AddHandler(GotFocusEvent, OnShellFocused);
-        AddHandler(LostFocusEvent, (_, _) => UpdateRail());
-        NavigationRail.PointerEntered += (_, _) => UpdateRail();
-        NavigationRail.PointerExited += (_, _) => UpdateRail();
+        SizeChanged += (_, args) => UpdateWorkspaceLayout(args.NewSize.Width);
+        ShowSettingsCategory("Preferences");
+        Navigate("Home");
     }
 
     public event EventHandler? DestinationChanged;
     public event EventHandler? ExitRequested;
     public event EventHandler? LanguageRequested;
     public event EventHandler? LibraryLayoutRequested;
-    public event EventHandler<MediaLibrary>? LibraryRequested;
+    public event EventHandler? LibrarySwitcherRequested;
+    public event EventHandler? DiagnosticsRequested;
     public string Destination => _destination;
     public Control? HomeLoadingAction { get; set; }
+
     private bool IsHomeLoading => _destination == "Home"
         && HomeLoadingAction is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true };
+
     public Control InitialFocus => _destination switch
     {
         "Home" when IsHomeLoading => HomeLoadingAction!,
-        "Home" => RetryHomeButton.IsEffectivelyVisible && RetryHomeButton.IsEffectivelyEnabled ? RetryHomeButton : HomeNavigation,
-        "Settings" => SettingsLanguageButton,
+        "Home" => RetryHomeButton,
+        "Settings" => SettingsPreferencesCategory,
         "Libraries" => LibraryView.IsEffectivelyVisible && LibraryView.InitialFocus != LibraryView
-            ? LibraryView.InitialFocus : LibrariesNavigation,
-        _ => NavigationButtons.Children.OfType<Button>().Single(button => Equals(button.Tag, _destination)),
+            ? LibraryView.InitialFocus : DestinationBackButton,
+        "Search" => SearchView.IsEffectivelyVisible ? SearchView.InitialFocus : DestinationBackButton,
+        _ => DestinationBackButton,
     };
-    public Control ContentFocus => IsHomeLoading || _destination == "Libraries" ? InitialFocus
-        : _contentMemory.TryGetValue(_destination, out var control)
-        && control.IsEffectivelyVisible && control.IsEffectivelyEnabled ? control : InitialFocus;
+
+    public Control ContentFocus =>
+        _contentMemory.TryGetValue(_destination, out var control)
+        && control.IsEffectivelyVisible && control.IsEffectivelyEnabled
+            ? control
+            : InitialFocus;
 
     public void Reset()
     {
@@ -58,9 +68,11 @@ public partial class ShellView : UserControl
             throw new ArgumentOutOfRangeException(nameof(destination));
         }
 
-        if (destination == "Settings" && _destination != "Settings")
+        var resetSettingsFocus = destination == "Settings" && _destination != "Settings";
+        if (resetSettingsFocus)
         {
-            _contentMemory.Remove("Settings");
+            ShowSettingsCategory("Preferences");
+            _contentMemory["Settings"] = SettingsPreferencesCategory;
         }
 
         if (destination != "Libraries")
@@ -68,24 +80,26 @@ public partial class ShellView : UserControl
             LibraryView.SuspendFocusMemory();
         }
 
+        if (destination != "Search")
+        {
+            SearchView.SuspendFocusMemory();
+        }
+
         _destination = destination;
+        DestinationHeader.IsVisible = destination != "Home";
+        DestinationBackButton.IsVisible = destination != "Home";
         HomePage.IsVisible = destination == "Home";
         SettingsPage.IsVisible = destination == "Settings";
         LibrariesPage.IsVisible = destination == "Libraries";
-        PageScroll.IsVisible = !LibrariesPage.IsVisible;
-        PlaceholderPage.IsVisible = !HomePage.IsVisible && !SettingsPage.IsVisible && !LibrariesPage.IsVisible;
+        SearchPage.IsVisible = destination == "Search";
+        PageScroll.IsVisible = destination is "Home" or "Downloads" or "Settings";
+        PlaceholderPage.IsVisible = destination == "Downloads";
         DestinationTitle.Text = Loc.Get($"Nav.{destination}");
-        DestinationMessage.Text = destination switch
-        {
-            "Search" => Loc.Get("Placeholder.Search"),
-            "Downloads" => Loc.Get("Placeholder.Downloads"),
-            _ => string.Empty,
-        };
-        foreach (var button in NavigationButtons.Children.OfType<Button>())
-        {
-            SetSelected(button, Equals(button.Tag, destination));
-        }
-
+        DestinationTitle.IsVisible = destination != "Libraries";
+        LibrarySwitcher.IsVisible = destination == "Libraries";
+        DestinationMessage.Text = destination == "Downloads"
+            ? Loc.Get("Placeholder.Downloads")
+            : string.Empty;
         DestinationChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -102,89 +116,203 @@ public partial class ShellView : UserControl
         }
 
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
-        var buttons = NavigationButtons.GetVisualDescendants().OfType<Button>().ToArray();
-        var index = Array.FindIndex(buttons, button => button == focused);
-        if (index >= 0)
+        if (_destination == "Settings" && TryMoveSettings(focused, direction))
         {
-            switch (direction)
+            return true;
+        }
+
+        if (_destination == "Libraries")
+        {
+            if (ReferenceEquals(focused, DestinationBackButton)
+                && direction == NavigationDirection.Right && LibrarySwitcher.IsEffectivelyEnabled)
             {
-                case NavigationDirection.Up:
-                case NavigationDirection.Down:
-                    buttons[Math.Clamp(index + (direction == NavigationDirection.Up ? -1 : 1), 0, buttons.Length - 1)]
-                        .Focus(NavigationMethod.Directional);
-                    (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control)?.BringIntoView();
-                    return true;
-                case NavigationDirection.Left:
-                    return true;
-                case NavigationDirection.Right:
-                    ContentFocus.Focus(NavigationMethod.Directional);
-                    return true;
+                return LibrarySwitcher.Focus(NavigationMethod.Directional);
+            }
+
+            if (ReferenceEquals(focused, LibrarySwitcher))
+            {
+                if (direction == NavigationDirection.Left)
+                {
+                    return DestinationBackButton.Focus(NavigationMethod.Directional);
+                }
+
+                if (direction == NavigationDirection.Down)
+                {
+                    return LibraryView.FilterMenuButton.Focus(NavigationMethod.Directional);
+                }
+            }
+
+            if ((ReferenceEquals(focused, LibraryView.FilterMenuButton)
+                || ReferenceEquals(focused, LibraryView.SortMenuButton))
+                && direction == NavigationDirection.Up)
+            {
+                return LibrarySwitcher.Focus(NavigationMethod.Directional);
             }
         }
 
-        if (direction == NavigationDirection.Left)
+        if (ReferenceEquals(focused, DestinationBackButton)
+            && direction is NavigationDirection.Right or NavigationDirection.Down)
         {
-            FocusRail();
+            return ContentFocus.Focus(NavigationMethod.Directional);
+        }
+
+        return false;
+    }
+
+    public void FocusBack() => DestinationBackButton.Focus(NavigationMethod.Directional);
+
+    public bool IsBackFocused =>
+        ReferenceEquals(TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement(), DestinationBackButton);
+
+    private void OnShellFocused(object? sender, RoutedEventArgs args)
+    {
+        if (args.Source is Control control && !ReferenceEquals(control, DestinationBackButton))
+        {
+            _contentMemory[_destination] = control;
+        }
+    }
+
+    private void OnBackClicked(object? sender, RoutedEventArgs args) => Navigate("Home");
+    private void OnHomeClicked(object? sender, RoutedEventArgs args) => Navigate("Home");
+    private void OnExitClicked(object? sender, RoutedEventArgs args) =>
+        ExitRequested?.Invoke(this, EventArgs.Empty);
+    private void OnLanguageClicked(object? sender, RoutedEventArgs args) =>
+        LanguageRequested?.Invoke(this, EventArgs.Empty);
+    private void OnLibraryLayoutClicked(object? sender, RoutedEventArgs args) =>
+        LibraryLayoutRequested?.Invoke(this, EventArgs.Empty);
+    private void OnLibrarySwitcherClicked(object? sender, RoutedEventArgs args) =>
+        LibrarySwitcherRequested?.Invoke(this, EventArgs.Empty);
+    private void OnDiagnosticsClicked(object? sender, RoutedEventArgs args) =>
+        DiagnosticsRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnSettingsCategoryClicked(object? sender, RoutedEventArgs args)
+    {
+        if (sender is Button { Tag: string category })
+        {
+            ShowSettingsCategory(category);
+        }
+    }
+
+    private void OnSettingsCategoryFocused(object? sender, RoutedEventArgs args) =>
+        OnSettingsCategoryClicked(sender, args);
+
+    private void ShowSettingsCategory(string category)
+    {
+        _settingsCategory = category;
+        SettingsPreferencesPanel.IsVisible = category == "Preferences";
+        SettingsLibraryPanel.IsVisible = category == "Library";
+        SettingsApplicationPanel.IsVisible = category == "Application";
+        SettingsDiagnosticsPanel.IsVisible = category == "Diagnostics";
+        SetSelected(SettingsPreferencesCategory, category == "Preferences");
+        SetSelected(SettingsLibraryCategory, category == "Library");
+        SetSelected(SettingsApplicationCategory, category == "Application");
+        SetSelected(SettingsDiagnosticsCategory, category == "Diagnostics");
+    }
+
+    private bool TryMoveSettings(Control? focused, NavigationDirection direction)
+    {
+        var categories = SettingsCategories.Children.OfType<Button>().ToArray();
+        var categoryIndex = Array.IndexOf(categories, focused);
+        if (categoryIndex >= 0)
+        {
+            if (direction is NavigationDirection.Up or NavigationDirection.Down)
+            {
+                var next = Math.Clamp(
+                    categoryIndex + (direction == NavigationDirection.Up ? -1 : 1),
+                    0,
+                    categories.Length - 1);
+                categories[next].Focus(NavigationMethod.Directional);
+                return true;
+            }
+
+            if (direction == NavigationDirection.Right)
+            {
+                if (ActiveSettingsActions().FirstOrDefault() is { } action)
+                {
+                    action.Focus(NavigationMethod.Directional);
+                    action.BringIntoView();
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        if (focused is not null && ActiveSettingsActions().Contains(focused)
+            && direction == NavigationDirection.Left)
+        {
+            var category = categories.Single(button => Equals(button.Tag, _settingsCategory));
+            category.Focus(NavigationMethod.Directional);
+            category.BringIntoView();
             return true;
         }
 
         return false;
     }
 
-    public void FocusRail() => NavigationButtons.Children.OfType<Button>()
-        .Single(button => Equals(button.Tag, _destination)).Focus(NavigationMethod.Directional);
+    private Button[] ActiveSettingsActions() =>
+        (_settingsCategory switch
+        {
+            "Library" => SettingsLibraryPanel,
+            "Application" => SettingsApplicationPanel,
+            "Diagnostics" => SettingsDiagnosticsPanel,
+            _ => SettingsPreferencesPanel,
+        })
+        .GetVisualDescendants().OfType<Button>()
+        .Where(button => button.IsEffectivelyVisible && button.IsEffectivelyEnabled)
+        .ToArray();
 
-    public bool IsRailFocused => NavigationButtons.IsKeyboardFocusWithin;
+    private void UpdateWorkspaceLayout(double width)
+    {
+        if (width <= 0)
+        {
+            return;
+        }
+
+        var compact = width < 900;
+        DestinationBrand.IsVisible = width >= 1400;
+        SettingsCategories.Orientation = compact
+            ? Avalonia.Layout.Orientation.Horizontal
+            : Avalonia.Layout.Orientation.Vertical;
+        SettingsCategoryScroll.HorizontalScrollBarVisibility = compact
+            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+            : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        SettingsCategoryScroll.VerticalScrollBarVisibility = compact
+            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
+            : Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
+        var textScale = TopLevel.GetTopLevel(this) is MainWindow window
+            ? window.Preferences.TextScale
+            : 1;
+        var densityScale = TopLevel.GetTopLevel(this) is MainWindow densityWindow
+            ? ResponsiveDensityProfile.Create(
+                densityWindow.ClientSize.Width,
+                densityWindow.ClientSize.Height).TypeScale
+            : 1;
+        var categoryWidth = Math.Min(
+            520,
+            Math.Max(280, 250 * textScale * densityScale
+                * (Loc.IsPseudoLocalized ? 1.15 : 1)));
+        SettingsWorkspace.ColumnDefinitions = compact
+            ? new ColumnDefinitions("*")
+            : new ColumnDefinitions(
+                $"{categoryWidth.ToString(CultureInfo.InvariantCulture)},*");
+        SettingsWorkspace.RowDefinitions = compact
+            ? new RowDefinitions("Auto,Auto")
+            : new RowDefinitions("Auto");
+        Grid.SetColumn(SettingsDetail, compact ? 0 : 1);
+        Grid.SetRow(SettingsDetail, compact ? 1 : 0);
+        Dispatcher.UIThread.Post(() =>
+            (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control)?.BringIntoView(),
+            DispatcherPriority.Loaded);
+    }
 
     private static void SetSelected(Button button, bool selected)
     {
         button.Classes.Set("selected", selected);
-        AutomationProperties.SetItemStatus(button, selected ? Loc.Get("State.Selected") : string.Empty);
-        AutomationProperties.SetHelpText(button, selected ? Loc.Get("State.Selected") : string.Empty);
-    }
-
-    private void OnShellFocused(object? sender, RoutedEventArgs args)
-    {
-        if (args.Source is Control control && !control.GetVisualAncestors().Contains(NavigationRail))
-        {
-            _contentMemory[_destination] = control;
-        }
-
-        UpdateRail();
-    }
-
-    private void UpdateRail()
-    {
-        var expanded = NavigationRail.IsKeyboardFocusWithin || NavigationRail.IsPointerOver;
-        var textScale = TopLevel.GetTopLevel(this) is MainWindow window ? window.Preferences.TextScale : 1;
-        var availableWidth = Math.Max(176, Bounds.Width);
-        NavigationRail.Width = expanded
-            ? Math.Min(availableWidth * 0.55, Math.Min(440, 280 * textScale * (Loc.IsPseudoLocalized ? 1.3 : 1)))
-            : Math.Min(88, availableWidth * 0.25);
-        foreach (var label in NavigationRail.GetVisualDescendants().OfType<TextBlock>()
-                     .Where(label => label.Classes.Contains("rail-label")))
-        {
-            label.IsVisible = expanded;
-        }
-    }
-
-    private void OnDestinationClicked(object? sender, RoutedEventArgs args) => Navigate((string)((Button)sender!).Tag!);
-    private void OnHomeClicked(object? sender, RoutedEventArgs args) => Navigate("Home");
-
-    private void OnExitClicked(object? sender, RoutedEventArgs args) =>
-        ExitRequested?.Invoke(this, EventArgs.Empty);
-
-    private void OnLanguageClicked(object? sender, RoutedEventArgs args) =>
-        LanguageRequested?.Invoke(this, EventArgs.Empty);
-
-    private void OnLibraryLayoutClicked(object? sender, RoutedEventArgs args) =>
-        LibraryLayoutRequested?.Invoke(this, EventArgs.Empty);
-
-    private void OnLibraryClicked(object? sender, RoutedEventArgs args)
-    {
-        if (sender is Button { DataContext: MediaLibrary library })
-        {
-            LibraryRequested?.Invoke(this, library);
-        }
+        AutomationProperties.SetItemStatus(
+            button, selected ? Loc.Get("State.Selected") : string.Empty);
+        AutomationProperties.SetHelpText(
+            button, selected ? Loc.Get("State.Selected") : string.Empty);
     }
 }

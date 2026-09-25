@@ -31,20 +31,22 @@ public sealed class LibraryArtworkTests
         Assert.Equal(40, cards.Count);
         Assert.False(model.IsLoading);
         Assert.True(model.LoadArtworkCommand.IsRunning);
-        Assert.True(model.HasNextPage);
-        Assert.True(model.LoadPageCommand.CanExecute(40));
-        Assert.All(cards, card => Assert.True(card.IsArtworkLoading));
+        Assert.True(model.HasMore);
+        Assert.True(model.LoadMoreCommand.CanExecute(null));
+        Assert.All(cards.Take(24), card => Assert.True(card.IsArtworkLoading));
+        Assert.All(cards.Skip(24), card => Assert.False(card.IsArtworkLoading));
         Assert.Equal(6, client.Active);
 
         gate.SetResult([1]);
         await model.LoadArtworkCommand.ExecutionTask!.WaitAsync(TestTimeout);
 
         Assert.Same(cards, model.Items);
-        Assert.All(cards, card =>
+        Assert.All(cards.Take(24), card =>
         {
             Assert.True(card.HasArtwork);
             Assert.False(card.IsArtworkLoading);
         });
+        Assert.All(cards.Skip(24), card => Assert.False(card.HasArtwork));
         Assert.Equal(6, client.Maximum);
         Assert.False(model.CanRetryArtwork);
         Assert.Equal(0, client.CacheClears);
@@ -73,17 +75,19 @@ public sealed class LibraryArtworkTests
 
         Assert.Equal(40, cards.Count);
         Assert.False(cards[0].HasArtwork);
-        Assert.All(cards.Skip(1), card => Assert.True(card.HasArtwork));
+        Assert.All(cards.Skip(1).Take(23), card => Assert.True(card.HasArtwork));
+        Assert.All(cards.Skip(24), card => Assert.False(card.HasArtwork));
         Assert.True(model.CanRetryArtwork);
         Assert.Contains("Some artwork could not be loaded", model.ArtworkMessage, StringComparison.Ordinal);
         Assert.False(model.CanRetry);
-        Assert.True(model.HasNextPage);
+        Assert.True(model.HasMore);
         Assert.Equal(0, client.CacheClears);
 
         fail = false;
         await model.LoadArtworkCommand.ExecuteAsync(null);
         Assert.Same(cards, model.Items);
-        Assert.All(cards, card => Assert.True(card.HasArtwork));
+        Assert.All(cards.Take(24), card => Assert.True(card.HasArtwork));
+        Assert.All(cards.Skip(24), card => Assert.False(card.HasArtwork));
         Assert.Equal(2, client.Calls["item-0"]);
         Assert.All(client.Calls.Where(pair => pair.Key != "item-0"), pair => Assert.Equal(1, pair.Value));
         Assert.False(model.CanRetryArtwork);
@@ -99,7 +103,7 @@ public sealed class LibraryArtworkTests
         await model.LoadArtworkCommand.ExecutionTask!;
 
         Assert.Equal(40, model.Items.Count);
-        Assert.Equal(2, model.Items.Count(card => !card.HasArtwork));
+        Assert.Equal(18, model.Items.Count(card => !card.HasArtwork));
         Assert.True(model.CanRetryArtwork);
         Assert.False(model.CanRetry);
         Assert.All(model.Items, card => Assert.False(card.IsArtworkLoading));
@@ -107,7 +111,7 @@ public sealed class LibraryArtworkTests
     }
 
     [Fact]
-    public async Task PagingCancelsOldImagesAndStartsNewMetadataWithoutWaitingForTheNetworkDeadline()
+    public async Task IncrementalLoadingCancelsOldImagesAndAppendsMetadataWithoutWaitingForArtwork()
     {
         var gate = new TaskCompletionSource<byte[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = new Client((_, token) => gate.Task.WaitAsync(token));
@@ -115,18 +119,19 @@ public sealed class LibraryArtworkTests
         using var model = Model(client, decoder);
         await model.OpenLibraryCommand.ExecuteAsync(Library);
         await client.SixStarted.Task.WaitAsync(TestTimeout);
-        var previous = model.Items;
+        var previous = model.Items.ToArray();
 
-        await model.LoadPageCommand.ExecuteAsync(40).WaitAsync(TestTimeout);
+        await model.LoadMoreCommand.ExecuteAsync(null).WaitAsync(TestTimeout);
 
-        Assert.Equal("item-40", model.Items[0].Id);
-        Assert.Equal(7, model.Items.Count);
+        Assert.Equal("item-0", model.Items[0].Id);
+        Assert.Equal("item-40", model.Items[40].Id);
+        Assert.Equal(47, model.Items.Count);
         Assert.True(client.Canceled >= 6);
         Assert.InRange(client.Maximum, 1, 6);
         gate.SetResult([1]);
         await model.LoadArtworkCommand.ExecutionTask!.WaitAsync(TestTimeout);
-        Assert.All(previous, card => Assert.False(card.HasArtwork));
-        Assert.All(model.Items, card => Assert.True(card.HasArtwork));
+        Assert.All(previous.Take(28), card => Assert.False(card.HasArtwork));
+        Assert.All(model.Items.Skip(28), card => Assert.True(card.HasArtwork));
     }
 
     [Theory]
@@ -210,7 +215,7 @@ public sealed class LibraryArtworkTests
     }
 
     [Fact]
-    public async Task DuplicateArtworkIsRequestedOnceAndEachCardOwnsItsDecodedResource()
+    public async Task DuplicateArtworkIsRequestedOnceAndEachWindowCardOwnsItsDecodedResource()
     {
         var gate = new TaskCompletionSource<byte[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = new Client((_, token) => gate.Task.WaitAsync(token)) { SharedArtwork = true };
@@ -221,9 +226,53 @@ public sealed class LibraryArtworkTests
         gate.SetResult([1]);
         await model.LoadArtworkCommand.ExecutionTask!.WaitAsync(TestTimeout);
         Assert.Single(client.Calls);
-        Assert.Equal(40, decoder.Resources.Count);
+        Assert.Equal(24, decoder.Resources.Count);
         model.Dispose();
         Assert.All(decoder.Resources, resource => Assert.Equal(1, resource.DisposeCount));
+    }
+
+    [Fact]
+    public async Task MovingArtworkWindowEvictsDecodedImagesAndReloadsEarlierCards()
+    {
+        var client = new Client((_, _) => Task.FromResult<byte[]?>([1]));
+        var decoder = new LockedDecoder();
+        using var model = Model(client, decoder);
+        await model.OpenLibraryCommand.ExecuteAsync(Library);
+        await model.LoadArtworkCommand.ExecutionTask!;
+        Assert.True(model.Items[0].HasArtwork);
+
+        await model.SetArtworkWindowAsync(39, 7);
+        await model.LoadArtworkCommand.ExecutionTask!;
+
+        Assert.False(model.Items[0].HasArtwork);
+        Assert.True(model.Items[39].HasArtwork);
+        await model.SetArtworkWindowAsync(0, 7);
+        await model.LoadArtworkCommand.ExecutionTask!;
+
+        Assert.True(model.Items[0].HasArtwork);
+        Assert.False(model.Items[39].HasArtwork);
+        Assert.Equal(2, client.Calls["item-0"]);
+        Assert.All(decoder.Resources.Where(resource => resource.DisposeCount > 0),
+            resource => Assert.Equal(1, resource.DisposeCount));
+    }
+
+    [Fact]
+    public async Task ChangingArtworkWindowDuringLoadRestartsTheLatestWindow()
+    {
+        var gate = new TaskCompletionSource<byte[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = new Client((_, token) => gate.Task.WaitAsync(token));
+        var decoder = new LockedDecoder();
+        using var model = Model(client, decoder);
+        await model.OpenLibraryCommand.ExecuteAsync(Library);
+        await client.SixStarted.Task.WaitAsync(TestTimeout);
+
+        await model.SetArtworkWindowAsync(1, 7);
+
+        Assert.True(model.LoadArtworkCommand.IsRunning);
+        Assert.True(client.Canceled >= 6);
+        gate.SetResult([1]);
+        await model.LoadArtworkCommand.ExecutionTask!.WaitAsync(TestTimeout);
+        Assert.True(model.Items[28].HasArtwork);
     }
 
     [Fact]

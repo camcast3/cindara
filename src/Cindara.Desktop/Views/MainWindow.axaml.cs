@@ -8,7 +8,9 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Cindara.Core.Authentication;
 using Cindara.Core.Diagnostics;
+using Cindara.Core.Jellyfin;
 using Cindara.Desktop.Accessibility;
 using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.Input;
@@ -73,6 +75,10 @@ public partial class MainWindow : Window
             {
                 _viewModel?.LibraryBrowser?.CancelLoading();
             }
+            if (Shell.Destination != "Search")
+            {
+                _viewModel?.SearchBrowser?.CancelLoading();
+            }
 
             if (Shell.Destination != "Home" && _viewModel?.ShowDesignGalleryCommand.IsRunning is true)
             {
@@ -90,23 +96,33 @@ public partial class MainWindow : Window
         Shell.ExitRequested += (_, _) => Close();
         Shell.LanguageRequested += (_, _) => ShowLanguage();
         Shell.LibraryLayoutRequested += (_, _) => ShowLibraryLayout();
+        Shell.LibrarySwitcherRequested += (_, _) => ShowLibrarySwitcher();
+        Shell.DiagnosticsRequested += (_, _) => ShowDiagnostics();
         GalleryView.SettingsRequested += (_, _) =>
         {
             GalleryView.SuspendFocusMemory();
             Shell.Navigate("Settings");
             _viewModel?.HideDesignGalleryCommand.Execute(null);
         };
-        GalleryView.LibrariesRequested += (_, _) => OpenLibraries();
         GalleryView.SearchRequested += (_, _) =>
         {
             GalleryView.SuspendFocusMemory();
             Shell.Navigate("Search");
             _viewModel?.HideDesignGalleryCommand.Execute(null);
         };
+        GalleryView.DownloadsRequested += (_, _) =>
+        {
+            GalleryView.SuspendFocusMemory();
+            Shell.Navigate("Downloads");
+            _viewModel?.HideDesignGalleryCommand.Execute(null);
+        };
         GalleryView.LibraryRequested += OnLibraryRequested;
-        Shell.LibraryRequested += OnLibraryRequested;
         GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
         Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        Shell.LibraryView.FilterRequested += (_, _) => ShowLibraryFilter();
+        Shell.LibraryView.SortRequested += (_, _) => ShowLibrarySort();
+        Shell.SearchView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        Shell.SearchView.KeyboardRequested += (_, target) => ShowKeyboard(target, fullScreen: true);
         GalleryView.NavigationWidthChanged += (_, _) => UpdateGalleryFooter();
         UpdateGalleryFooter();
     }
@@ -145,6 +161,87 @@ public partial class MainWindow : Window
 
         AddModalButton(Loc.Get("Action.Back"), DismissModal);
         FocusModal();
+    }
+
+    private void ShowLibrarySwitcher()
+    {
+        if (_viewModel?.LibraryBrowser is { CanChooseLibrary: true } browser)
+        {
+            ShowLibraryMenu(Loc.Get("Library.Switch"), browser.Libraries,
+                library => library.Name,
+                library => library == browser.SelectedLibrary,
+                library => browser.OpenLibraryCommand.ExecuteAsync(library));
+        }
+    }
+
+    private void ShowLibraryFilter()
+    {
+        if (_viewModel?.LibraryBrowser is { } browser
+            && browser.SetFilterCommand.CanExecute(browser.SelectedFilter))
+        {
+            ShowLibraryMenu(Loc.Get("Library.Filter.Title"), Enum.GetValues<MediaLibraryFilter>(),
+                filter => Loc.Get($"Library.Filter.{filter}"),
+                filter => filter == browser.SelectedFilter,
+                filter => browser.SetFilterCommand.ExecuteAsync(filter));
+        }
+    }
+
+    private void ShowLibrarySort()
+    {
+        if (_viewModel?.LibraryBrowser is { } browser
+            && browser.SetSortDirectionCommand.CanExecute(browser.SelectedSortDirection))
+        {
+            ShowLibraryMenu(Loc.Get("Library.Sort.Title"), Enum.GetValues<MediaLibrarySortDirection>(),
+                direction => Loc.Get($"Library.Sort.{direction}"),
+                direction => direction == browser.SelectedSortDirection,
+                direction => browser.SetSortDirectionCommand.ExecuteAsync(direction));
+        }
+    }
+
+    private void ShowLibraryMenu<T>(
+        string title,
+        IEnumerable<T> choices,
+        Func<T, string> label,
+        Func<T, bool> isSelected,
+        Func<T, Task> select)
+    {
+        if (ModalOverlay.IsVisible)
+        {
+            return;
+        }
+
+        BeginModal(title);
+        ModalDialog.MaxWidth = 620 * ResponsiveDensityProfile.Create(ClientSize.Width, ClientSize.Height).CardScale;
+        Button? initial = null;
+        foreach (var choice in choices)
+        {
+            var button = new Button
+            {
+                Content = label(choice),
+                Tag = choice,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            };
+            if (isSelected(choice))
+            {
+                button.Classes.Add("selected");
+                AutomationProperties.SetItemStatus(button, Loc.Get("State.Selected"));
+                initial = button;
+            }
+
+            button.Click += async (_, _) =>
+            {
+                var unchanged = isSelected(choice);
+                DismissModal();
+                if (!unchanged)
+                {
+                    await select(choice);
+                }
+            };
+            ModalActions.Children.Add(button);
+        }
+
+        AddModalButton(Loc.Get("Action.Back"), DismissModal);
+        FocusModal(initial);
     }
 
     private async void OnOpened(object? sender, EventArgs eventArgs)
@@ -206,6 +303,7 @@ public partial class MainWindow : Window
         {
             _viewModel.ShowDesignGalleryCommand.Cancel();
             _viewModel.LibraryBrowser?.CancelLoading();
+            _viewModel.SearchBrowser?.CancelLoading();
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _viewModel.ShowDesignGalleryCommand.PropertyChanged -= OnHomeLoadPropertyChanged;
             _viewModel = null;
@@ -247,6 +345,7 @@ public partial class MainWindow : Window
         }
 
         if (args.PropertyName is nameof(MainViewModel.IsServerEntryVisible)
+            or nameof(MainViewModel.IsServerSelectionVisible)
             or nameof(MainViewModel.IsSignInVisible) or nameof(MainViewModel.AreSavedSessionsVisible)
             or nameof(MainViewModel.IsAuthenticatedVisible) or nameof(MainViewModel.IsDesignGalleryVisible)
             or nameof(MainViewModel.IsBusy))
@@ -271,12 +370,14 @@ public partial class MainWindow : Window
         ShellViewport.IsVisible = !_viewModel.IsDesignGalleryVisible;
         Shell.IsVisible = _viewModel.IsAuthenticatedVisible;
         AuthenticationSurface.IsVisible = !Shell.IsVisible;
+        ShellFooter.IsVisible = !Shell.IsVisible || Shell.Destination == "Home";
         var screen = _viewModel.IsDesignGalleryVisible ? "gallery"
             : _viewModel.IsAuthenticatedVisible && Shell.Destination == "Home"
                 && _viewModel.ShowDesignGalleryCommand.IsRunning ? "shell:Home:loading"
             : _viewModel.IsAuthenticatedVisible ? $"shell:{Shell.Destination}"
             : _viewModel.IsSignInVisible ? "sign-in"
             : _viewModel.AreSavedSessionsVisible ? "accounts"
+            : _viewModel.IsServerSelectionVisible ? "server-selection"
             : _viewModel.IsServerEntryVisible ? "server" : "loading";
         if (_diagnosticsOpen)
         {
@@ -306,10 +407,20 @@ public partial class MainWindow : Window
         _screen = screen;
         var contentFocus = Shell.ContentFocus;
         UpdateLayout();
+        AuthenticationProgress.Text = screen switch
+        {
+            "server-selection" or "server" => Loc.Get("Auth.StepServer"),
+            "accounts" => Loc.Get("Auth.StepAccount"),
+            "sign-in" => Loc.Get("Auth.StepSignIn"),
+            _ => string.Empty,
+        };
         var initial = screen switch
         {
             "sign-in" => UsernameTextBox,
-            "accounts" => SavedAccountButton,
+            "accounts" => SavedAccountsList.GetVisualDescendants().OfType<Button>().FirstOrDefault()
+                ?? AddAccountButton,
+            "server-selection" => SavedServersList.GetVisualDescendants().OfType<Button>().FirstOrDefault()
+                ?? AddServerFromSelectionButton,
             "server" => (Control)ServerAddressTextBox,
             "gallery" => GalleryView.HomeNavigation,
             "loading" => LanguageButton,
@@ -326,6 +437,10 @@ public partial class MainWindow : Window
             if (Shell.Destination == "Libraries")
             {
                 Shell.LibraryView.ResumeFocusMemory();
+            }
+            else if (Shell.Destination == "Search")
+            {
+                Shell.SearchView.ResumeFocusMemory();
             }
         }
     }
@@ -439,6 +554,11 @@ public partial class MainWindow : Window
             {
                 return;
             }
+            if (Shell.SearchView.IsEffectivelyVisible && Shell.SearchView.IsKeyboardFocusWithin
+                && Shell.SearchView.TryMove(direction))
+            {
+                return;
+            }
 
             if (_viewModel?.IsDesignGalleryVisible is true && GalleryView.TryMoveGalleryFocus(direction))
             {
@@ -464,6 +584,9 @@ public partial class MainWindow : Window
             case Button button when button.IsEffectivelyEnabled:
                 ((IInvokeProvider)new ButtonAutomationPeer(button)).Invoke();
                 break;
+            case TextBox textBox when Shell.SearchView.IsEffectivelyVisible
+                && Shell.SearchView.TryActivateTextBox(textBox):
+                break;
             case TextBox textBox when textBox != _keyboardDraft:
                 ShowKeyboard(textBox);
                 break;
@@ -488,19 +611,20 @@ public partial class MainWindow : Window
         {
             _viewModel.ShowDesignGalleryCommand.Cancel();
         }
-        else if (_viewModel?.LibraryBrowser?.IsLoading is true)
+        else if (_viewModel?.LibraryBrowser?.IsAnyLoading is true)
         {
             _viewModel.LibraryBrowser.CancelLoading();
+        }
+        else if (_viewModel?.SearchBrowser?.IsLoading is true)
+        {
+            _viewModel.SearchBrowser.CancelLoading();
         }
         else if (_viewModel?.IsDesignGalleryVisible is true)
         {
             GalleryView.HomeNavigation.Focus(NavigationMethod.Directional);
         }
-        else if (_viewModel?.IsAuthenticatedVisible is true && !Shell.IsRailFocused)
-        {
-            Shell.FocusRail();
-        }
         else if (_viewModel?.IsSignInVisible is true
+            || _viewModel?.AreSavedSessionsVisible is true
             || _viewModel?.IsServerEntryVisible is true && _viewModel.SavedSessions.Count > 0)
         {
             if (_viewModel.BackToSessionsCommand.CanExecute(null))
@@ -508,7 +632,7 @@ public partial class MainWindow : Window
                 _viewModel.BackToSessionsCommand.Execute(null);
             }
         }
-        else if (_viewModel?.IsAuthenticatedVisible is true)
+        else if (_viewModel?.IsAuthenticatedVisible is true && Shell.Destination != "Home")
         {
             Shell.Navigate("Home");
         }
@@ -560,12 +684,21 @@ public partial class MainWindow : Window
         }
 
         var profile = AdaptiveLayoutProfile.Create(size.Width, size.Height);
+        var density = ResponsiveDensityProfile.Create(size.Width, size.Height);
         Resources["Cindara.Adaptive.SafeMargin"] = new Thickness(profile.SafeMargin);
         Resources["Cindara.Adaptive.ContentSpacing"] = profile.ContentSpacing;
-        Resources["Cindara.Adaptive.FormMaxWidth"] = 800 * profile.UiScale;
+        Resources["Cindara.Adaptive.FormMaxWidth"] = 800 * density.CardScale;
+        Resources["Cindara.Adaptive.NavigationActionSize"] = density.NavigationActionSize;
+        Resources["Cindara.Media.GridPosterWidth"] = density.GridPosterWidth;
+        Resources["Cindara.Media.GridPosterHeight"] = density.GridPosterHeight;
+        Resources["Cindara.Media.GridSpacing"] = density.GridSpacing;
+        Resources["Cindara.Media.GridCardMargin"] = new Thickness(density.GridSpacing / 2);
         Resources["Cindara.Adaptive.DialogMaxHeight"] =
             Math.Max(240, size.Height - (profile.SafeMargin * 2) - 96);
-        var typographyScale = Preferences.TextScale * profile.UiScale;
+        var typographyScale = Preferences.TextScale * density.TypeScale;
+        Resources["Cindara.Media.GridTitleHeight"] = 48 * typographyScale;
+        Resources["Cindara.Media.GridTitleLineHeight"] = 24 * typographyScale;
+        Resources["Cindara.Media.GridSubtitleHeight"] = 20 * typographyScale;
         Resources["Cindara.Type.Display"] = 48 * typographyScale;
         Resources["Cindara.Type.Title"] = 32 * typographyScale;
         Resources["Cindara.Type.Heading"] = 24 * typographyScale;
@@ -615,6 +748,42 @@ public partial class MainWindow : Window
         FocusModal();
     }
 
+    private void OnSelectServer(object? sender, RoutedEventArgs args)
+    {
+        if (_viewModel is not null
+            && sender is Button { DataContext: Cindara.Core.Models.ServerIdentity server }
+            && _viewModel.SelectServerCommand.CanExecute(server))
+        {
+            _viewModel.SelectServerCommand.Execute(server);
+        }
+    }
+
+    private async void OnUseSavedAccount(object? sender, RoutedEventArgs args)
+    {
+        if (_viewModel is not null
+            && sender is Button { DataContext: SessionProfile profile })
+        {
+            _viewModel.SelectedSavedSession = profile;
+            if (_viewModel.UseSavedSessionCommand.CanExecute(null))
+            {
+                await _viewModel.UseSavedSessionCommand.ExecuteAsync(null);
+            }
+        }
+    }
+
+    private async void OnRemoveSavedAccount(object? sender, RoutedEventArgs args)
+    {
+        if (_viewModel is not null
+            && sender is Button { DataContext: SessionProfile profile })
+        {
+            _viewModel.SelectedSavedSession = profile;
+            if (_viewModel.RemoveSavedSessionCommand.CanExecute(null))
+            {
+                await _viewModel.RemoveSavedSessionCommand.ExecuteAsync(null);
+            }
+        }
+    }
+
     private void BeginModal(string title)
     {
         _navigation.Remember();
@@ -624,6 +793,14 @@ public partial class MainWindow : Window
         ModalActions.Children.Clear();
         ModalOverlay.IsVisible = true;
         MainSurface.IsEnabled = false;
+    }
+
+    private void BeginFullScreenModal(string title)
+    {
+        BeginModal(title);
+        ModalDialog.MaxWidth = double.PositiveInfinity;
+        ModalDialog.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        ModalDialog.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
     }
 
     private Button AddModalButton(string text, Action action)
@@ -651,6 +828,9 @@ public partial class MainWindow : Window
     private void ClearModal()
     {
         _diagnosticsOpen = false;
+        ModalDialog.MaxWidth = 1200;
+        ModalDialog.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        ModalDialog.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         if (_keyboardDraft is not null)
         {
             _keyboardDraft.Text = string.Empty;
@@ -675,18 +855,29 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ShowKeyboard(TextBox target)
+    private void ShowKeyboard(TextBox target, bool fullScreen = false)
     {
         if (ModalOverlay.IsVisible)
         {
             return;
         }
 
-        BeginModal(AutomationProperties.GetName(target) ?? target.PlaceholderText ?? Loc.Get("Keyboard.EnterText"));
+        var title = AutomationProperties.GetName(target)
+            ?? target.PlaceholderText
+            ?? Loc.Get("Keyboard.EnterText");
+        if (fullScreen)
+        {
+            BeginFullScreenModal(title);
+        }
+        else
+        {
+            BeginModal(title);
+        }
         var draft = new TextBox
         {
             Text = target.Text,
             PasswordChar = target.PasswordChar,
+            MaxLength = target.MaxLength,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
             FlowDirection = target.FlowDirection,
         };
@@ -699,7 +890,13 @@ public partial class MainWindow : Window
         foreach (var character in "1234567890-=" + "qwertyuiop[]" + "asdfghjkl;'\\"
                      + "zxcvbnm,./`" + "!@#$%^&*()_+{}:\"|<>?~")
         {
-            var key = new Button { Content = character.ToString(), Margin = new Avalonia.Thickness(3) };
+            var key = new Button
+            {
+                Content = character.ToString(),
+                Margin = new Avalonia.Thickness(3),
+                MinWidth = 48,
+                MinHeight = 48,
+            };
             key.Click += (_, _) => InsertText(draft, (string)key.Content!);
             keys.Children.Add(key);
             if (char.IsLetter(character))
@@ -742,7 +939,12 @@ public partial class MainWindow : Window
 
         void AddKeyboardAction(string text, Action action)
         {
-            var button = new Button { Content = text, Margin = new Avalonia.Thickness(3) };
+            var button = new Button
+            {
+                Content = text,
+                Margin = new Avalonia.Thickness(3),
+                MinHeight = 48,
+            };
             button.Click += (_, _) => action();
             actions.Children.Add(button);
         }
@@ -752,8 +954,15 @@ public partial class MainWindow : Window
     {
         var start = Math.Min(draft.SelectionStart, draft.SelectionEnd);
         var length = Math.Abs(draft.SelectionEnd - draft.SelectionStart);
-        draft.Text = (draft.Text ?? string.Empty).Remove(start, length).Insert(start, value);
-        draft.CaretIndex = start + value.Length;
+        var text = draft.Text ?? string.Empty;
+        start = Math.Clamp(start, 0, text.Length);
+        length = Math.Min(length, text.Length - start);
+        var available = draft.MaxLength > 0
+            ? Math.Max(0, draft.MaxLength - (text.Length - length))
+            : int.MaxValue;
+        var insertion = value.Length <= available ? value : value[..available];
+        draft.Text = text.Remove(start, length).Insert(start, insertion);
+        draft.CaretIndex = start + insertion.Length;
         draft.SelectionStart = draft.SelectionEnd = draft.CaretIndex;
     }
 }

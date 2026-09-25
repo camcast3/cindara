@@ -3,6 +3,7 @@
              xmlns:vm="using:Cindara.Desktop.ViewModels"
              xmlns:core="using:Cindara.Core.Jellyfin"
              xmlns:loc="using:Cindara.Desktop.Localization"
+             xmlns:views="using:Cindara.Desktop.Views"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              x:Class="Cindara.Desktop.Views.DesignGalleryView"
@@ -11,6 +12,7 @@
              d:DesignHeight="1080"
              mc:Ignorable="d">
     <UserControl.Resources>
+        <views:LibraryNavigationIconConverter x:Key="LibraryNavigationIcon" />
         <x:Double x:Key="Gallery.HeroHeight">420</x:Double>
         <x:Double x:Key="Gallery.NavigationWidth">96</x:Double>
         <Thickness x:Key="Gallery.NavigationPadding">10,24</Thickness>
@@ -89,31 +91,33 @@
                                  Height="{DynamicResource Gallery.NavigationIconSize}"
                                  Data="M12,3 2,12 5,12 5,21 10,21 10,15 14,15 14,21 19,21 19,12 22,12 Z" />
                     </Button>
-                    <Button x:Name="GalleryLibrariesButton" Width="{DynamicResource Gallery.NavigationButtonSize}"
-                            AutomationProperties.Name="{loc:Tr Nav.Libraries}"
-                            Click="OnLibrariesClicked"
-                            Classes="nav"
-                            ToolTip.Tip="{loc:Tr Nav.Libraries}">
-                        <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
-                                 Height="{DynamicResource Gallery.NavigationIconSize}"
-                                 Data="M4,3 C2.3,3 1,4.3 1,6 L1,16 C1,17.7 2.3,19 4,19 L9,19 9,21 6,21 6,23 18,23 18,21 15,21 15,19 20,19 C21.7,19 23,17.7 23,16 L23,6 C23,4.3 21.7,3 20,3 Z M4,5 20,5 Q21,5 21,6 L21,16 Q21,17 20,17 L4,17 Q3,17 3,16 L3,6 Q3,5 4,5 Z" />
-                    </Button>
                     <ItemsControl x:Name="GalleryLibraryShortcuts" ItemsSource="{Binding SidebarLibraries}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate><StackPanel Spacing="{DynamicResource Gallery.NavigationSpacing}" /></ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="core:MediaLibrary">
-                                <Button Width="{DynamicResource Gallery.ShortcutWidth}" MinHeight="48" Classes="nav" Click="OnLibraryClicked"
+                                <Button Width="{DynamicResource Gallery.NavigationButtonSize}"
+                                        Height="{DynamicResource Gallery.NavigationButtonSize}"
+                                        Classes="nav" Click="OnLibraryClicked"
                                         AutomationProperties.Name="{Binding Name}" ToolTip.Tip="{Binding Name}">
-                                    <TextBlock Text="{Binding Name}" FontSize="{DynamicResource Gallery.NavigationTextSize}"
-                                               MaxWidth="{DynamicResource Gallery.ShortcutTextWidth}"
-                                               TextWrapping="Wrap" TextAlignment="Center" MaxLines="2"
-                                               TextTrimming="CharacterEllipsis" />
+                                    <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
+                                              Height="{DynamicResource Gallery.NavigationIconSize}"
+                                              Data="{Binding Converter={StaticResource LibraryNavigationIcon}}" />
                                 </Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <Button x:Name="GalleryDownloadsButton"
+                            Width="{DynamicResource Gallery.NavigationButtonSize}"
+                            AutomationProperties.Name="{loc:Tr Nav.Downloads}"
+                            Click="OnDownloadsClicked"
+                            Classes="nav"
+                            ToolTip.Tip="{loc:Tr Nav.Downloads}">
+                        <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
+                                  Height="{DynamicResource Gallery.NavigationIconSize}"
+                                  Data="M 10,2 L 14,2 L 14,12 L 20,12 L 12,20 L 4,12 L 10,12 Z M 2,22 L 22,22 L 22,24 L 2,24 Z" />
+                    </Button>
                 </StackPanel>
                 </ScrollViewer>
                 <Button x:Name="GallerySettingsButton" Grid.Row="2"

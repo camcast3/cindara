@@ -57,8 +57,10 @@ public sealed class GalleryNavigationMarkupTests
             element => (string?)element.Attribute("ItemsSource") == "{Binding Libraries}");
         Assert.DoesNotContain(gallery.Descendants(Xaml + "TextBlock"),
             element => (string?)element.Attribute("Text") == "{loc:Tr Nav.Libraries}");
-        Assert.Contains(gallery.Descendants(Xaml + "Button"),
+        Assert.DoesNotContain(gallery.Descendants(Xaml + "Button"),
             element => (string?)element.Attribute("Click") == "OnLibrariesClicked");
+        Assert.Contains(gallery.Descendants(Xaml + "Button"),
+            element => (string?)element.Attribute("Click") == "OnLibraryClicked");
         Assert.DoesNotContain(gallery.Descendants(Xaml + "Button"),
             element => (string?)element.Attribute("AutomationProperties.HelpText") == "{loc:Tr Gallery.PreviewOnly}");
     }

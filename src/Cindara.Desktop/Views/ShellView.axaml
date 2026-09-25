@@ -2,121 +2,205 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Cindara.Desktop.ViewModels"
              xmlns:views="using:Cindara.Desktop.Views"
-             xmlns:core="using:Cindara.Core.Jellyfin"
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.ShellView"
              x:DataType="vm:MainViewModel">
-    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}">
-        <ScrollViewer x:Name="PageScroll" Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
-        <Grid>
-            <StackPanel x:Name="HomePage" Spacing="24">
-                <TextBlock Classes="display" Text="{loc:Tr Nav.Home}" />
-                <Border Classes="hero">
-                    <StackPanel Spacing="24">
-                        <TextBlock Classes="secondary" TextWrapping="Wrap"
-                                   Text="{Binding StatusMessage}" />
-                        <Button x:Name="RetryHomeButton" Classes="primary" IsVisible="{Binding !IsBusy}"
-                                Command="{Binding OpenHomeCommand}" Content="{loc:Tr Home.Retry}" />
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-            <StackPanel x:Name="PlaceholderPage" IsVisible="False" Spacing="24">
+    <Grid RowDefinitions="Auto,*" RowSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}">
+        <Grid x:Name="DestinationHeader" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="18">
+            <Button x:Name="DestinationBackButton"
+                    Width="{DynamicResource Cindara.Adaptive.NavigationActionSize}"
+                    Height="{DynamicResource Cindara.Adaptive.NavigationActionSize}"
+                    AutomationProperties.Name="{loc:Tr Action.Back}"
+                    Click="OnBackClicked">
+                <PathIcon Width="24" Height="24"
+                          Data="M 15,4 L 7,12 L 15,20 L 13,22 L 3,12 L 13,2 Z" />
+            </Button>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock x:Name="DestinationEyebrow" Classes="caption"
+                           Text="{loc:Tr Brand.Name}" />
                 <TextBlock x:Name="DestinationTitle" Classes="display" />
-                <Border Classes="hero">
-                    <StackPanel Spacing="24">
-                        <TextBlock x:Name="DestinationMessage" Classes="secondary" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
+                <Button x:Name="LibrarySwitcher" Classes="library-title"
+                        HorizontalAlignment="Left" HorizontalContentAlignment="Stretch"
+                        IsEnabled="{Binding LibraryBrowser.CanChooseLibrary, FallbackValue=False}"
+                        AutomationProperties.Name="{Binding LibraryBrowser.LibraryName}"
+                        AutomationProperties.HelpText="{loc:Tr Library.Switch.Help}"
+                        Click="OnLibrarySwitcherClicked">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                        <TextBlock x:Name="LibraryTitle" Classes="display"
+                                   Text="{Binding LibraryBrowser.LibraryName, FallbackValue={loc:Tr Library.Switch}, TargetNullValue={loc:Tr Library.Switch}}"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                        <PathIcon Grid.Column="1" Width="20" Height="20"
+                                  VerticalAlignment="Center"
+                                  Data="M 2,6 L 10,14 L 18,6 L 20,8 L 10,18 L 0,8 Z" />
+                    </Grid>
+                </Button>
             </StackPanel>
-            <StackPanel x:Name="SettingsPage" IsVisible="False" Spacing="32"
-                        MaxWidth="{DynamicResource Cindara.Adaptive.FormMaxWidth}"
-                        HorizontalAlignment="Stretch">
-                <TextBlock Classes="display" Text="{loc:Tr Nav.Settings}" />
-                <Border Classes="settings-card">
-                    <StackPanel x:Name="SettingsActions" Spacing="16">
-                        <Button x:Name="SettingsLanguageButton" Classes="settings-action"
-                                HorizontalAlignment="Stretch"
-                                Content="{loc:Tr Language.Selection}" Click="OnLanguageClicked" />
-                        <Button x:Name="SettingsLibraryLayoutButton" Classes="settings-action"
-                                HorizontalAlignment="Stretch" IsEnabled="{Binding HasLibraryLayout}"
-                                Content="{loc:Tr LibraryLayout.Title}" Click="OnLibraryLayoutClicked" />
-                        <Button x:Name="ExitButton" Classes="settings-action"
-                                HorizontalAlignment="Stretch"
-                                Content="{loc:Tr Action.Exit}" Click="OnExitClicked" />
-                        <Button x:Name="BackHomeButton" Classes="settings-action"
-                                HorizontalAlignment="Stretch"
-                                Content="{loc:Tr Nav.BackHome}" Click="OnHomeClicked" />
-                    </StackPanel>
-                </Border>
-            </StackPanel>
+            <TextBlock x:Name="DestinationBrand" Grid.Column="2" Classes="heading"
+                       VerticalAlignment="Center"
+                       Text="{loc:Tr Brand.Name}" />
         </Grid>
-        </ScrollViewer>
-        <Grid x:Name="LibrariesPage" Grid.Column="1" IsVisible="False">
-            <Grid IsVisible="{Binding HasLibraryBrowser}">
-                <views:LibraryBrowserView x:Name="LibraryView" DataContext="{Binding LibraryBrowser}" />
-            </Grid>
-            <StackPanel x:Name="LibrariesUnavailable" Spacing="24" IsVisible="{Binding !HasLibraryBrowser}">
-                <TextBlock Classes="display" Text="{loc:Tr Nav.Libraries}" />
-                <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" />
-                <Button Content="{loc:Tr Home.Retry}" Command="{Binding OpenHomeCommand}" />
-            </StackPanel>
-        </Grid>
-        <Border x:Name="NavigationRail" Width="88" HorizontalAlignment="Left"
-                VerticalAlignment="Top" Background="{DynamicResource Cindara.Brush.Surface}"
-                CornerRadius="{DynamicResource Cindara.Radius.Medium}">
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Hidden">
-            <StackPanel x:Name="NavigationButtons" Spacing="16" Margin="8">
-                <Button x:Name="HomeNavigation" Classes="nav selected" Tag="Home" Click="OnDestinationClicked"
-                        AutomationProperties.Name="{loc:Tr Nav.Home}" ToolTip.Tip="{loc:Tr Nav.Home}" HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal" Spacing="16">
-                        <PathIcon Width="28" Height="28" Data="M 2,12 L 12,3 L 22,12 M 5,10 L 5,22 L 10,22 L 10,15 L 14,15 L 14,22 L 19,22 L 19,10" />
-                        <TextBlock Text="{loc:Tr Nav.Home}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
+
+        <Grid Grid.Row="1">
+            <ScrollViewer x:Name="PageScroll" HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <Grid>
+                    <StackPanel x:Name="HomePage" Spacing="24">
+                        <Border Classes="hero">
+                            <StackPanel Spacing="24">
+                                <TextBlock Classes="secondary" TextWrapping="Wrap"
+                                           Text="{Binding StatusMessage}" />
+                                <Button x:Name="RetryHomeButton" Classes="primary"
+                                        IsVisible="{Binding !IsBusy}"
+                                        Command="{Binding OpenHomeCommand}"
+                                        Content="{loc:Tr Home.Retry}" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                </Button>
-                <Button x:Name="LibrariesNavigation" Classes="nav" Tag="Libraries" Click="OnDestinationClicked"
-                        AutomationProperties.Name="{loc:Tr Nav.Libraries}" ToolTip.Tip="{loc:Tr Nav.Libraries}" HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal" Spacing="16">
-                        <PathIcon Width="28" Height="28" Data="M 2,3 L 7,3 L 7,22 L 2,22 Z M 10,3 L 15,3 L 15,22 L 10,22 Z M 18,3 L 22,3 L 22,22 L 18,22 Z" />
-                        <TextBlock Text="{loc:Tr Nav.Libraries}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
+
+                    <StackPanel x:Name="PlaceholderPage" IsVisible="False" Spacing="24">
+                        <Border Classes="hero">
+                            <TextBlock x:Name="DestinationMessage" Classes="secondary"
+                                       TextWrapping="Wrap" />
+                        </Border>
                     </StackPanel>
-                </Button>
-                <Button x:Name="SearchNavigation" Classes="nav" Tag="Search" Click="OnDestinationClicked"
-                        AutomationProperties.Name="{loc:Tr Nav.Search}" ToolTip.Tip="{loc:Tr Nav.Search}" HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal" Spacing="16">
-                        <PathIcon Width="28" Height="28" Data="M 10,2 A 8,8 0 1 0 10,18 A 8,8 0 1 0 10,2 M 16,16 L 23,23 L 21,24 L 14,18 Z" />
-                        <TextBlock Text="{loc:Tr Nav.Search}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
+
+                    <StackPanel x:Name="SettingsPage" IsVisible="False" Spacing="24"
+                                HorizontalAlignment="Stretch">
+                        <Grid x:Name="SettingsWorkspace" ColumnDefinitions="250,*"
+                              ColumnSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}">
+                            <Border Classes="settings-card">
+                                <ScrollViewer x:Name="SettingsCategoryScroll"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="SettingsCategories" Spacing="8">
+                                    <Button x:Name="SettingsPreferencesCategory"
+                                            Classes="settings-action"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Left"
+                                            Content="{loc:Tr Settings.Preferences}"
+                                            Click="OnSettingsCategoryClicked"
+                                            GotFocus="OnSettingsCategoryFocused"
+                                            Tag="Preferences" />
+                                    <Button x:Name="SettingsLibraryCategory"
+                                            Classes="settings-action"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Left"
+                                            Content="{loc:Tr LibraryLayout.Title}"
+                                            Click="OnSettingsCategoryClicked"
+                                            GotFocus="OnSettingsCategoryFocused"
+                                            Tag="Library" />
+                                    <Button x:Name="SettingsApplicationCategory"
+                                            Classes="settings-action"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Left"
+                                            Content="{loc:Tr Settings.Application}"
+                                            Click="OnSettingsCategoryClicked"
+                                            GotFocus="OnSettingsCategoryFocused"
+                                            Tag="Application" />
+                                    <Button x:Name="SettingsDiagnosticsCategory"
+                                            Classes="settings-action"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Left"
+                                            Content="{loc:Tr Diagnostics.Title}"
+                                            Click="OnSettingsCategoryClicked"
+                                            GotFocus="OnSettingsCategoryFocused"
+                                            Tag="Diagnostics" />
+                                </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+
+                            <Border x:Name="SettingsDetail" Grid.Column="1"
+                                    Classes="settings-card">
+                                <StackPanel>
+                                    <StackPanel x:Name="SettingsPreferencesPanel" Spacing="16">
+                                        <TextBlock Classes="heading"
+                                                   Text="{loc:Tr Settings.Preferences}" />
+                                        <TextBlock Classes="secondary"
+                                                   Text="{loc:Tr Settings.PreferencesHelp}"
+                                                   TextWrapping="Wrap" />
+                                        <StackPanel x:Name="SettingsActions" Spacing="16">
+                                            <Button x:Name="SettingsLanguageButton"
+                                                    Classes="settings-action"
+                                                    HorizontalAlignment="Stretch"
+                                                    Content="{loc:Tr Language.Selection}"
+                                                    Click="OnLanguageClicked" />
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="SettingsLibraryPanel" Spacing="16"
+                                                IsVisible="False">
+                                        <TextBlock Classes="heading"
+                                                   Text="{loc:Tr LibraryLayout.Title}" />
+                                        <TextBlock Classes="secondary"
+                                                   Text="{loc:Tr LibraryLayout.Scope}"
+                                                   TextWrapping="Wrap" />
+                                        <Button x:Name="SettingsLibraryLayoutButton"
+                                                Classes="settings-action"
+                                                HorizontalAlignment="Stretch"
+                                                IsEnabled="{Binding HasLibraryLayout}"
+                                                Content="{loc:Tr LibraryLayout.Title}"
+                                                Click="OnLibraryLayoutClicked" />
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="SettingsApplicationPanel" Spacing="16"
+                                                IsVisible="False">
+                                        <TextBlock Classes="heading"
+                                                   Text="{loc:Tr Settings.Application}" />
+                                        <TextBlock Classes="secondary"
+                                                   Text="{loc:Tr Settings.ApplicationHelp}"
+                                                   TextWrapping="Wrap" />
+                                        <Button x:Name="ExitButton" Classes="settings-action"
+                                                HorizontalAlignment="Stretch"
+                                                Content="{loc:Tr Action.Exit}"
+                                                Click="OnExitClicked" />
+                                        <Button x:Name="BackHomeButton" Classes="settings-action"
+                                                HorizontalAlignment="Stretch"
+                                                Content="{loc:Tr Nav.BackHome}"
+                                                Click="OnHomeClicked" />
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="SettingsDiagnosticsPanel" Spacing="16"
+                                                IsVisible="False">
+                                        <TextBlock Classes="heading"
+                                                   Text="{loc:Tr Diagnostics.Title}" />
+                                        <TextBlock Classes="secondary"
+                                                   Text="{loc:Tr Diagnostics.Privacy}"
+                                                   TextWrapping="Wrap" />
+                                        <Button x:Name="OpenDiagnosticsButton"
+                                                Classes="settings-action"
+                                                HorizontalAlignment="Stretch"
+                                                Content="{loc:Tr Diagnostics.Title}"
+                                                Click="OnDiagnosticsClicked" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </StackPanel>
-                </Button>
-                <ItemsControl x:Name="ShellLibraryShortcuts" ItemsSource="{Binding SidebarLibraries}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><StackPanel Spacing="16" /></ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="core:MediaLibrary">
-                            <Button Classes="nav" HorizontalAlignment="Stretch" Click="OnLibraryClicked"
-                                    AutomationProperties.Name="{Binding Name}" ToolTip.Tip="{Binding Name}">
-                                <TextBlock Text="{Binding Name}" FontSize="16" TextWrapping="Wrap"
-                                           TextAlignment="Center" MaxWidth="240" Margin="4" />
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <Button x:Name="DownloadsNavigation" Classes="nav" Tag="Downloads" Click="OnDestinationClicked"
-                        AutomationProperties.Name="{loc:Tr Nav.Downloads}" ToolTip.Tip="{loc:Tr Nav.Downloads}" HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal" Spacing="16">
-                        <PathIcon Width="28" Height="28" Data="M 10,2 L 14,2 L 14,12 L 20,12 L 12,20 L 4,12 L 10,12 Z M 2,22 L 22,22 L 22,24 L 2,24 Z" />
-                        <TextBlock Text="{loc:Tr Nav.Downloads}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Button>
-                <Button x:Name="SettingsNavigation" Classes="nav" Tag="Settings" Click="OnDestinationClicked"
-                        AutomationProperties.Name="{loc:Tr Nav.Settings}" ToolTip.Tip="{loc:Tr Nav.Settings}" HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal" Spacing="16">
-                        <PathIcon Width="28" Height="28" Data="M 2,5 L 22,5 L 22,7 L 2,7 Z M 2,17 L 22,17 L 22,19 L 2,19 Z M 6,2 L 10,2 L 10,10 L 6,10 Z M 15,14 L 19,14 L 19,22 L 15,22 Z" />
-                        <TextBlock Text="{loc:Tr Nav.Settings}" Classes="rail-label" IsVisible="False" VerticalAlignment="Center" MaxWidth="340" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
+                </Grid>
             </ScrollViewer>
-        </Border>
+
+            <Grid x:Name="LibrariesPage" IsVisible="False">
+                <Grid IsVisible="{Binding HasLibraryBrowser}">
+                    <views:LibraryBrowserView x:Name="LibraryView"
+                                              DataContext="{Binding LibraryBrowser}" />
+                </Grid>
+                <StackPanel x:Name="LibrariesUnavailable" Spacing="24"
+                            IsVisible="{Binding !HasLibraryBrowser}">
+                    <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+                    <Button Content="{loc:Tr Home.Retry}"
+                            Command="{Binding OpenHomeCommand}" />
+                </StackPanel>
+            </Grid>
+
+            <Grid x:Name="SearchPage" IsVisible="False">
+                <Grid IsVisible="{Binding HasSearchBrowser}">
+                    <views:SearchBrowserView x:Name="SearchView"
+                                             DataContext="{Binding SearchBrowser}" />
+                </Grid>
+                <StackPanel Spacing="24" IsVisible="{Binding !HasSearchBrowser}">
+                    <TextBlock Text="{loc:Tr Search.Unavailable}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

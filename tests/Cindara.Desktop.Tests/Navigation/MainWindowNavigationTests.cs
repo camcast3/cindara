@@ -155,8 +155,7 @@ public sealed class MainWindowNavigationTests
             fixture.Preview.LayoutLibraries = true;
             fixture.SignIn();
             File.WriteAllText(path, "Block creation of the settings directory.");
-            fixture.OpenSettings();
-            fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+            fixture.OpenLibraryLayoutSettings();
             fixture.ClickAutomationId("ConfigureHomeLibraries");
             fixture.ClickAutomationId("library-Home-tv-toggle");
             fixture.ClickAutomationId("SaveLibraryLayout");
@@ -191,11 +190,25 @@ public sealed class MainWindowNavigationTests
                     fixture.SignIn();
                     Assert.Equal(["tv", "movies", "anime"], fixture.Model.SidebarLibraries.Select(library => library.Id));
                     Assert.Equal(["tv", "movies", "anime"], fixture.Model.DesignGallery!.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
-                    Assert.All(fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
-                        .GetVisualDescendants().OfType<Button>(), button =>
-                        Assert.Single(Assert.Single(button.GetVisualDescendants().OfType<TextBlock>()).TextLayout.TextLines));
-                    fixture.OpenSettings();
-                    fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+                    var shortcutButtons = fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
+                        .GetVisualDescendants().OfType<Button>().ToArray();
+                    var homeButton = fixture.Gallery.FindControl<Button>("SidebarHomeButton")!;
+                    var homeCenter = homeButton.TranslatePoint(
+                        new Point(homeButton.Bounds.Width / 2, homeButton.Bounds.Height / 2),
+                        fixture.Gallery)!.Value.X;
+                    Assert.All(shortcutButtons, button =>
+                    {
+                        Assert.Equal(homeButton.Bounds.Size, button.Bounds.Size);
+                        var center = button.TranslatePoint(
+                            new Point(button.Bounds.Width / 2, button.Bounds.Height / 2),
+                            fixture.Gallery)!.Value.X;
+                        Assert.InRange(Math.Abs(center - homeCenter), 0, 1);
+                        Assert.Single(button.GetVisualDescendants().OfType<PathIcon>());
+                    });
+                    Assert.Equal(3, shortcutButtons.Select(button =>
+                            Assert.Single(button.GetVisualDescendants().OfType<PathIcon>()).Data)
+                        .Distinct().Count());
+                    fixture.OpenLibraryLayoutSettings();
                     fixture.ClickAutomationId("ConfigureSidebarLibraries");
                     Assert.Equal(3, fixture.Modal.GetVisualDescendants().OfType<Button>()
                         .Count(button => AutomationProperties.GetAutomationId(button)?.EndsWith("-toggle", StringComparison.Ordinal) is true));
@@ -211,15 +224,14 @@ public sealed class MainWindowNavigationTests
                     Capture(fixture.Window, $"library-layout-sidebar-{cultureName}");
                     fixture.ClickAutomationId("SaveLibraryLayout");
                     Assert.False(fixture.IsModalVisible);
-                    fixture.Click(fixture.Shell.FindControl<Button>("BackHomeButton")!);
+                    fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
                     Assert.Equal(["tv", "anime"], fixture.Model.DesignGallery!.SidebarLibraries.Select(library => library.Id));
                     Assert.Equal(["tv", "movies", "anime"], fixture.Model.DesignGallery.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
                     var shortcuts = fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
                         .GetVisualDescendants().OfType<Button>().ToArray();
                     Assert.Equal(["TV", "Anime"], shortcuts.Select(AutomationProperties.GetName));
 
-                    fixture.OpenSettings();
-                    fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+                    fixture.OpenLibraryLayoutSettings();
                     fixture.ClickAutomationId("ConfigureHomeLibraries");
                     Assert.DoesNotContain(fixture.Modal.GetVisualDescendants().OfType<TextBlock>(),
                         text => text.Text is "Collections" or "People");
@@ -228,13 +240,12 @@ public sealed class MainWindowNavigationTests
                     Assert.Equal("library-Home-anime-toggle", AutomationProperties.GetAutomationId(Focused(fixture.Window)));
                     fixture.ClickAutomationId("library-Home-tv-toggle");
                     fixture.ClickAutomationId("SaveLibraryLayout");
-                    fixture.Click(fixture.Shell.FindControl<Button>("BackHomeButton")!);
+                    fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
                     Assert.Equal(["anime", "movies"], fixture.Model.DesignGallery!.RecentlyAddedLibraries.Select(rail => rail.LibraryId));
                     Assert.Equal(["tv", "anime"], fixture.Model.DesignGallery.SidebarLibraries.Select(library => library.Id));
                     Assert.Equal(1, fixture.Preview.Calls);
 
-                    fixture.OpenSettings();
-                    fixture.Click(fixture.Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+                    fixture.OpenLibraryLayoutSettings();
                     fixture.ClickAutomationId("ConfigureSidebarLibraries");
                     fixture.ClickAutomationId("library-Sidebar-tv-toggle");
                     fixture.Key(Key.Escape);
@@ -281,14 +292,16 @@ public sealed class MainWindowNavigationTests
         fixture.Flush();
         Assert.False(model.IsLoading);
         Assert.True(model.LoadArtworkCommand.IsRunning);
-        Assert.True(fixture.Shell.LibraryView.FindControl<Button>("NextLibraryPage")!.IsEffectivelyEnabled);
+        Assert.True(model.HasMore);
         fixture.Key(Key.Right);
         fixture.Input.Press(ControllerAction.NavigateDown);
         fixture.Flush();
         var focused = Focused(fixture.Window);
         var card = Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
-        Assert.Equal("movie-6", card.Id);
+        Assert.Equal($"movie-{model.ColumnCount + 1}", card.Id);
         Assert.True(card.IsArtworkLoading);
+        Assert.Equal(0, card.MetadataOpacity);
+        Assert.False(card.ShowArtworkPlaceholder);
         var artworkChanged = false;
         card.PropertyChanged += (_, args) =>
         {
@@ -305,10 +318,11 @@ public sealed class MainWindowNavigationTests
 
         Assert.True(artworkChanged);
         Assert.True(card.HasArtwork);
+        Assert.Equal(1, card.MetadataOpacity);
         Assert.Same(focused, Focused(fixture.Window));
         AssertInsideWindow(fixture.Window, focused);
         Assert.False(model.CanRetryArtwork);
-        Assert.False(fixture.Shell.LibraryView.FindControl<Button>("CancelLibraryArtwork")!.IsEffectivelyVisible);
+        Assert.Null(fixture.Shell.LibraryView.FindControl<Button>("CancelLibraryArtwork"));
     });
 
     [Theory]
@@ -509,7 +523,7 @@ public sealed class MainWindowNavigationTests
     [InlineData("en", 1920)]
     [InlineData("en", 3840)]
     [InlineData("qps-plocm", 1920)]
-    public Task LibrariesPageThroughMediaAndRestoreFocusAndScrollFromSummaryAndHome(string cultureName, int width) =>
+    public Task LibrariesIncrementallyLoadAndRestoreFocusAndScrollFromSummaryAndHome(string cultureName, int width) =>
         TestAppBuilder.Run(async () =>
         {
             using var culture = new CultureScope(cultureName);
@@ -529,18 +543,21 @@ public sealed class MainWindowNavigationTests
             Assert.False(fixture.Shell.FindControl<StackPanel>("LibrariesUnavailable")!.IsEffectivelyVisible);
             Assert.Equal(40, fixture.Model.LibraryBrowser!.Items.Count);
             Assert.Equal("movie-0", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
-            Assert.InRange(Focused(fixture.Window).Bounds.Width / 206, 1.195, 1.205);
-            Assert.Equal(310 * 1.2, Focused(fixture.Window).Bounds.Height, precision: 6);
-            var firstPageOffset = browser.FindControl<ScrollViewer>("LibraryScroll")!.Offset;
+            Assert.InRange(
+                Focused(fixture.Window).Bounds.Height / Focused(fixture.Window).Bounds.Width,
+                1.49,
+                1.51);
             fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
             Assert.Equal("movie-1", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
             fixture.Input.Press(ControllerAction.NavigateDown);
             fixture.Input.Press(ControllerAction.NavigateDown);
             fixture.Flush();
             var card = Focused(fixture.Window);
-            Assert.Equal("movie-11", Assert.IsType<MediaPreviewCardViewModel>(card.DataContext).Id);
+            var cardItem = Assert.IsType<MediaPreviewCardViewModel>(card.DataContext);
+            Assert.Equal($"movie-{1 + (fixture.Model.LibraryBrowser.ColumnCount * 2)}", cardItem.Id);
             AssertInsideWindow(fixture.Window, card);
-            var scroll = browser.FindControl<ScrollViewer>("LibraryScroll")!;
+            var scroll = browser.FindControl<ListBox>("LibraryRows")!
+                .GetVisualDescendants().OfType<ScrollViewer>().First();
             var offset = scroll.Offset;
             Assert.True(offset.Y > 0);
             fixture.Input.Press(ControllerAction.Accept);
@@ -553,26 +570,37 @@ public sealed class MainWindowNavigationTests
             Assert.Equal(offset, scroll.Offset);
             Capture(fixture.Window, $"library-{cultureName}-{width}");
 
-            fixture.Click(fixture.Shell.FindControl<Button>("HomeNavigation")!);
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
             Assert.True(fixture.Model.IsDesignGalleryVisible);
             Assert.Same(homeLibrary, Focused(fixture.Window));
             fixture.Click(homeLibrary);
-            Assert.Equal("movie-11", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
+            Assert.Equal(cardItem.Id, Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
             Assert.Same(card, Focused(fixture.Window));
             Assert.Equal(offset, scroll.Offset);
             Assert.Equal(1, fixture.Preview.LibraryCalls);
 
-            fixture.Click(browser.FindControl<Button>("NextLibraryPage")!);
-            await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
+            while (fixture.Model.LibraryBrowser.Items.IndexOf(
+                       Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext))
+                   < fixture.Model.LibraryBrowser.Items.Count - fixture.Model.LibraryBrowser.ColumnCount)
+            {
+                fixture.Input.Press(ControllerAction.NavigateDown);
+                fixture.Flush();
+                if (fixture.Model.LibraryBrowser.LoadMoreCommand.IsRunning)
+                {
+                    break;
+                }
+            }
+
+            if (fixture.Model.LibraryBrowser.LoadMoreCommand.ExecutionTask is { } loadMore)
+            {
+                await loadMore;
+            }
             fixture.Flush();
-            Assert.Equal(7, fixture.Model.LibraryBrowser.Items.Count);
-            Assert.Equal("movie-40", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
-            Assert.False(browser.FindControl<Button>("NextLibraryPage")!.IsEffectivelyEnabled);
-            fixture.Click(browser.FindControl<Button>("PreviousLibraryPage")!);
-            await fixture.Model.LibraryBrowser.LoadPageCommand.ExecutionTask!;
-            fixture.Flush();
-            Assert.Equal("movie-0", Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext).Id);
-            Assert.Equal(firstPageOffset, scroll.Offset);
+            Assert.Equal(47, fixture.Model.LibraryBrowser.Items.Count);
+            Assert.Equal("movie-0", fixture.Model.LibraryBrowser.Items[0].Id);
+            Assert.Equal("movie-40", fixture.Model.LibraryBrowser.Items[40].Id);
+            Assert.Null(browser.FindControl<Button>("NextLibraryPage"));
+            Assert.Null(browser.FindControl<Button>("PreviousLibraryPage"));
         });
 
     [Fact]
@@ -584,7 +612,7 @@ public sealed class MainWindowNavigationTests
         fixture.SignIn();
         fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
             .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
-        Assert.Equal("CancelLibraryLoading", Focused(fixture.Window).Name);
+        Assert.Equal("DestinationBackButton", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.Back);
         await fixture.Model.LibraryBrowser!.LoadPageCommand.ExecutionTask!;
         fixture.Flush();
@@ -635,18 +663,20 @@ public sealed class MainWindowNavigationTests
             fixture.Window.WindowState = WindowState.Normal;
             fixture.Window.Width = width;
             fixture.Window.Height = width * 9 / 16;
+            Button launcher;
             if (signedIn)
             {
                 fixture.SignIn();
                 fixture.OpenSettings();
-                Assert.Equal(4, fixture.Shell.FindControl<StackPanel>("SettingsActions")!.Children.OfType<Button>().Count());
-                fixture.Input.Press(ControllerAction.NavigateDown);
-                fixture.Input.Press(ControllerAction.NavigateDown);
-                fixture.Input.Press(ControllerAction.NavigateDown);
-                Assert.Equal("DiagnosticsButton", Focused(fixture.Window).Name);
+                fixture.Click(fixture.Shell.FindControl<Button>("SettingsDiagnosticsCategory")!);
+                launcher = fixture.Shell.FindControl<Button>("OpenDiagnosticsButton")!;
+            }
+            else
+            {
+                launcher = fixture.Window.FindControl<Button>("DiagnosticsButton")!;
             }
 
-            fixture.Click("DiagnosticsButton");
+            fixture.Click(launcher);
             Assert.True(fixture.IsModalVisible);
             Assert.False(fixture.Window.FindControl<Grid>("MainSurface")!.IsEnabled);
             AssertInsideWindow(fixture.Window, Focused(fixture.Window));
@@ -674,7 +704,7 @@ public sealed class MainWindowNavigationTests
             fixture.ClickContent(Loc.Get("Action.Cancel"));
             fixture.Input.Press(ControllerAction.Back);
             Assert.False(fixture.IsModalVisible);
-            Assert.Equal("DiagnosticsButton", Focused(fixture.Window).Name);
+            Assert.Same(launcher, Focused(fixture.Window));
             Assert.DoesNotContain(diagnostics.Snapshot(), entry => entry.Action == DiagnosticAction.ExportBundle);
         }
         finally
@@ -732,6 +762,7 @@ public sealed class MainWindowNavigationTests
     public Task SignInOpensMediaHomeWithoutAnIntermediateLauncherOrDuplicateHome() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         Assert.True(fixture.Model.IsDesignGalleryVisible);
         Assert.Equal(1, fixture.Preview.Calls);
@@ -753,20 +784,36 @@ public sealed class MainWindowNavigationTests
     public Task SettingsIncludesLibraryLayoutAndHomeReturnDoesNotReload() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
-        var homeFocus = Focused(fixture.Window);
         fixture.OpenSettings();
         Assert.Equal("Settings", fixture.Shell.Destination);
-        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+        Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
+        var categories = fixture.Shell.FindControl<StackPanel>("SettingsCategories")!
+            .Children.OfType<Button>().ToArray();
+        Assert.Equal(new[]
+            {
+                Loc.Get("Settings.Preferences"), Loc.Get("LibraryLayout.Title"),
+                Loc.Get("Settings.Application"), Loc.Get("Diagnostics.Title"),
+            },
+            categories.Select(button => button.Content));
         var actions = fixture.Shell.FindControl<StackPanel>("SettingsActions")!.Children.OfType<Button>().ToArray();
-        Assert.Equal(new[] { Loc.Get("Language.Selection"), Loc.Get("LibraryLayout.Title"), Loc.Get("Action.Exit"), Loc.Get("Nav.BackHome") },
+        Assert.Equal(new[] { Loc.Get("Language.Selection") },
             actions.Select(button => button.Content));
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.Accept);
         Assert.True(fixture.IsModalVisible);
         Assert.Equal(Loc.Get("Language.English"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
         fixture.Input.Press(ControllerAction.Back);
         Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateLeft);
+        Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("SettingsLibraryCategory", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("ExitButton", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateDown);
         Assert.Equal("BackHomeButton", Focused(fixture.Window).Name);
@@ -774,7 +821,7 @@ public sealed class MainWindowNavigationTests
         fixture.Flush();
         Assert.True(fixture.Model.IsDesignGalleryVisible);
         Assert.Equal(1, fixture.Preview.Calls);
-        Assert.Same(homeFocus, Focused(fixture.Window));
+        Assert.Equal("GallerySettingsButton", Focused(fixture.Window).Name);
     });
 
     [Theory]
@@ -783,29 +830,40 @@ public sealed class MainWindowNavigationTests
     public Task ReenteringSettingsStartsOnLanguageWithoutDiscardingInPageFocus(string destination) => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         fixture.OpenSettings();
         fixture.Input.Press(ControllerAction.NavigateDown);
-        Assert.Equal("ExitButton", Focused(fixture.Window).Name);
-        fixture.Input.Press(ControllerAction.NavigateLeft);
-        Assert.Equal("SettingsNavigation", Focused(fixture.Window).Name);
+        Assert.Equal("SettingsLibraryCategory", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("ExitButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateLeft);
+        Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateLeft);
+        Assert.Equal("DestinationBackButton", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
 
         if (destination == "Home")
         {
+            fixture.Input.Press(ControllerAction.NavigateRight);
             fixture.Input.Press(ControllerAction.NavigateDown);
+            Assert.Equal("BackHomeButton", Focused(fixture.Window).Name);
             fixture.Input.Press(ControllerAction.Accept);
             fixture.Flush();
             fixture.OpenSettings();
         }
         else
         {
-            fixture.Click(fixture.Shell.FindControl<Button>("LibrariesNavigation")!);
-            fixture.Click(fixture.Shell.FindControl<Button>("SettingsNavigation")!);
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+            fixture.Click(FirstLibraryShortcut(fixture));
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+            fixture.OpenSettings();
         }
 
-        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+        Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
     });
 
     [Theory]
@@ -818,21 +876,10 @@ public sealed class MainWindowNavigationTests
         fixture.Preview.Pause = true;
         fixture.SignIn(waitForHome: false);
         Assert.Equal("CancelLoadingButton", Focused(fixture.Window).Name);
-
-        fixture.Input.Press(rtl ? ControllerAction.NavigateRight : ControllerAction.NavigateLeft);
-        for (var index = 0; index < 4; index++)
-        {
-            fixture.Input.Press(ControllerAction.NavigateUp);
-        }
-
-        Assert.Equal("HomeNavigation", Focused(fixture.Window).Name);
-        fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
-        Assert.Equal("CancelLoadingButton", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
         Assert.False(fixture.Model.IsBusy);
         Assert.Equal(Loc.Get("Status.PreviewCanceled"), fixture.Model.StatusMessage);
-        fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
         Assert.Equal("RetryHomeButton", Focused(fixture.Window).Name);
 
         fixture.Input.Press(ControllerAction.Accept);
@@ -900,25 +947,378 @@ public sealed class MainWindowNavigationTests
         fixture.SignIn();
         Assert.Equal("SidebarHomeButton", Focused(fixture.Window).Name);
         fixture.OpenSettings();
-        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+        Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
     });
 
     [Fact]
-    public Task NavigationDestinationsRemainAvailableAndDoNotAddBackToHomeButtons() => TestAppBuilder.Run(() =>
+    public Task NonHomeDestinationsUseOneFullScreenBackPathAndRestoreTheirHomeSource() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        foreach (var destination in Destinations)
+        {
+            var source = destination switch
+            {
+                "Libraries" => FirstLibraryShortcut(fixture),
+                "Downloads" => fixture.Gallery.FindControl<Button>("GalleryDownloadsButton")!,
+                _ => fixture.Gallery.GetVisualDescendants().OfType<Button>()
+                    .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")),
+            };
+            fixture.Click(source);
+            Assert.Equal(destination, fixture.Shell.Destination);
+            Assert.True(fixture.Shell.FindControl<Grid>("DestinationHeader")!.IsEffectivelyVisible);
+            if (destination == "Libraries")
+            {
+                Assert.False(fixture.Shell.FindControl<TextBlock>("DestinationTitle")!.IsEffectivelyVisible);
+                Assert.Equal(fixture.Model.LibraryBrowser!.SelectedLibrary!.Name,
+                    fixture.Shell.FindControl<TextBlock>("LibraryTitle")!.Text);
+            }
+            else
+            {
+                Assert.Equal(Loc.Get($"Nav.{destination}"),
+                    fixture.Shell.FindControl<TextBlock>("DestinationTitle")!.Text);
+            }
+            Assert.Null(fixture.Shell.FindControl<Control>("NavigationRail"));
+            Assert.Null(fixture.Shell.FindControl<Button>("ReturnHomeButton"));
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+            Assert.True(fixture.Model.IsDesignGalleryVisible);
+            Assert.Same(source, Focused(fixture.Window));
+        }
+    });
+
+    [Fact]
+    public Task SearchSupportsKeyboardOverlayCombinedGridAndExactReturnState() => TestAppBuilder.Run(async () =>
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
-        fixture.OpenSettings();
-        foreach (var destination in Destinations)
-        {
-            fixture.Click(fixture.Shell.FindControl<Button>($"{destination}Navigation")!);
-            Assert.Equal(destination, fixture.Shell.Destination);
-            Assert.Equal($"{destination}Navigation", Focused(fixture.Window).Name);
-            Assert.Null(fixture.Shell.FindControl<Button>("ReturnHomeButton"));
-        }
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        var search = fixture.Model.SearchBrowser!;
+        var view = fixture.Shell.SearchView;
+        var query = view.FindControl<TextBox>("SearchTextBox")!;
+        Assert.Equal("Search", fixture.Shell.Destination);
+        Assert.True(view.IsEffectivelyVisible);
+        Assert.False(fixture.Shell.FindControl<StackPanel>("PlaceholderPage")!.IsEffectivelyVisible);
+        Assert.Same(query, Focused(fixture.Window));
+        Assert.Equal(Loc.Get("Search.Name"), AutomationProperties.GetName(query));
+        Assert.Equal(Loc.Get("Search.Help"), AutomationProperties.GetHelpText(query));
 
-        fixture.Click(fixture.Shell.FindControl<Button>("HomeNavigation")!);
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(fixture.IsModalVisible);
+        foreach (var character in "space")
+        {
+            fixture.Click(fixture.Modal.GetVisualDescendants().OfType<Button>()
+                .Single(button => Equals(button.Content, character.ToString())));
+        }
+        fixture.Click(fixture.Modal.GetVisualDescendants().OfType<Button>()
+            .Single(button => Equals(button.Content, Loc.Get("Keyboard.Done"))));
+        Assert.False(fixture.IsModalVisible);
+        await search.LoadPageCommand.ExecuteAsync(0);
+        fixture.Flush();
+
+        Assert.Equal(MediaSearchPage.PageSize, search.Items.Count);
+        var cards = view.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("search-card")).ToArray();
+        Assert.Equal(MediaSearchPage.PageSize, cards.Length);
+        var selected = cards[17];
+        selected.Focus();
+        view.FindControl<ScrollViewer>("SearchScroll")!.Offset = new Vector(0, 500);
+        fixture.Flush();
+        var offset = view.FindControl<ScrollViewer>("SearchScroll")!.Offset;
+        fixture.Click(selected);
+        Assert.True(fixture.IsModalVisible);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(selected, Focused(fixture.Window));
+
+        fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+        fixture.Click(fixture.Gallery.FindControl<Button>("GalleryDownloadsButton")!);
+        fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+        var searchSource = fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search"));
+        fixture.Click(searchSource);
+        Assert.Equal("space", query.Text);
+        Assert.Same(selected, Focused(fixture.Window));
+        Assert.Equal(offset, view.FindControl<ScrollViewer>("SearchScroll")!.Offset);
+        fixture.Input.Press(ControllerAction.Back);
         Assert.True(fixture.Model.IsDesignGalleryVisible);
+        Assert.Same(searchSource, Focused(fixture.Window));
+    });
+
+    [Theory]
+    [InlineData(720, 480, "en")]
+    [InlineData(800, 600, "qps-ploc")]
+    [InlineData(1280, 680, "en")]
+    [InlineData(1280, 800, "qps-plocm")]
+    [InlineData(1366, 768, "en")]
+    [InlineData(1920, 1080, "en")]
+    public Task ReferenceAlignedSearchLibrariesAndSettingsStayInsideActualClient(
+        int width, int height, string cultureName) => TestAppBuilder.Run(async () =>
+    {
+        using var culture = new CultureScope(cultureName);
+        using var fixture = new ShellFixture(preferences: new PresentationPreferences(1.5));
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        var searchView = fixture.Shell.SearchView;
+        var search = fixture.Model.SearchBrowser!;
+        var query = searchView.FindControl<TextBox>("SearchTextBox")!;
+        query.Text = "reference";
+        await search.LoadPageCommand.ExecuteAsync(0);
+        fixture.Flush();
+
+        AssertInsideWindow(fixture.Window, query);
+        AssertInsideWindow(fixture.Window, searchView.FindControl<Button>("SearchKeyboardButton")!);
+        Assert.Equal(width >= 1920,
+            fixture.Shell.FindControl<TextBlock>("DestinationBrand")!.IsEffectivelyVisible);
+        AssertInsideWindow(fixture.Window, fixture.Window.FindControl<Button>("DiagnosticsButton")!);
+        var searchCards = searchView.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("search-card")).ToArray();
+        Assert.Equal(MediaSearchPage.PageSize, searchCards.Length);
+        searchCards[^1].Focus();
+        searchCards[^1].BringIntoView();
+        fixture.Flush();
+        Assert.Same(searchCards[^1], Focused(fixture.Window));
+        AssertInsideWindow(fixture.Window, searchCards[^1]);
+
+        query.Focus();
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        Assert.True(fixture.IsModalVisible);
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        var keyboardKeys = fixture.Modal.GetVisualDescendants().OfType<UniformGrid>()
+            .Single().Children.OfType<Button>().ToArray();
+        keyboardKeys[^1].Focus();
+        keyboardKeys[^1].BringIntoView();
+        fixture.Flush();
+        AssertInsideWindow(fixture.Window, keyboardKeys[^1]);
+        var done = fixture.Modal.GetVisualDescendants().OfType<Button>()
+            .Single(button => Equals(button.Content, Loc.Get("Keyboard.Done")));
+        done.Focus();
+        done.BringIntoView();
+        fixture.Flush();
+        AssertInsideWindow(fixture.Window, done);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.False(fixture.IsModalVisible);
+        Assert.Same(query, Focused(fixture.Window));
+
+        fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var libraryView = fixture.Shell.LibraryView;
+        await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var libraryCards = libraryView.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("card")).ToArray();
+        libraryCards[^1].Focus();
+        libraryCards[^1].BringIntoView();
+        fixture.Flush();
+        AssertInsideWindow(fixture.Window, libraryCards[^1]);
+
+        fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+        fixture.OpenSettings();
+        Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        Assert.All(fixture.Shell.FindControl<StackPanel>("SettingsCategories")!
+            .GetVisualDescendants().OfType<Button>(), button =>
+            Assert.Single(Assert.Single(button.GetVisualDescendants().OfType<TextBlock>())
+                .TextLayout.TextLines));
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.NavigateLeft);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Equal("ExitButton", Focused(fixture.Window).Name);
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+        AssertInsideWindow(fixture.Window, fixture.Window.FindControl<Button>("DiagnosticsButton")!);
+    });
+
+    [Fact]
+    public Task SearchKeyboardOverlayHonorsMaximumQueryLength() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        var view = fixture.Shell.SearchView;
+        var query = view.FindControl<TextBox>("SearchTextBox")!;
+        query.Text = new string('A', query.MaxLength);
+        query.CaretIndex = query.Text.Length;
+        fixture.Input.Press(ControllerAction.Accept);
+        var draft = fixture.Modal.GetVisualDescendants().OfType<TextBox>().Single();
+        fixture.Click(fixture.Modal.GetVisualDescendants().OfType<Button>()
+            .Single(button => Equals(button.Content, "b")));
+        Assert.Equal(query.MaxLength, draft.Text!.Length);
+        fixture.ClickContent(Loc.Get("Keyboard.Done"));
+
+        Assert.Equal(query.MaxLength, query.Text.Length);
+        Assert.Equal(new string('A', query.MaxLength), query.Text);
+    });
+
+    [Fact]
+    public Task LibraryReferenceGridExposesFiltersSortAndAllLetterChoices() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var view = fixture.Shell.LibraryView;
+        await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var model = fixture.Model.LibraryBrowser;
+
+        fixture.Click(view.FindControl<Button>("FilterMenuButton")!);
+        fixture.ClickContent(Loc.Get("Library.Filter.Favorites"));
+        await model.SetFilterCommand.ExecutionTask!;
+        fixture.Click(view.FindControl<Button>("SortMenuButton")!);
+        fixture.ClickContent(Loc.Get("Library.Sort.Descending"));
+        await model.SetSortDirectionCommand.ExecutionTask!;
+        var letters = view.FindControl<StackPanel>("LetterChoices")!
+            .Children.OfType<Button>().ToArray();
+        Assert.Equal(27, letters.Length);
+        fixture.Click(letters.Single(button => Equals(button.Tag, "M")));
+        await model.SetLetterCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.Equal(MediaLibraryFilter.Favorites, model.SelectedFilter);
+        Assert.Equal(MediaLibrarySortDirection.Descending, model.SelectedSortDirection);
+        Assert.Equal('M', model.SelectedLetter);
+        Assert.Equal(Loc.Format("Library.Filter.Action", Loc.Get("Library.Filter.Favorites")),
+            AutomationProperties.GetName(view.FindControl<Button>("FilterMenuButton")!));
+        Assert.Equal(Loc.Format("Library.Sort.Action", Loc.Get("Library.Sort.Descending")),
+            AutomationProperties.GetName(view.FindControl<Button>("SortMenuButton")!));
+        Assert.Null(view.FindControl<ItemsControl>("LibraryChoices"));
+        Assert.Equal(Loc.Get("State.Selected"),
+            AutomationProperties.GetItemStatus(letters.Single(button => Equals(button.Tag, "M"))));
+        var cards = view.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("card")).ToArray();
+        var columns = model.ColumnCount;
+        Assert.InRange(cards.Length, columns, model.Items.Count);
+        Assert.InRange(columns, 2, 14);
+        Assert.Single(view.FindControl<ListBox>("LibraryRows")!
+            .GetVisualDescendants().OfType<VirtualizingStackPanel>());
+        Assert.Null(view.FindControl<Button>("NextLibraryPage"));
+        Assert.Null(view.FindControl<Button>("PreviousLibraryPage"));
+        cards[columns - 1].Focus();
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Equal("M", Assert.IsType<Button>(Focused(fixture.Window)).Tag);
+    });
+
+    [Theory]
+    [InlineData("FilterMenuButton")]
+    [InlineData("SortMenuButton")]
+    public Task LibraryMenusCancelWithoutChangingGridAndMarkCurrentChoices(string name) => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var view = fixture.Shell.LibraryView;
+        var rows = view.FindControl<ListBox>("LibraryRows")!;
+        rows.ScrollIntoView(2);
+        fixture.Flush();
+        var scroll = rows.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var originalItems = model.Items;
+        var calls = fixture.Preview.LibraryCalls;
+
+        var launcher = view.FindControl<Button>(name)!;
+        fixture.Click(launcher);
+        var offset = scroll.Offset;
+        Assert.True(fixture.IsModalVisible);
+        var selected = Assert.IsType<Button>(Focused(fixture.Window));
+        Assert.Equal(Loc.Get("State.Selected"), AutomationProperties.GetItemStatus(selected));
+        fixture.Key(Key.Tab, RawInputModifiers.Shift);
+        Assert.Equal(Loc.Get("Action.Back"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
+        fixture.Key(Key.Tab);
+        Assert.Same(selected, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Input.Press(ControllerAction.Back);
+        fixture.Flush();
+        Assert.False(fixture.IsModalVisible);
+        Assert.Same(launcher, Focused(fixture.Window));
+        Assert.Equal(offset, scroll.Offset);
+        Assert.Same(originalItems, model.Items);
+        Assert.Equal(calls, fixture.Preview.LibraryCalls);
+        Assert.Equal(MediaLibraryFilter.All, model.SelectedFilter);
+        Assert.Equal(MediaLibrarySortDirection.Ascending, model.SelectedSortDirection);
+
+        fixture.Click(launcher);
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        Assert.False(fixture.IsModalVisible);
+        Assert.Same(launcher, Focused(fixture.Window));
+        Assert.Equal(calls, fixture.Preview.LibraryCalls);
+    });
+
+    [Theory]
+    [InlineData("en", 1920, 1080, 1, false)]
+    [InlineData("qps-ploc", 1280, 800, 1.5, false)]
+    [InlineData("qps-plocm", 720, 480, 1.5, true)]
+    public Task LibraryNameSwitcherAndMenusFitAndSupportControllerNavigation(
+        string culture, int width, int height, double scale, bool longName) => TestAppBuilder.Run(async () =>
+    {
+        using var scope = new CultureScope(culture);
+        using var fixture = new ShellFixture(preferences: new PresentationPreferences(TextScale: scale));
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.Preview.LayoutLibraries = true;
+        fixture.Preview.LongLibraryName = longName;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var switcher = fixture.Shell.FindControl<Button>("LibrarySwitcher")!;
+        var title = fixture.Shell.FindControl<TextBlock>("LibraryTitle")!;
+        var filter = fixture.Shell.LibraryView.FindControl<Button>("FilterMenuButton")!;
+        var sort = fixture.Shell.LibraryView.FindControl<Button>("SortMenuButton")!;
+        fixture.Shell.FocusBack();
+        fixture.Input.Press(culture == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Same(switcher, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(fixture.IsModalVisible);
+        var choices = fixture.Modal.Children.OfType<Button>().Where(button => button.Tag is MediaLibrary).ToArray();
+        Assert.Equal(["tv", "movies", "anime"], choices.Select(button => ((MediaLibrary)button.Tag!).Id));
+        Assert.Same(choices[0], Focused(fixture.Window));
+        Assert.Equal(Loc.Get("State.Selected"), AutomationProperties.GetItemStatus(choices[0]));
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Same(choices[2], Focused(fixture.Window));
+        AssertInsideWindow(fixture.Window, choices[2]);
+        fixture.Input.Press(ControllerAction.Accept);
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.Equal("anime", model.SelectedLibrary!.Id);
+        Assert.Equal(model.SelectedLibrary.Name, title.Text);
+        Assert.Equal(model.SelectedLibrary.Name, AutomationProperties.GetName(switcher));
+        Assert.False(fixture.Shell.FindControl<TextBlock>("DestinationTitle")!.IsEffectivelyVisible);
+        Assert.Equal(Loc.Format("Library.Count", 47),
+            fixture.Shell.LibraryView.FindControl<TextBlock>("LibraryItemCount")!.Text);
+        AssertInsideWindow(fixture.Window, switcher);
+        AssertInsideWindow(fixture.Window, filter);
+        AssertInsideWindow(fixture.Window, sort);
+        Assert.True(title.Bounds.Width <= switcher.Bounds.Width);
+        switcher.Focus();
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Same(filter, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(switcher, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.Equal("anime", Assert.IsType<MediaLibrary>(Assert.IsType<Button>(Focused(fixture.Window)).Tag).Id);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(switcher, Focused(fixture.Window));
     });
 
     [Fact]
@@ -927,6 +1327,7 @@ public sealed class MainWindowNavigationTests
         using var fixture = new ShellFixture();
         fixture.SignIn();
         fixture.OpenSettings();
+        fixture.Input.Press(ControllerAction.NavigateRight);
         var launcher = Assert.IsType<Button>(Focused(fixture.Window));
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
@@ -954,6 +1355,9 @@ public sealed class MainWindowNavigationTests
         var closed = false;
         fixture.Window.Closed += (_, _) => closed = true;
         fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("SettingsApplicationCategory", Focused(fixture.Window).Name);
+        fixture.Input.Press(ControllerAction.NavigateRight);
         Assert.Equal("ExitButton", Focused(fixture.Window).Name);
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
@@ -980,23 +1384,33 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
-    public Task SavedAccountPickerTrapsFocusAndSwitchingAccountsClearsPreviousHome() => TestAppBuilder.Run(() =>
+    public Task SavedServerAndAccountStepsRestoreSessionsAndClearPreviousHome() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
+        Assert.True(fixture.Model.IsServerSelectionVisible);
+        Assert.Equal(Loc.Get("Auth.StepServer"),
+            fixture.Window.FindControl<TextBlock>("AuthenticationProgress")!.Text);
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
-        fixture.Input.Press(ControllerAction.NavigateDown);
-        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(fixture.Model.AreSavedSessionsVisible);
+        Assert.Equal(Loc.Get("Auth.StepAccount"),
+            fixture.Window.FindControl<TextBlock>("AuthenticationProgress")!.Text);
+        var accountButtons = fixture.Window.FindControl<ItemsControl>("SavedAccountsList")!
+            .GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("settings-action")).ToArray();
+        Assert.Equal(2, accountButtons.Length);
+        Assert.Equal(2, fixture.Window.FindControl<ItemsControl>("SavedAccountsList")!
+            .GetVisualDescendants().OfType<Button>()
+            .Count(button => Equals(button.Content, Loc.Get("Auth.RemoveSaved"))));
+        fixture.Click(accountButtons.Single(button =>
+            button.DataContext is SessionProfile { UserId: "second" }));
         fixture.Flush();
         Assert.Equal("second", fixture.Model.SelectedSavedSession!.UserId);
-        Assert.Equal(LocaleFormat.SessionDisplayName(fixture.Model.SelectedSavedSession),
-            fixture.Window.FindControl<Button>("SavedAccountButton")!.Content);
-        Assert.Equal("SavedAccountButton", Focused(fixture.Window).Name);
-        fixture.SignIn();
+        Assert.True(fixture.Model.IsDesignGalleryVisible);
         var previous = fixture.Model.DesignGallery;
         fixture.Model.BackToSessionsCommand.Execute(null);
         fixture.Flush();
-        Assert.True(fixture.Model.AreSavedSessionsVisible);
+        Assert.True(fixture.Model.IsServerSelectionVisible);
         Assert.Null(fixture.Model.DesignGallery);
         fixture.SignIn();
         Assert.NotSame(previous, fixture.Model.DesignGallery);
@@ -1020,7 +1434,9 @@ public sealed class MainWindowNavigationTests
         if (savedAccounts)
         {
             fixture.Click(button);
-            Assert.Equal("SavedAccountButton", Focused(fixture.Window).Name);
+            Assert.True(fixture.Model.IsServerSelectionVisible);
+            Assert.IsType<Button>(Focused(fixture.Window));
+            Assert.Equal("Test library", AutomationProperties.GetName(Focused(fixture.Window)));
         }
         else
         {
@@ -1107,12 +1523,12 @@ public sealed class MainWindowNavigationTests
         Assert.Equal(rtl ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight,
             fixture.Window.FlowDirection);
         fixture.OpenSettings();
-        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+        Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         fixture.Input.Press(rtl ? ControllerAction.NavigateRight : ControllerAction.NavigateLeft);
-        Assert.Equal("SettingsNavigation", Focused(fixture.Window).Name);
+        Assert.Equal("DestinationBackButton", Focused(fixture.Window).Name);
         fixture.Input.Press(rtl ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
-        Assert.Equal("SettingsLanguageButton", Focused(fixture.Window).Name);
+        Assert.Equal("SettingsPreferencesCategory", Focused(fixture.Window).Name);
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         Capture(fixture.Window, $"settings-{locale}");
     });
@@ -1132,14 +1548,14 @@ public sealed class MainWindowNavigationTests
         fixture.Window.WindowState = WindowState.Normal;
         fixture.Window.Width = width;
         fixture.Window.Height = height;
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
-        Assert.Equal(width >= 2560 ? 27 : 18,
-            fixture.Shell.FindControl<Button>("SettingsNavigation")!.FontSize);
         Capture(fixture.Window, $"media-home-{width}");
         fixture.OpenSettings();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         Capture(fixture.Window, $"in-app-settings-{width}");
+        fixture.Input.Press(ControllerAction.NavigateRight);
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
@@ -1152,17 +1568,18 @@ public sealed class MainWindowNavigationTests
     [InlineData(1280, 800, "qps-plocm")]
     [InlineData(1920, 1080, "en")]
     public Task ResizePreservesFocusAndKeepsPseudoLocalizedDestinationsReachable(
-        int width, int height, string cultureName) => TestAppBuilder.Run(() =>
+        int width, int height, string cultureName) => TestAppBuilder.Run(async () =>
     {
         using var culture = new CultureScope(cultureName);
         using var fixture = new ShellFixture(preferences: new PresentationPreferences(1.5));
         fixture.Window.WindowState = WindowState.Normal;
         fixture.Window.Width = width;
         fixture.Window.Height = height;
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         fixture.OpenSettings();
         var focused = Focused(fixture.Window);
-        Assert.Equal("SettingsLanguageButton", focused.Name);
+        Assert.Equal("SettingsPreferencesCategory", focused.Name);
         AssertInsideWindow(fixture.Window, focused);
 
         fixture.Window.Width = width == 720 ? 1366 : 720;
@@ -1173,7 +1590,19 @@ public sealed class MainWindowNavigationTests
 
         foreach (var destination in Destinations)
         {
-            fixture.Shell.Navigate(destination);
+            fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
+            var source = destination switch
+            {
+                "Libraries" => FirstLibraryShortcut(fixture),
+                "Downloads" => fixture.Gallery.FindControl<Button>("GalleryDownloadsButton")!,
+                _ => fixture.Gallery.GetVisualDescendants().OfType<Button>()
+                    .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")),
+            };
+            fixture.Click(source);
+            if (destination == "Libraries")
+            {
+                await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+            }
             fixture.Flush();
             AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         }
@@ -1206,6 +1635,7 @@ public sealed class MainWindowNavigationTests
     [InlineData(1280, 720)]
     [InlineData(1366, 768)]
     [InlineData(1920, 1080)]
+    [InlineData(3440, 1440)]
     public Task LibraryGridReflowsWithoutReplacingFocusedCards(int width, int height) => TestAppBuilder.Run(async () =>
     {
         using var fixture = new ShellFixture();
@@ -1219,18 +1649,188 @@ public sealed class MainWindowNavigationTests
         await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
         fixture.Flush();
         var focused = Focused(fixture.Window);
-        Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
+        var focusedItem = Assert.IsType<MediaPreviewCardViewModel>(focused.DataContext);
         AssertInsideWindow(fixture.Window, focused);
+        var densityScale = Math.Clamp(width / 1600d, 1, 1.55);
+        Assert.Equal(270d * densityScale,
+            (double)fixture.Window.Resources["Cindara.Media.GridPosterWidth"]!,
+            precision: 6);
+        Assert.Equal(405d * densityScale,
+            (double)fixture.Window.Resources["Cindara.Media.GridPosterHeight"]!,
+            precision: 6);
+        Assert.Equal(24d * densityScale,
+            (double)fixture.Window.Resources["Cindara.Media.GridSpacing"]!,
+            precision: 6);
+        if (width >= 2800)
+        {
+            Assert.Equal(11, fixture.Model.LibraryBrowser.ColumnCount);
+        }
 
         fixture.Window.Width = width < 1000 ? 1920 : 720;
         fixture.Window.Height = width < 1000 ? 1080 : 480;
         fixture.Flush();
-        Assert.Same(focused, Focused(fixture.Window));
-        Assert.Contains(focused, fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>());
-        AssertInsideWindow(fixture.Window, focused);
+        Assert.Same(focusedItem, Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext));
+        Assert.Contains(Focused(fixture.Window),
+            fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>());
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         fixture.Input.Press(ControllerAction.NavigateDown);
         fixture.Flush();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+    });
+
+    [Fact]
+    public Task DeepVirtualizedLibraryFocusSurvivesResponsiveRegrouping() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = 1920;
+        fixture.Window.Height = 720;
+        fixture.Preview.WithLibraries = true;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        await model.LoadMoreCommand.ExecuteAsync(null);
+        fixture.Flush();
+        var target = model.Items[45];
+        var row = 45 / model.ColumnCount;
+        var rows = fixture.Shell.LibraryView.FindControl<ListBox>("LibraryRows")!;
+        rows.ScrollIntoView(row);
+        fixture.Flush();
+        var button = fixture.Shell.LibraryView.GetVisualDescendants().OfType<Button>()
+            .Single(control => ReferenceEquals(control.DataContext, target));
+        button.Focus();
+        fixture.Flush();
+
+        fixture.Window.Width = 720;
+        fixture.Window.Height = 480;
+        fixture.Flush();
+
+        Assert.Same(target, Assert.IsType<MediaPreviewCardViewModel>(Focused(fixture.Window).DataContext));
+        AssertInsideWindow(fixture.Window, Focused(fixture.Window));
+    });
+
+    [Theory]
+    [InlineData("en", 1920, 1080, 1)]
+    [InlineData("qps-plocm", 1920, 1080, 1.5)]
+    [InlineData("en", 720, 480, 1.5)]
+    public Task LibraryBufferFillsWithoutMovingSlotsOrScroll(
+        string culture, int width, int height, double textScale) => TestAppBuilder.Run(async () =>
+    {
+        using var scope = new CultureScope(culture);
+        using var fixture = new ShellFixture(
+            preferences: new PresentationPreferences(TextScale: textScale, ReducedMotion: true));
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.LibraryTotal = 250;
+        fixture.Preview.LongLibraryTitles = true;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var slots = model.Rows.SelectMany(row => row.Slots).ToArray();
+        Assert.Equal(100, slots.Length);
+        Assert.Equal(60, slots.Count(slot => slot.IsPlaceholder));
+        var view = fixture.Shell.LibraryView;
+        var filter = view.FindControl<Button>("FilterMenuButton")!;
+        filter.Focus();
+        var rows = view.FindControl<ListBox>("LibraryRows")!;
+        var scroll = rows.GetVisualDescendants().OfType<ScrollViewer>().First();
+        fixture.Preview.LibraryGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        rows.ScrollIntoView(40 / model.ColumnCount);
+        fixture.Flush();
+
+        Assert.True(model.IsLoadingMore);
+        Assert.Equal(2, fixture.Preview.LibraryCalls);
+        Assert.Equal(slots, model.Rows.SelectMany(row => row.Slots));
+        var placeholder = view.GetVisualDescendants().OfType<Grid>()
+            .Single(grid => grid.Classes.Contains("library-slot") && ReferenceEquals(grid.DataContext, slots[40]));
+        var offset = scroll.Offset;
+        var position = placeholder.TranslatePoint(default, view);
+        var size = placeholder.Bounds.Size;
+        Assert.True(slots[40].IsPlaceholder);
+        fixture.Preview.LibraryGate.SetResult(true);
+        await model.LoadMoreCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.Equal(80, model.Items.Count);
+        Assert.Equal(2, fixture.Preview.LibraryCalls);
+        Assert.Same(filter, Focused(fixture.Window));
+        Assert.Equal(offset, scroll.Offset);
+        Assert.Equal(position, placeholder.TranslatePoint(default, view));
+        Assert.Equal(size, placeholder.Bounds.Size);
+        Assert.Contains(placeholder, view.GetVisualDescendants());
+        Assert.Same(slots[40], placeholder.DataContext);
+        Assert.True(slots[40].HasItem);
+        Assert.Equal(60, model.Rows.SelectMany(row => row.Slots).Count(slot => slot.IsPlaceholder));
+        Assert.Contains(placeholder.GetVisualDescendants().OfType<Button>(),
+            button => button.IsEffectivelyVisible && ReferenceEquals(button.DataContext, model.Items[40]));
+    });
+
+    [Fact]
+    public Task ScrollingIntoTheBlankBufferLoadsOnceAndShowsRetryWithoutMovingRows() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = 1920;
+        fixture.Window.Height = 1080;
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.LibraryTotal = 250;
+        fixture.SignIn();
+        fixture.Click(FirstLibraryShortcut(fixture));
+        var model = fixture.Model.LibraryBrowser!;
+        await model.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        var view = fixture.Shell.LibraryView;
+        var rows = view.FindControl<ListBox>("LibraryRows")!;
+        var originalRows = model.Rows.ToArray();
+        var slots = originalRows.SelectMany(row => row.Slots).ToArray();
+        fixture.Preview.LibraryGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        rows.ScrollIntoView(80 / model.ColumnCount);
+        fixture.Flush();
+
+        Assert.True(model.IsLoadingMore);
+        Assert.Equal(2, fixture.Preview.LibraryCalls);
+        Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(),
+            button => button.DataContext is MediaPreviewCardViewModel && button.IsEffectivelyVisible);
+        var scroll = rows.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var offset = scroll.Offset;
+        fixture.Preview.LibraryGate.SetException(
+            new MediaPreviewException(MediaPreviewError.Network, "Library unavailable."));
+        await model.LoadMoreCommand.ExecutionTask!;
+        fixture.Flush();
+
+        Assert.Equal(2, fixture.Preview.LibraryCalls);
+        Assert.Equal(originalRows, model.Rows);
+        Assert.Equal(slots, model.Rows.SelectMany(row => row.Slots));
+        Assert.Equal(offset, scroll.Offset);
+        Assert.True(slots[40].IsRetry);
+
+        rows.ScrollIntoView(40 / model.ColumnCount);
+        fixture.Flush();
+        var retry = view.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.Name == "RetryLoadingMore" && button.IsEffectivelyVisible);
+        var slot = view.GetVisualDescendants().OfType<Grid>()
+            .Single(grid => grid.Classes.Contains("library-slot") && ReferenceEquals(grid.DataContext, slots[40]));
+        var size = slot.Bounds.Size;
+        var position = slot.TranslatePoint(default, view);
+        offset = scroll.Offset;
+        fixture.Preview.LibraryGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Click(retry);
+        Assert.Equal(3, fixture.Preview.LibraryCalls);
+        Assert.Equal(size, slot.Bounds.Size);
+        Assert.Equal(position, slot.TranslatePoint(default, view));
+        Assert.Equal(offset, scroll.Offset);
+        fixture.Preview.LibraryGate.SetResult(true);
+        await model.RetryPageCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.Equal(80, model.Items.Count);
+        Assert.Equal(size, slot.Bounds.Size);
+        Assert.Equal(position, slot.TranslatePoint(default, view));
     });
 
     [Fact]
@@ -1266,6 +1866,10 @@ public sealed class MainWindowNavigationTests
 
     private static Control Focused(Window window) =>
         Assert.IsAssignableFrom<Control>(window.FocusManager!.GetFocusedElement());
+
+    private static Button FirstLibraryShortcut(ShellFixture fixture) =>
+        fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
+            .GetVisualDescendants().OfType<Button>().First();
 
     private static void AssertInsideWindow(Window window, Control control)
     {
@@ -1317,6 +1921,16 @@ public sealed class MainWindowNavigationTests
 
         public void SignIn(bool waitForHome = true)
         {
+            if (Model.IsServerSelectionVisible)
+            {
+                var preferred = Model.SelectedSavedSession;
+                Model.SelectServerCommand.Execute(preferred?.Server ?? Model.SavedServers[0]);
+                if (preferred is not null && Model.ServerAccounts.Contains(preferred))
+                {
+                    Model.SelectedSavedSession = preferred;
+                }
+            }
+
             Model.UseSavedSessionCommand.Execute(null);
             Flush();
             Assert.True(Model.IsAuthenticatedVisible);
@@ -1327,6 +1941,12 @@ public sealed class MainWindowNavigationTests
         }
 
         public void OpenSettings() => Click(Gallery.FindControl<Button>("GallerySettingsButton")!);
+        public void OpenLibraryLayoutSettings()
+        {
+            OpenSettings();
+            Click(Shell.FindControl<Button>("SettingsLibraryCategory")!);
+            Click(Shell.FindControl<Button>("SettingsLibraryLayoutButton")!);
+        }
         public void Click(string name) => Click(Window.FindControl<Button>(name)!);
         public void Click(Button button)
         {
@@ -1424,6 +2044,26 @@ public sealed class MainWindowNavigationTests
         public bool WithLibraries { get; set; }
         public bool LayoutLibraries { get; set; }
         public bool PauseLibrary { get; set; }
+        public int LibraryTotal { get; set; } = 47;
+        public bool LongLibraryTitles { get; set; }
+        public bool LongLibraryName { get; set; }
+        public TaskCompletionSource<bool>? LibraryGate { get; set; }
+        public int SearchCalls { get; private set; }
+        public Task<MediaSearchPage> SearchAsync(AuthenticatedSession session, string query, int startIndex,
+            CancellationToken cancellationToken = default)
+        {
+            SearchCalls++;
+            var types = new[] { "Movie", "Series", "Season", "Episode" };
+            var count = Math.Min(MediaSearchPage.PageSize, 80 - startIndex);
+            return Task.FromResult(new MediaSearchPage(
+                Enumerable.Range(startIndex, count)
+                    .Select(index => new MediaPreviewItem(
+                        $"search-{index}", $"{query} {index}", string.Empty, types[index % types.Length],
+                        null, null, "Search result.", string.Empty, null))
+                    .ToArray(),
+                startIndex,
+                80));
+        }
         public async Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,
             int startIndex, CancellationToken cancellationToken = default)
         {
@@ -1433,12 +2073,19 @@ public sealed class MainWindowNavigationTests
                 await Task.Delay(Timeout.Infinite, cancellationToken);
             }
 
-            return new MediaLibraryPage(Enumerable.Range(startIndex, Math.Min(40, 47 - startIndex))
-                .Select(index => new MediaPreviewItem($"movie-{index}", $"Movie {index}", "2026", "Movie",
+            if (LibraryGate is { } gate)
+            {
+                await gate.Task.WaitAsync(cancellationToken);
+            }
+
+            return new MediaLibraryPage(Enumerable.Range(startIndex, Math.Min(40, LibraryTotal - startIndex))
+                .Select(index => new MediaPreviewItem($"movie-{index}",
+                    LongLibraryTitles ? $"Movie {index} with a long title wrapping across multiple lines" : $"Movie {index}",
+                    "2026", "Movie",
                     null, null, "A media description.", "1h 5m", null)
                 {
                     ArtworkItemId = ProgressiveArtwork ? $"movie-{index}" : null,
-                }).ToArray(), startIndex, 47);
+                }).ToArray(), startIndex, LibraryTotal);
         }
 
         public int Calls { get; private set; }
@@ -1475,7 +2122,8 @@ public sealed class MainWindowNavigationTests
                 MediaLibrary[] libraries =
                 [
                     new("tv", "TV", "tvshows"), new("collections", "Collections", "boxsets"),
-                    new("movies", "Movies", "movies"), new("people", "People", "people"), new("anime", "Anime", "tvshows"),
+                    new("movies", "Movies", "movies"), new("people", "People", "people"),
+                    new("anime", LongLibraryName ? string.Concat(Enumerable.Repeat("Anime ", 30)) : "Anime", "tvshows"),
                 ];
                 return new MediaPreviewHome(item, [item],
                     libraries.Select(library => new MediaPreviewRail(library.Id, library.Name,

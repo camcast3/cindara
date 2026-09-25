@@ -23,7 +23,7 @@ public partial class MainWindow
     {
         if (!_diagnosticsOpen)
         {
-            BeginModal(title);
+            BeginFullScreenModal(title);
             _diagnosticsOpen = true;
         }
         else

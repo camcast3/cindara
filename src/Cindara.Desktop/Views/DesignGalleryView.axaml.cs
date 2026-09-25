@@ -16,6 +16,7 @@ public partial class DesignGalleryView : UserControl
     private double _heroHeight = 420;
     private Button? _focusedCard;
     private Button? _libraryReturnFocus;
+    private Button? _destinationReturnFocus;
     private bool _pinAfterLayout;
     private PresentationPreferences _preferences = new();
     private bool _rememberFocus;
@@ -205,8 +206,8 @@ public partial class DesignGalleryView : UserControl
     }
 
     public event EventHandler? SettingsRequested;
-    public event EventHandler? LibrariesRequested;
     public event EventHandler? SearchRequested;
+    public event EventHandler? DownloadsRequested;
     public event EventHandler<MediaLibrary>? LibraryRequested;
     public event EventHandler<MediaPreviewCardViewModel>? ItemRequested;
 
@@ -214,6 +215,17 @@ public partial class DesignGalleryView : UserControl
 
     public bool RestoreHomeFocus()
     {
+        var destination = _destinationReturnFocus;
+        _destinationReturnFocus = null;
+        if (destination is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true }
+            && destination.GetVisualAncestors().Contains(this)
+            && destination.Focus(NavigationMethod.Directional))
+        {
+            _rememberFocus = true;
+            destination.BringIntoView();
+            return true;
+        }
+
         var shortcut = _libraryReturnFocus;
         _libraryReturnFocus = null;
         if (shortcut is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true }
@@ -247,9 +259,23 @@ public partial class DesignGalleryView : UserControl
 
     private void OnHomeClicked(object? sender, RoutedEventArgs args) => FocusHomeContent();
 
-    private void OnSettingsClicked(object? sender, RoutedEventArgs args) => SettingsRequested?.Invoke(this, EventArgs.Empty);
-    private void OnLibrariesClicked(object? sender, RoutedEventArgs args) => LibrariesRequested?.Invoke(this, EventArgs.Empty);
-    private void OnSearchClicked(object? sender, RoutedEventArgs args) => SearchRequested?.Invoke(this, EventArgs.Empty);
+    private void OnSettingsClicked(object? sender, RoutedEventArgs args)
+    {
+        _destinationReturnFocus = sender as Button;
+        SettingsRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnSearchClicked(object? sender, RoutedEventArgs args)
+    {
+        _destinationReturnFocus = sender as Button;
+        SearchRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnDownloadsClicked(object? sender, RoutedEventArgs args)
+    {
+        _destinationReturnFocus = sender as Button;
+        DownloadsRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     private void OnLibraryClicked(object? sender, RoutedEventArgs args)
     {

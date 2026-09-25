@@ -188,6 +188,7 @@ public sealed class MediaPreviewCardViewModel : ObservableObject, IDisposable
     {
         Id = item.Id;
         Name = item.Name;
+        MediaType = item.MediaType;
         HeroName = item.HeroName ?? item.Name;
         Overview = item.Overview ?? string.Empty;
         if (item.Metadata is { } metadata)
@@ -227,6 +228,7 @@ public sealed class MediaPreviewCardViewModel : ObservableObject, IDisposable
 
     public string Name { get; }
     public string Id { get; }
+    public string MediaType { get; }
 
     public string Subtitle { get; }
 
@@ -252,10 +254,15 @@ public sealed class MediaPreviewCardViewModel : ObservableObject, IDisposable
             if (SetProperty(ref _isArtworkLoading, value))
             {
                 OnPropertyChanged(nameof(ArtworkPlaceholder));
+                OnPropertyChanged(nameof(ShowArtworkPlaceholder));
+                OnPropertyChanged(nameof(MetadataOpacity));
             }
         }
     }
-    public string ArtworkPlaceholder => Loc.Get(IsArtworkLoading ? "Library.LoadingArtwork" : "Library.ArtworkUnavailable");
+    public string ArtworkPlaceholder =>
+        HasArtwork ? string.Empty : Loc.Get("Library.ArtworkUnavailable");
+    public bool ShowArtworkPlaceholder => !HasArtwork && !IsArtworkLoading;
+    public double MetadataOpacity => IsArtworkLoading ? 0 : 1;
 
     public IImage? Backdrop => _backdrop?.Source;
 
@@ -266,6 +273,8 @@ public sealed class MediaPreviewCardViewModel : ObservableObject, IDisposable
         IsArtworkLoading = false;
         OnPropertyChanged(nameof(Artwork));
         OnPropertyChanged(nameof(HasArtwork));
+        OnPropertyChanged(nameof(ShowArtworkPlaceholder));
+        OnPropertyChanged(nameof(MetadataOpacity));
     }
 
     public void Dispose()
