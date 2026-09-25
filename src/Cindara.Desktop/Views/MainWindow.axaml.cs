@@ -102,7 +102,6 @@ public partial class MainWindow : Window
             Shell.Navigate("Settings");
             _viewModel?.HideDesignGalleryCommand.Execute(null);
         };
-        GalleryView.LibrariesRequested += (_, _) => OpenLibraries();
         GalleryView.SearchRequested += (_, _) =>
         {
             GalleryView.SuspendFocusMemory();

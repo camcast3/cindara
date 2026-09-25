@@ -745,6 +745,7 @@ public sealed class MainWindowNavigationTests
     public Task SignInOpensMediaHomeWithoutAnIntermediateLauncherOrDuplicateHome() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         Assert.True(fixture.Model.IsDesignGalleryVisible);
         Assert.Equal(1, fixture.Preview.Calls);
@@ -766,6 +767,7 @@ public sealed class MainWindowNavigationTests
     public Task SettingsIncludesLibraryLayoutAndHomeReturnDoesNotReload() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         fixture.OpenSettings();
         Assert.Equal("Settings", fixture.Shell.Destination);
@@ -811,6 +813,7 @@ public sealed class MainWindowNavigationTests
     public Task ReenteringSettingsStartsOnLanguageWithoutDiscardingInPageFocus(string destination) => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         fixture.OpenSettings();
         fixture.Input.Press(ControllerAction.NavigateDown);
@@ -838,7 +841,7 @@ public sealed class MainWindowNavigationTests
         else
         {
             fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
-            fixture.Click(fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!);
+            fixture.Click(FirstLibraryShortcut(fixture));
             fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
             fixture.OpenSettings();
         }
@@ -934,12 +937,13 @@ public sealed class MainWindowNavigationTests
     public Task NonHomeDestinationsUseOneFullScreenBackPathAndRestoreTheirHomeSource() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         foreach (var destination in Destinations)
         {
             var source = destination switch
             {
-                "Libraries" => fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!,
+                "Libraries" => FirstLibraryShortcut(fixture),
                 "Downloads" => fixture.Gallery.FindControl<Button>("GalleryDownloadsButton")!,
                 _ => fixture.Gallery.GetVisualDescendants().OfType<Button>()
                     .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")),
@@ -1078,7 +1082,7 @@ public sealed class MainWindowNavigationTests
         Assert.Same(query, Focused(fixture.Window));
 
         fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
-        fixture.Click(fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!);
+        fixture.Click(FirstLibraryShortcut(fixture));
         var libraryView = fixture.Shell.LibraryView;
         fixture.Click(libraryView.FindControl<ItemsControl>("LibraryChoices")!
             .GetVisualDescendants().OfType<Button>().Single());
@@ -1140,7 +1144,7 @@ public sealed class MainWindowNavigationTests
         using var fixture = new ShellFixture();
         fixture.Preview.WithLibraries = true;
         fixture.SignIn();
-        fixture.Click(fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!);
+        fixture.Click(FirstLibraryShortcut(fixture));
         var view = fixture.Shell.LibraryView;
         fixture.Click(view.FindControl<ItemsControl>("LibraryChoices")!
             .GetVisualDescendants().OfType<Button>().Single());
@@ -1406,6 +1410,7 @@ public sealed class MainWindowNavigationTests
         fixture.Window.WindowState = WindowState.Normal;
         fixture.Window.Width = width;
         fixture.Window.Height = height;
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         Capture(fixture.Window, $"media-home-{width}");
@@ -1425,13 +1430,14 @@ public sealed class MainWindowNavigationTests
     [InlineData(1280, 800, "qps-plocm")]
     [InlineData(1920, 1080, "en")]
     public Task ResizePreservesFocusAndKeepsPseudoLocalizedDestinationsReachable(
-        int width, int height, string cultureName) => TestAppBuilder.Run(() =>
+        int width, int height, string cultureName) => TestAppBuilder.Run(async () =>
     {
         using var culture = new CultureScope(cultureName);
         using var fixture = new ShellFixture(preferences: new PresentationPreferences(1.5));
         fixture.Window.WindowState = WindowState.Normal;
         fixture.Window.Width = width;
         fixture.Window.Height = height;
+        fixture.Preview.WithLibraries = true;
         fixture.SignIn();
         fixture.OpenSettings();
         var focused = Focused(fixture.Window);
@@ -1449,12 +1455,16 @@ public sealed class MainWindowNavigationTests
             fixture.Click(fixture.Shell.FindControl<Button>("DestinationBackButton")!);
             var source = destination switch
             {
-                "Libraries" => fixture.Gallery.FindControl<Button>("GalleryLibrariesButton")!,
+                "Libraries" => FirstLibraryShortcut(fixture),
                 "Downloads" => fixture.Gallery.FindControl<Button>("GalleryDownloadsButton")!,
                 _ => fixture.Gallery.GetVisualDescendants().OfType<Button>()
                     .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")),
             };
             fixture.Click(source);
+            if (destination == "Libraries")
+            {
+                await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+            }
             fixture.Flush();
             AssertInsideWindow(fixture.Window, Focused(fixture.Window));
         }
@@ -1547,6 +1557,10 @@ public sealed class MainWindowNavigationTests
 
     private static Control Focused(Window window) =>
         Assert.IsAssignableFrom<Control>(window.FocusManager!.GetFocusedElement());
+
+    private static Button FirstLibraryShortcut(ShellFixture fixture) =>
+        fixture.Gallery.FindControl<ItemsControl>("GalleryLibraryShortcuts")!
+            .GetVisualDescendants().OfType<Button>().First();
 
     private static void AssertInsideWindow(Window window, Control control)
     {

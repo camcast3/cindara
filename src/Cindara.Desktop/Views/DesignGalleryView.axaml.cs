@@ -206,7 +206,6 @@ public partial class DesignGalleryView : UserControl
     }
 
     public event EventHandler? SettingsRequested;
-    public event EventHandler? LibrariesRequested;
     public event EventHandler? SearchRequested;
     public event EventHandler? DownloadsRequested;
     public event EventHandler<MediaLibrary>? LibraryRequested;
@@ -264,12 +263,6 @@ public partial class DesignGalleryView : UserControl
     {
         _destinationReturnFocus = sender as Button;
         SettingsRequested?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnLibrariesClicked(object? sender, RoutedEventArgs args)
-    {
-        _destinationReturnFocus = sender as Button;
-        LibrariesRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnSearchClicked(object? sender, RoutedEventArgs args)
