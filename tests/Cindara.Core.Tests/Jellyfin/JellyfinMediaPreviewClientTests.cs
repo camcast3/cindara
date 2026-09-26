@@ -391,7 +391,7 @@ public sealed class JellyfinMediaPreviewClientTests
 
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized, MediaPreviewError.AccessDenied)]
-    [InlineData(HttpStatusCode.Forbidden, MediaPreviewError.AccessDenied)]
+    [InlineData(HttpStatusCode.Forbidden, MediaPreviewError.Forbidden)]
     [InlineData(HttpStatusCode.InternalServerError, MediaPreviewError.UnexpectedStatus)]
     public async Task GetHomeAsyncCancelsSiblingRequestsOnArtworkFailure(
         HttpStatusCode status,

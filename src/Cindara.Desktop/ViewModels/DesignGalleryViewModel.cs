@@ -89,6 +89,16 @@ public sealed class DesignGalleryViewModel : ObservableObject, IDisposable
         Featured = item;
     }
 
+    internal void ApplyUserState(string itemId, MediaUserState state)
+    {
+        foreach (var card in _allRails.SelectMany(rail => rail.Items).Concat(ContinueWatching)
+            .Concat(new[] { _initialFeatured, Featured }.OfType<MediaPreviewCardViewModel>())
+            .Where(card => card.Id == itemId).Distinct())
+        {
+            card.ApplyUserState(state);
+        }
+    }
+
     public static DesignGalleryViewModel Create(MediaPreviewHome home) =>
         Create(home, PreviewImage.Decode);
 
@@ -240,7 +250,14 @@ public sealed class MediaPreviewCardViewModel : ObservableObject, IDisposable
 
     public string Details { get; }
 
-    public double PlaybackProgress { get; }
+    public double PlaybackProgress { get; private set; }
+
+    internal void ApplyUserState(MediaUserState state)
+    {
+        PlaybackProgress = state.IsPlayed ? 0 : Math.Clamp(state.PlayedPercentage ?? 0, 0, 100);
+        OnPropertyChanged(nameof(PlaybackProgress));
+        OnPropertyChanged(nameof(HasPlaybackProgress));
+    }
 
     public bool HasPlaybackProgress => PlaybackProgress > 0;
 

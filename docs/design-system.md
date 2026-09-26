@@ -19,9 +19,10 @@ The authenticated Home uses a compact icon rail with Search, Home,
 Libraries, and Settings. The product owner removed the speculative
 Home/Trending/Activity/Profile top bar. Home focuses the media content and Settings
 opens the signed-in settings. Libraries use the account's actual server-provided
-entries rather than hard-coded TV/Movie/Anime shortcuts. Search leads to its
-inline controller keyboard, focused-result context, and grouped horizontal result
-rails. Full details and playback remain assigned to the remaining #5 batches and #4.
+entries rather than hard-coded TV/Movie/Anime shortcuts. Search retains the accepted
+combined poster grid and temporary full-screen controller keyboard. Full movie
+details are the current #5 review batch; series navigation and playback remain
+assigned to later #5 batches and #4.
 
 ## Implemented shell navigation
 
@@ -48,6 +49,11 @@ reloading it. Exit closes the app; Back to Home restores media and focus.
 The login screen offers only the English language selector alongside authentication.
 
 `FocusNavigationService` scopes navigation to the active screen or dialog.
+Home and the shell/authentication viewport are separate focus roots. During a
+loading-to-Home transition, recovery for a removed loading control must not
+choose a nearby card in the incoming screen and scroll an unopened row sideways.
+Scope changes establish Home's intended initial focus without resetting saved
+row offsets on ordinary return navigation.
 Explicit rail links take priority; other controls use transformed bounds,
 aligned candidates, nearest directional edge, distance, and stable visual order.
 Screen focus is remembered, and hidden, disabled, or removed controls recover to
@@ -377,22 +383,68 @@ batch preserves posters and the buffer, replacing its first blank with a
 Retry loading more tile until explicitly retried. Lightweight
 metadata is retained; decoded artwork outside nearby rows is disposed and can reload
 through the session byte cache.
-Selecting a card opens a read-only metadata summary; Back restores the exact
+Selecting a movie opens full movie details; other cards retain their metadata summary.
+Back restores the exact
 card, loaded batches, and scroll position. Returning from Home or Settings reuses
 the grid.
 
 ### Details
 
 ```text
-[Backdrop / title / facts]
-[Play] [More] [Favorite]
-[Seasons or related-content rail]
+[Back] Movie details
+[Poster] [Title / facts / director / synopsis]
+         [Resume / compact video, audio, subtitle summaries]
+         [Favorite] [Mark watched/unwatched] [Full details] [Credits]
+[Cast]
+[Photo / name / role] [Photo / name / role] ... (single horizontal row)
 ```
 
-Initial focus: Play. Left/right traverses primary actions; down enters the
-season selector or first related card. Up returns to actions. Back restores
-the source screen and focus. Unavailable actions remain visible and disabled
-with an explanation.
+Initial focus: Back. The detail surface is a separate full-screen focus scope;
+the underlying Home, library, or Search stays intact and disabled. Back restores
+the exact originating card and scroll offset. The shared density tokens govern
+typography and gutters; poster and cast artwork fit the available viewport height.
+Compact viewports omit the optional poster to leave room for metadata and actions.
+The text and actions form one vertically centered group beside the poster, rather
+than disconnected blocks at opposite edges. Read-only metadata has no input-field
+chrome; action buttons use intrinsic widths and centered labels. Short viewports
+place the copy and media summaries side by side above a shared action row.
+At enlarged text sizes, secondary genre/director previews may move into the full
+details overlay. Synopsis previews show only complete lines, never half-clipped text.
+The overview has no vertical scrolling and no routine refresh control.
+Synopsis/title previews are bounded; Full details retains the complete metadata
+and trailer availability in a separate readable overlay. Credits uses a responsive
+multi-column popup of full cast names/roles and crew rather than a narrow text list.
+Cast photos are directly focusable; left/right moves one photo at a time, scrolls
+it into view, and respects RTL. Up returns to the originating movie action; Down
+restores the last cast photo. Selecting a photo opens Credits at that entry.
+Back restores the exact launcher and horizontal cast offset. These remain
+informational credits, not person-page links.
+
+Cast focus uses one rounded outline on the currently focused photo. Nonfocused
+mouse hover does not draw a second outline while a controller or keyboard moves
+elsewhere. The artwork is explicitly clipped inside a rounded border so image
+corners never protrude beyond the focus treatment.
+Missing cast photos reserve the identical rounded poster area with a centered
+"No photo" label. They remain focusable and selectable in the same rail order;
+missing artwork must never collapse a card or interrupt directional traversal.
+Available video, audio, and subtitles are compact summaries in the future
+playback action area, not an exhaustive track/language list beneath the cast.
+They remain explicitly informational until functional selectors ship in #20.
+
+Favorite and watched/unwatched apply directly, with no watched confirmation.
+An outlined circle means unwatched and a teal checkmark means watched, on the
+movie poster and watched action. Accessible action/state labels describe both.
+Indicators follow authoritative server state; unknown state hides the indicator
+and disables changes rather than presenting an unwatched default. Successful
+updates go to diagnostics, never a technical success banner.
+Both actions are disabled while one write is in flight. Back waits for
+that bounded write; failed/uncertain writes show an error-only Retry that performs
+a fresh read before another mutation. No optimistic or blind-toggle retry is used. Missing metadata,
+artwork, access, and session state are explicit, not populated with sample data.
+
+Playback/resume position and trailer availability are text only until the player
+is integrated. Continue Watching retains its existing summary. Series overview
+and season/episode navigation require their own subsequent owner-accepted batch.
 
 ### Search
 

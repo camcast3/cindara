@@ -145,6 +145,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public bool HasSearchBrowser => SearchBrowser is not null;
 
     [ObservableProperty]
+    private MovieDetailsViewModel? _movieDetails;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasLibraryLayout))]
     [NotifyPropertyChangedFor(nameof(SidebarLibraries))]
     private LibraryLayoutViewModel? _libraryLayout;
@@ -474,6 +477,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
             SearchBrowser = new SearchBrowserViewModel(_mediaPreviewClient, session,
                 exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
+            MovieDetails = new MovieDetailsViewModel(_mediaPreviewClient, session,
+                exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
+            MovieDetails.UserStateChanged += ApplyMediaUserState;
             if (_libraryLayoutStore is not null)
             {
                 LibraryLayout = new LibraryLayoutViewModel(session.Profile, home.Libraries, _libraryLayoutStore, _diagnostics);
@@ -677,6 +683,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void ClearDesignGallery()
     {
+        var details = MovieDetails;
+        MovieDetails = null;
+        if (details is not null)
+        {
+            details.UserStateChanged -= ApplyMediaUserState;
+            details.Dispose();
+        }
         if (LibraryLayout is { } layout)
         {
             layout.Applied -= OnLibraryLayoutApplied;
@@ -693,6 +706,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var search = SearchBrowser;
         SearchBrowser = null;
         search?.Dispose();
+    }
+
+    private void ApplyMediaUserState(string itemId, MediaUserState state)
+    {
+        DesignGallery?.ApplyUserState(itemId, state);
+        foreach (var card in (LibraryBrowser?.Items ?? []).Concat(SearchBrowser?.Items ?? [])
+            .Where(card => card.Id == itemId))
+        {
+            card.ApplyUserState(state);
+        }
     }
 
     public void Dispose()

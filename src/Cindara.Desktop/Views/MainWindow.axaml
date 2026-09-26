@@ -227,6 +227,8 @@
                 </Grid>
             </Grid>
         </Grid>
+        <views:MovieDetailsView x:Name="MovieDetails" IsVisible="False"
+                                DataContext="{Binding MovieDetails}" />
         <Border x:Name="ModalOverlay" IsVisible="False" Background="#B3080B12"
                 AutomationProperties.ControlTypeOverride="Group" AutomationProperties.AccessibilityView="Control">
             <Grid>
