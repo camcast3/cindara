@@ -46,7 +46,10 @@ public sealed record MediaItemDetails(
     IReadOnlyList<MediaTrackInfo> Tracks,
     MediaUserState UserState,
     bool HasPrimaryImage,
-    bool HasBackdrop);
+    bool HasBackdrop,
+    int? LocalTrailerCount = null,
+    bool HasRemoteTrailers = false,
+    bool HasUserState = true);
 
 public sealed record MediaSeason(
     string Id,

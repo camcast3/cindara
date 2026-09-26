@@ -23,7 +23,10 @@ logical-viewport density model for typography, poster sizing, gutters, forms, an
 navigation actions; OS DPI is not applied twice. Home includes a single Continue
 Watching row and recently added media
 from the selected libraries, with no generic Libraries shortcut row. Open libraries
-from the sidebar or library chooser. Home library shortcuts use aligned TV, Movie,
+from the sidebar or library chooser. Fresh Home loads keep each row at its first
+card: loading-screen focus recovery cannot briefly select and scroll a card in
+the incoming Home screen. Returning to existing content still preserves its position.
+Home library shortcuts use aligned TV, Movie,
 and Anime icons with accessible names. A library opens a virtualized poster grid
 headed by its actual name; the heading opens a library switcher. Compact filter
 and sort menus show the active All titles/Unwatched/Favorites and Title A–Z/Z–A
@@ -34,12 +37,13 @@ the final loaded row. A rolling buffer of 60 blank poster slots (capped to the
 remaining titles) is present before the next request; responses fill those slots
 in place and extend only the far end. Poster and metadata heights stay stable.
 There are no visible pages or replacements of earlier items. Selecting a
-card opens a read-only summary; Back restores the exact card, query controls, loaded
+movie card opens full movie details; other media still opens a read-only summary.
+Back restores the exact card, query controls, loaded
 batches, and grid position. Search supports debounced physical-keyboard
 input, a temporary full-screen controller keyboard, one combined movie/series/season/
 episode poster grid, bounded paging, cancellation, and exact query/focus/scroll
-restoration. Full details and episode navigation remain
-deferred to the remaining issue #5 batches; downloads remain deferred. Signing in opens media Home directly, without
+restoration. Series, season, and episode details remain
+deferred to the next issue #5 batch; downloads remain deferred. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
 Settings uses a controller-first category/detail layout while retaining only
@@ -68,8 +72,55 @@ dismisses the deepest utility or returns from a full-screen destination to its
 exact Home source. Start/Options/+ or F11
 toggles fullscreen; **Settings → Exit** closes the app.
 Accept on authentication text fields opens a focus-trapped on-screen keyboard.
-Search uses an inline controller keyboard so results and query context remain visible.
+Search uses a temporary full-screen controller keyboard and retains the query/grid on return.
 Saved servers and accounts are controller-navigable steps rather than a modal picker.
+
+### Movie details review batch (#5)
+
+Movies selected from libraries, Search, or Home's recently added rows open a
+full-screen detail surface without changing the accepted browsing layout.
+The view includes backdrop/poster artwork, title, year, runtime, content rating,
+genres, available community/critic ratings, synopsis, director, informational cast
+photos/names/roles and other credits. Compact video/audio/subtitle summaries sit
+beside the future playback actions, not in a long track list below the cast.
+They describe available media, not negotiated playback choices; functional
+selectors remain in #20.
+Resume position and trailer availability are informational only: **no Play,
+Resume, or Trailer button pretends to launch playback**. Continue Watching
+retains its existing summary until the separate player integration.
+
+Favorite and watched changes use explicit authenticated Jellyfin mutations.
+Watched/unwatched changes immediately when selected, without a confirmation dialog.
+A checkmark indicates watched and an outlined circle indicates unwatched on the
+movie poster and watched action, with accessible state labels. These indicators
+update only from Jellyfin's returned state; an unknown state never pretends to be
+unwatched. Jellyfin may clear the resume position and change history on other devices.
+Actions do not update optimistically; one write is allowed at a time and Back
+waits for its bounded response. An uncertain response disables further changes
+until the error-only **Retry** reads authoritative state; it never blindly retries
+a toggle. A 403 keeps the session and reports missing permission; a 401 uses the
+existing sign-in recovery. Browsing alone never writes playback progress.
+Successful updates are recorded in local diagnostics without a success banner;
+only failures requiring recovery are shown to the user.
+
+Initial focus is Back. The overview fits one screen without vertical scrolling:
+poster and movie information, compact media summaries beside the actions, and a
+single horizontal cast row. Cast photos take focus directly with arrows or the
+controller and scroll into view like Home's media posters, without arrow buttons.
+Only the focused cast photo has an outline; a stationary mouse cannot leave a
+second hover outline. Artwork is clipped to the same rounded card treatment.
+**Full details** and **Credits** open readable expanded content, with
+Back restoring the exact action and cast position. Long titles, synopsis previews,
+and credit labels are bounded on the overview; the expanded content preserves
+their full text. Credits sits beside the main movie actions and uses a responsive
+multi-column popup. Selecting a cast photo opens that popup at the corresponding
+credit, not a person page. No ordinary media-refresh button is shown; Retry appears only
+after an unsuccessful load or unconfirmed write. Missing artwork/metadata and
+unavailable media have explicit states. Artwork loads separately with four workers and a 30-second
+budget; leaving cancels stale work and disposes decoded images. Loaded source
+cards and their exact scroll position remain intact when returning.
+This movie batch must receive actual-media traversal and owner acceptance before
+series/seasons/episodes advance. No VM or playback validation is implied.
 
 The login screen and **Settings** offer **Language: English**.
 English is the only supported UI language. Appearance controls are deferred;

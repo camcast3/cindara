@@ -67,6 +67,12 @@ public interface IJellyfinMediaPreviewClient
 
     void ClearImageCache();
 
+    Task<byte[]?> GetDetailBackdropAsync(
+        AuthenticatedSession session,
+        string itemId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromException<byte[]?>(new NotSupportedException("Detail artwork is not supported by this client."));
+
     Task<byte[]?> GetLibraryArtworkAsync(
         AuthenticatedSession session,
         string itemId,
