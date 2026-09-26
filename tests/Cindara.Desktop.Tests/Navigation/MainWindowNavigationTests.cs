@@ -1431,7 +1431,7 @@ public sealed class MainWindowNavigationTests
         fixture.Flush();
         var offset = view.FindControl<ScrollViewer>("SearchScroll")!.Offset;
         fixture.Click(selected);
-        Assert.True(fixture.IsModalVisible);
+        Assert.True(fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!.IsVisible);
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(selected, Focused(fixture.Window));
 
@@ -1447,6 +1447,78 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.Back);
         Assert.True(fixture.Model.IsDesignGalleryVisible);
         Assert.Same(searchSource, Focused(fixture.Window));
+    });
+
+    [Theory]
+    [InlineData(720, 480, "en", 1.5)]
+    [InlineData(1280, 720, "en", 1)]
+    [InlineData(1920, 1080, "en", 1)]
+    [InlineData(3840, 2160, "en", 1)]
+    [InlineData(1280, 720, "qps-ploc", 1.5)]
+    [InlineData(1280, 720, "qps-plocm", 1.5)]
+    public Task SeriesOverviewRestoresSearchAndTraversesMissingSeasonPosters(
+        int width, int height, string cultureName, double scale) => TestAppBuilder.Run(async () =>
+    {
+        using var culture = new CultureScope(cultureName);
+        using var fixture = new ShellFixture(preferences: new PresentationPreferences(scale));
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        var search = fixture.Model.SearchBrowser!;
+        search.Query = "Series";
+        await search.LoadPageCommand.ExecuteAsync(0);
+        fixture.Flush();
+        var source = fixture.Shell.SearchView.GetVisualDescendants().OfType<Button>()
+            .First(button => button.DataContext is MediaPreviewCardViewModel { MediaType: "Series" });
+        source.Focus();
+        var searchScroll = fixture.Shell.SearchView.FindControl<ScrollViewer>("SearchScroll")!;
+        var searchOffset = searchScroll.Offset;
+        fixture.Click(source);
+        var overview = fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!;
+        Assert.True(overview.IsEffectivelyVisible);
+        Assert.True(fixture.Model.SeriesOverview!.Summary.HasDetails);
+        Assert.Same(overview.BackAction, Focused(fixture.Window));
+        Assert.False(fixture.Window.FindControl<Grid>("MainSurface")!.IsEnabled);
+        var seasons = overview.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("season-card")).ToArray();
+        Assert.Equal(12, seasons.Length);
+        Assert.All(seasons, card => Assert.InRange(card.Bounds.Width / card.Bounds.Height, 0.66, 0.68));
+        Assert.Equal(Loc.Get("Details.StateUnknown"), AutomationProperties.GetItemStatus(seasons[2]));
+        var info = overview.FindControl<Button>("InformationButton")!;
+        info.Focus();
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Same(seasons[0], Focused(fixture.Window));
+        for (var index = 1; index < seasons.Length; index++)
+        {
+            fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+            Assert.Same(seasons[index], Focused(fixture.Window));
+        }
+        AssertInsideWindow(fixture.Window, seasons[^1]);
+        var scroll = overview.FindControl<ScrollViewer>("SeasonScroll")!;
+        var offset = scroll.Offset;
+        Assert.True(offset.X > 0);
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(fixture.IsModalVisible);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(seasons[^1], Focused(fixture.Window));
+        Assert.Equal(offset, scroll.Offset);
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(info, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(fixture.IsModalVisible);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(info, Focused(fixture.Window));
+        Assert.Equal(offset, scroll.Offset);
+        Assert.Equal(0, fixture.Preview.StateWrites);
+        Capture(fixture.Window, $"series-overview-{cultureName}-{width}-{scale}");
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.False(overview.IsVisible);
+        Assert.Same(source, Focused(fixture.Window));
+        Assert.Equal(searchOffset, searchScroll.Offset);
+        Assert.Equal("Series", search.Query);
     });
 
     [Theory]
@@ -2460,7 +2532,9 @@ public sealed class MainWindowNavigationTests
             ? Task.FromException<MediaItemDetails>(new MediaPreviewException(error, "details"))
             : Task.FromResult(new MediaItemDetails(
                 itemId, PopulatedMovie ? "A movie with a rather long title for a compact viewport" : "Movie details",
-                "Movie", null, null, null, null, null, 2026, null,
+                itemId.StartsWith("search-", StringComparison.Ordinal)
+                    && int.Parse(itemId.AsSpan(7), System.Globalization.CultureInfo.InvariantCulture) % 4 == 1
+                    ? "Series" : "Movie", null, null, null, null, null, 2026, null,
                 TimeSpan.FromMinutes(65).Ticks, "PG", ["Drama", "Science Fiction"], [new("Community", 8.2)],
                 PopulatedMovie ? string.Concat(Enumerable.Repeat("A full movie synopsis that stays readable. ", 100)) : "A synopsis.",
                 PopulatedMovie ? Enumerable.Range(0, 40)
@@ -2469,6 +2543,12 @@ public sealed class MainWindowNavigationTests
                  new("Audio", "eac3", "English - Dolby Digital Plus + Dolby Atmos - 5.1 - Default", "eng", null, null, 6, true, false),
                  new("Subtitle", "srt", "English - Default - SUBRIP", "eng", null, null, null, true, false)],
                 _userState, false, false));
+        public Task<IReadOnlyList<MediaSeason>> GetSeasonsAsync(AuthenticatedSession session, string seriesId,
+            CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<MediaSeason>>(
+                Enumerable.Range(1, 12).Select(number => new MediaSeason($"season-{number}", $"Season {number}",
+                    number, new(false, number == 1, 0, 0), false, number != 3)).ToArray());
+        public Task<MediaItemDetails?> GetSeriesContinuationAsync(AuthenticatedSession session, string seriesId,
+            CancellationToken cancellationToken = default) => Task.FromResult<MediaItemDetails?>(null);
         public Task<MediaUserState> SetFavoriteAsync(AuthenticatedSession session, string itemId, bool isFavorite,
             CancellationToken cancellationToken = default)
         {

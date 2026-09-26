@@ -271,6 +271,53 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         return CreateDetails(item);
     }
 
+    public async Task<MediaItemDetails?> GetSeriesContinuationAsync(
+        AuthenticatedSession session,
+        string seriesId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSession(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(seriesId);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30), _timeProvider);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
+        try
+        {
+            var resume = await GetWrappedItemsAsync(load,
+                $"Users/{Uri.EscapeDataString(session.UserId)}/Items/Resume"
+                + $"?ParentId={Uri.EscapeDataString(seriesId)}&Limit=1&Recursive=true"
+                + $"&IncludeItemTypes=Episode&SortBy=DatePlayed&SortOrder=Descending&EnableUserData=true&Fields={ItemFields}",
+                "series resume").ConfigureAwait(false);
+            ValidateCandidate(resume);
+            var candidate = resume.Count > 0 ? resume[0] : null;
+            if (candidate is null)
+            {
+                var next = await GetWrappedItemsAsync(load,
+                    $"Shows/NextUp?UserId={Uri.EscapeDataString(session.UserId)}&SeriesId={Uri.EscapeDataString(seriesId)}"
+                    + $"&Limit=1&EnableUserData=true&EnableResumable=true&EnableRewatching=false&DisableFirstEpisode=false&Fields={ItemFields}",
+                    "series next episode").ConfigureAwait(false);
+                ValidateCandidate(next);
+                candidate = next.Count > 0 ? next[0] : null;
+            }
+            if (candidate is not null && !IsContinueCandidate(candidate))
+                candidate = await GetFollowingEpisodeAsync(load, candidate).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            deadline.Token.ThrowIfCancellationRequested();
+            return candidate is null ? null : CreateDetails(candidate);
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new MediaPreviewException(MediaPreviewError.TimedOut, "Loading series continuation timed out.");
+        }
+
+        void ValidateCandidate(IReadOnlyList<JellyfinItem> items)
+        {
+            if (items.Count > 1 || items.Any(item => !IsValidDetailItem(item)
+                || item.Type != "Episode" || item.SeriesId != seriesId))
+                throw InvalidResponse(new JsonException("Invalid series continuation."));
+        }
+    }
+
     public async Task<IReadOnlyList<MediaSeason>> GetSeasonsAsync(
         AuthenticatedSession session,
         string seriesId,
@@ -288,8 +335,11 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 item.Name!,
                 item.IndexNumber,
                 CreateUserState(item.UserData),
-                item.ImageTags?.ContainsKey("Primary") is true),
-            cancellationToken).ConfigureAwait(false);
+                item.ImageTags?.ContainsKey("Primary") is true,
+                item.UserData?.Played is not null && item.UserData.IsFavorite is not null),
+            cancellationToken,
+            item => item.Type == "Season" && (item.SeriesId is null || item.SeriesId == seriesId))
+            .ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<MediaEpisode>> GetEpisodesAsync(

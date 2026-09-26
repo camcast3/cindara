@@ -37,13 +37,14 @@ the final loaded row. A rolling buffer of 60 blank poster slots (capped to the
 remaining titles) is present before the next request; responses fill those slots
 in place and extend only the far end. Poster and metadata heights stay stable.
 There are no visible pages or replacements of earlier items. Selecting a
-movie card opens full movie details; other media still opens a read-only summary.
+movie card opens full movie details; a series opens its overview and season posters.
+Season and episode cards still open a read-only summary.
 Back restores the exact card, query controls, loaded
 batches, and grid position. Search supports debounced physical-keyboard
 input, a temporary full-screen controller keyboard, one combined movie/series/season/
 episode poster grid, bounded paging, cancellation, and exact query/focus/scroll
-restoration. Series, season, and episode details remain
-deferred to the next issue #5 batch; downloads remain deferred. Signing in opens media Home directly, without
+restoration. The first series overview batch is awaiting owner acceptance;
+season/episode browsing and downloads remain deferred. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
 Settings uses a controller-first category/detail layout while retaining only
@@ -119,8 +120,33 @@ after an unsuccessful load or unconfirmed write. Missing artwork/metadata and
 unavailable media have explicit states. Artwork loads separately with four workers and a 30-second
 budget; leaving cancels stale work and disposes decoded images. Loaded source
 cards and their exact scroll position remain intact when returning.
-This movie batch must receive actual-media traversal and owner acceptance before
-series/seasons/episodes advance. No VM or playback validation is implied.
+The movie batch received actual-media traversal and owner acceptance in #34.
+No VM or playback validation is implied.
+
+### Series overview review batch (#5, stacked above #34)
+
+Series cards from Home, libraries, or Search now open a read-only overview with
+poster/backdrop, metadata, available ratings, synopsis, Full details, and
+informational Credits. Shared `MediaDetailsViewModel` preserves the accepted
+movie loading, artwork lifetime, and mutation behavior without duplicating it.
+The series surface does not expose mutations in this increment.
+
+The overview reads only the selected series' resumable/next episode. It follows
+Home's 90% completion cutoff, shows remaining time only when runtime and position
+are known, and can show the first episode of an unstarted series. It does not
+load the global Home feed or update playback history.
+Season posters use watched/unwatched indicators, with an explicit unknown state
+when Jellyfin omits user state. Every season remains traversable without artwork.
+Left/right scrolls the season row; Accept opens **season information only**.
+Back restores the exact season, row offset, and originating Search/library/Home
+card without changing the query or reloading the source. Missing seasons,
+inaccessible media, expired sessions, and unsuccessful reads are explicit;
+error-only Retry reads again, and superseded responses cannot replace the screen.
+
+This is a partial, manually gated increment. Season tabs, horizontal episode
+browsing, season/episode entry routing, and their mutation controls follow only
+after owner acceptance. Playback and functional selectors are still out of scope.
+Issue #5 remains open; this layer does not unblock dependent playback work.
 
 The login screen and **Settings** offer **Language: English**.
 English is the only supported UI language. Appearance controls are deferred;
