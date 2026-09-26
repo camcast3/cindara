@@ -7,24 +7,35 @@ namespace Cindara.Desktop.Views;
 
 public partial class MainWindow
 {
-    private MovieDetailsViewModel? _activeMovieDetails;
+    private MediaDetailsViewModel? _activeMovieDetails;
     private Control? _detailsReturnFocus;
     private MovieCreditsView? _creditsView;
+    private bool IsDetailsVisible => MovieDetails.IsVisible || SeriesOverview.IsVisible;
+    private Control DetailsSurface => SeriesOverview.IsVisible ? SeriesOverview : MovieDetails;
+    private Button DetailsBackAction => SeriesOverview.IsVisible ? SeriesOverview.BackAction : MovieDetails.BackAction;
 
     private async void ShowMediaItem(MediaPreviewCardViewModel item, bool continueWatching = false)
     {
-        if (ModalOverlay.IsVisible || MovieDetails.IsVisible) return;
+        if (ModalOverlay.IsVisible || IsDetailsVisible) return;
+        if (item.MediaType == "Series" && !continueWatching && _viewModel?.SeriesOverview is { } series)
+        {
+            RememberDetailsSource();
+            _activeMovieDetails = series.Summary;
+            SeriesOverview.IsVisible = true;
+            MainSurface.IsEnabled = false;
+            SeriesOverview.ResetPosition();
+            _navigation.Forget("series-overview");
+            _navigation.SetScope(SeriesOverview, SeriesOverview.BackAction, "series-overview");
+            await series.OpenAsync(item.Id, item.Name);
+            return;
+        }
         if (item.MediaType != "Movie" || continueWatching || _viewModel?.MovieDetails is not { } details)
         {
             ShowMediaSummary(item);
             return;
         }
 
-        _navigation.Remember();
-        _detailsReturnFocus = FocusManager?.GetFocusedElement() as Control;
-        GalleryView.SuspendFocusMemory();
-        Shell.LibraryView.SuspendFocusMemory();
-        Shell.SearchView.SuspendFocusMemory();
+        RememberDetailsSource();
         _activeMovieDetails = details;
         MovieDetails.IsVisible = true;
         MainSurface.IsEnabled = false;
@@ -32,6 +43,28 @@ public partial class MainWindow
         _navigation.Forget("movie-details");
         _navigation.SetScope(MovieDetails, MovieDetails.BackAction, "movie-details");
         await details.OpenAsync(item.Id, item.Name);
+    }
+
+    private void RememberDetailsSource()
+    {
+        _navigation.Remember();
+        _detailsReturnFocus = FocusManager?.GetFocusedElement() as Control;
+        GalleryView.SuspendFocusMemory();
+        Shell.LibraryView.SuspendFocusMemory();
+        Shell.SearchView.SuspendFocusMemory();
+    }
+
+    private void ShowSeasonInformation(SeasonCardViewModel season)
+    {
+        if (ModalOverlay.IsVisible || !SeriesOverview.IsVisible) return;
+        BeginModal(season.Name);
+        ModalActions.Children.Add(new TextBlock { Text = season.WatchedState });
+        ModalActions.Children.Add(new TextBlock
+        {
+            Text = Loc.Get("Series.ReviewBoundary"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+        });
+        FocusModal(AddModalButton(Loc.Get("Action.Back"), DismissModal));
     }
 
     private void ShowMovieCredits(MovieCreditViewModel? selected = null)
@@ -97,7 +130,7 @@ public partial class MainWindow
 
     private void CloseMovieDetails(bool force = false)
     {
-        if (!MovieDetails.IsVisible || !force && _activeMovieDetails?.CanClose is false) return;
+        if (!IsDetailsVisible || !force && _activeMovieDetails?.CanClose is false) return;
         var details = _activeMovieDetails;
         _activeMovieDetails = null;
         if (details is not null)
@@ -105,6 +138,8 @@ public partial class MainWindow
             details.Close();
         }
         MovieDetails.IsVisible = false;
+        if (SeriesOverview.IsVisible) _viewModel?.SeriesOverview?.Close();
+        SeriesOverview.IsVisible = false;
         MainSurface.IsEnabled = true;
         var returnFocus = _detailsReturnFocus;
         _detailsReturnFocus = null;
@@ -115,7 +150,7 @@ public partial class MainWindow
         Shell.SearchView.ResumeFocusMemory();
         Dispatcher.UIThread.Post(() =>
         {
-            if (_viewModel?.IsDesignGalleryVisible is true && !MovieDetails.IsVisible)
+            if (_viewModel?.IsDesignGalleryVisible is true && !IsDetailsVisible)
                 GalleryView.RestoreHomeFocus();
         }, DispatcherPriority.Loaded);
     }

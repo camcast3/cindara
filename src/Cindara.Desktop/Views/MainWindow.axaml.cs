@@ -133,6 +133,10 @@ public partial class MainWindow : Window
         MovieDetails.InformationRequested += (_, _) => ShowMovieInformation();
         MovieDetails.CreditsRequested += (_, _) => ShowMovieCredits();
         MovieDetails.CastRequested += (_, credit) => ShowMovieCredits(credit);
+        SeriesOverview.BackRequested += (_, _) => CloseMovieDetails();
+        SeriesOverview.InformationRequested += (_, _) => ShowMovieInformation();
+        SeriesOverview.CreditsRequested += (_, _) => ShowMovieCredits();
+        SeriesOverview.SeasonRequested += (_, season) => ShowSeasonInformation(season);
         Shell.SearchView.KeyboardRequested += (_, target) => ShowKeyboard(target, fullScreen: true);
         GalleryView.NavigationWidthChanged += (_, _) => UpdateGalleryFooter();
         UpdateGalleryFooter();
@@ -383,9 +387,9 @@ public partial class MainWindow : Window
         Shell.IsVisible = _viewModel.IsAuthenticatedVisible;
         AuthenticationSurface.IsVisible = !Shell.IsVisible;
         ShellFooter.IsVisible = !Shell.IsVisible || Shell.Destination == "Home";
-        if (MovieDetails.IsVisible)
+        if (IsDetailsVisible)
         {
-            if (_viewModel.IsAuthenticatedVisible && _viewModel.MovieDetails?.IsOpen is true)
+            if (_viewModel.IsAuthenticatedVisible && _activeMovieDetails?.IsOpen is true)
             {
                 _navigation.EnsureFocus();
                 return;
@@ -530,7 +534,7 @@ public partial class MainWindow : Window
         {
             args.Handled = true;
         }
-        else if (args.Key is Key.PageUp or Key.PageDown && !ModalOverlay.IsVisible && !MovieDetails.IsVisible
+        else if (args.Key is Key.PageUp or Key.PageDown && !ModalOverlay.IsVisible && !IsDetailsVisible
             && _viewModel?.IsDesignGalleryVisible is true)
         {
             GalleryView.ScrollDescription(args.Key == Key.PageDown);
@@ -573,11 +577,15 @@ public partial class MainWindow : Window
     private void MoveFocus(NavigationDirection direction)
     {
         _navigation.EnsureFocus();
+        if (!ModalOverlay.IsVisible && SeriesOverview.IsVisible && SeriesOverview.TryMove(direction))
+        {
+            return;
+        }
         if (!ModalOverlay.IsVisible && MovieDetails.IsVisible && MovieDetails.TryMove(direction))
         {
             return;
         }
-        if (!ModalOverlay.IsVisible && !MovieDetails.IsVisible)
+        if (!ModalOverlay.IsVisible && !IsDetailsVisible)
         {
             if (Shell.LibraryView.IsEffectivelyVisible && Shell.LibraryView.IsKeyboardFocusWithin
                 && Shell.LibraryView.TryMove(direction))
@@ -637,7 +645,7 @@ public partial class MainWindow : Window
         {
             DismissModal();
         }
-        else if (MovieDetails.IsVisible)
+        else if (IsDetailsVisible)
         {
             CloseMovieDetails();
         }
@@ -829,6 +837,7 @@ public partial class MainWindow : Window
         ModalOverlay.IsVisible = true;
         MainSurface.IsEnabled = false;
         MovieDetails.IsEnabled = false;
+        SeriesOverview.IsEnabled = false;
     }
 
     private void BeginFullScreenModal(string title)
@@ -878,7 +887,8 @@ public partial class MainWindow : Window
         ModalActions.Children.Clear();
         MainSurface.IsEnabled = true;
         MovieDetails.IsEnabled = true;
-        if (MovieDetails.IsVisible) MainSurface.IsEnabled = false;
+        SeriesOverview.IsEnabled = true;
+        if (IsDetailsVisible) MainSurface.IsEnabled = false;
         ModalActions.IsEnabled = true;
         _navigation.Forget("modal");
     }
@@ -888,9 +898,9 @@ public partial class MainWindow : Window
         var returnFocus = _modalReturnFocus;
         _modalReturnFocus = null;
         ClearModal();
-        _navigation.SetScope(MovieDetails.IsVisible ? MovieDetails : ActiveSurface,
-            MovieDetails.IsVisible ? MovieDetails.BackAction : null,
-            MovieDetails.IsVisible ? "movie-details" : _screen ?? "server");
+        _navigation.SetScope(IsDetailsVisible ? DetailsSurface : ActiveSurface,
+            IsDetailsVisible ? DetailsBackAction : null,
+            SeriesOverview.IsVisible ? "series-overview" : MovieDetails.IsVisible ? "movie-details" : _screen ?? "server");
         if (returnFocus is not null)
         {
             _navigation.Focus(returnFocus);

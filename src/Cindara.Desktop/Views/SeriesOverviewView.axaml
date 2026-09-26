@@ -1,0 +1,129 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Cindara.Desktop.ViewModels"
+             xmlns:loc="using:Cindara.Desktop.Localization"
+             x:Class="Cindara.Desktop.Views.SeriesOverviewView"
+             x:DataType="vm:SeriesOverviewViewModel"
+             Background="{DynamicResource Cindara.Brush.Background}">
+    <UserControl.Styles>
+        <Style Selector="Button.season-card">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.season-card:pointerover:not(:focus) /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+    </UserControl.Styles>
+    <Grid>
+        <Image Source="{Binding Summary.Backdrop}" Stretch="UniformToFill" Opacity="0.15" />
+        <Grid Margin="{DynamicResource Cindara.Adaptive.SafeMargin}" RowDefinitions="Auto,Auto,*,Auto"
+              RowSpacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <Button x:Name="SeriesBack" Content="{loc:Tr Action.Back}" Click="OnBack"
+                        AutomationProperties.AutomationId="SeriesBack" />
+                <TextBlock Text="{loc:Tr Series.Title}" Classes="heading" VerticalAlignment="Center" />
+            </StackPanel>
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" IsVisible="{Binding Summary.HasMessage}">
+                <TextBlock Text="{Binding Summary.Message}" TextWrapping="Wrap"
+                           AutomationProperties.LiveSetting="Polite" />
+                <Button Grid.Column="1" Content="{loc:Tr Details.Retry}" IsVisible="{Binding Summary.NeedsRetry}"
+                        Command="{Binding Summary.RefreshCommand}" />
+            </Grid>
+            <Grid Grid.Row="2" x:Name="SeriesBody" RowDefinitions="*,Auto" RowSpacing="16"
+                  IsVisible="{Binding Summary.HasDetails}">
+                <Grid x:Name="OverviewHeading" ColumnDefinitions="Auto,*" ColumnSpacing="32">
+                    <Border x:Name="SeriesPoster" Width="{DynamicResource Cindara.Series.PosterWidth}"
+                            Height="{DynamicResource Cindara.Series.PosterHeight}" VerticalAlignment="Center"
+                            CornerRadius="{DynamicResource Cindara.Radius.Large}"
+                            ClipToBounds="True" Background="{DynamicResource Cindara.Brush.SurfaceRaised}">
+                        <Grid>
+                            <TextBlock Text="{loc:Tr Library.ArtworkUnavailable}" IsVisible="{Binding !Summary.HasPoster}"
+                                       TextWrapping="Wrap" TextAlignment="Center" Margin="12" VerticalAlignment="Center" />
+                            <Image Source="{Binding Summary.Poster}" Stretch="UniformToFill" />
+                        </Grid>
+                    </Border>
+                    <ScrollViewer x:Name="OverviewCopy" Grid.Column="1"
+                                  HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="{Binding Summary.Title}" Classes="title" TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="SeriesTitle" />
+                            <TextBlock Text="{Binding Summary.Metadata}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Summary.Genres}" Classes="secondary" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Summary.Ratings}" />
+                            <TextBlock Text="{Binding Summary.Overview}" TextWrapping="Wrap" MaxLines="3"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding ContinuationLabel}" TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="SeriesContinuation" />
+                            <TextBlock Text="{Binding ContinuationMetadata}" Classes="secondary" TextWrapping="Wrap" />
+                            <WrapPanel x:Name="OverviewActions">
+                                <Button x:Name="InformationButton" Content="{loc:Tr Details.MoreInformation}"
+                                        Click="OnInformation" Margin="0,0,12,0" />
+                                <Button x:Name="CreditsButton" Content="{loc:Tr Details.Credits}" Click="OnCredits" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+                <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                    <TextBlock Text="{loc:Tr Series.Seasons}" Classes="heading" />
+                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" IsVisible="{Binding HasMessage}">
+                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+                        <Button Grid.Column="1" Content="{loc:Tr Details.Retry}" IsVisible="{Binding NeedsRetry}"
+                                Command="{Binding RetryCommand}" />
+                    </Grid>
+                    <ScrollViewer x:Name="SeasonScroll" Grid.Row="2"
+                                  HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Seasons}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="16" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SeasonCardViewModel">
+                                    <Grid Width="{DynamicResource Cindara.Series.SeasonWidth}"
+                                          RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
+                                        <Button Classes="card season-card" Click="OnSeason" GotFocus="OnSeasonFocus"
+                                                HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                Height="{DynamicResource Cindara.Series.SeasonHeight}"
+                                                AutomationProperties.Name="{Binding Name}"
+                                                AutomationProperties.ItemStatus="{Binding WatchedState}"
+                                                AutomationProperties.HelpText="{loc:Tr Series.SeasonHelp}">
+                                            <Border CornerRadius="{DynamicResource Cindara.Radius.Medium}"
+                                                    ClipToBounds="True" Background="{DynamicResource Cindara.Brush.SurfaceRaised}">
+                                                <Grid>
+                                                    <TextBlock Text="{loc:Tr Series.NoArtwork}" IsVisible="{Binding !HasImage}"
+                                                               TextWrapping="Wrap" TextAlignment="Center" Margin="8"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    <Image Source="{Binding Image}" Stretch="UniformToFill" />
+                                                    <Border Background="{DynamicResource Cindara.Brush.Surface}"
+                                                            CornerRadius="20" Padding="8" Margin="8"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Top">
+                                                        <Grid Width="20" Height="20">
+                                                            <Ellipse IsVisible="{Binding IsUnwatched}" StrokeThickness="2"
+                                                                     Stroke="{DynamicResource Cindara.Brush.TextSecondary}" />
+                                                            <Path IsVisible="{Binding IsWatched}" Data="M 2,10 L 7,16 L 18,3"
+                                                                  StrokeThickness="3" Stroke="{DynamicResource Cindara.Brush.Accent}" />
+                                                            <TextBlock Text="?" IsVisible="{Binding !Season.HasUserState}" />
+                                                        </Grid>
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                        </Button>
+                                        <TextBlock Grid.Row="1" Text="{Binding Name}" MaxLines="1" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Row="2" Text="{Binding WatchedState}" Classes="caption"
+                                                   MaxLines="1" TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+            <StackPanel Grid.Row="3">
+                <TextBlock Text="{Binding Summary.ArtworkMessage}" IsVisible="{Binding Summary.HasArtworkMessage}" Classes="caption" />
+                <TextBlock Text="{Binding ArtworkMessage}" IsVisible="{Binding HasArtworkMessage}" Classes="caption" />
+                <TextBlock Text="{loc:Tr Series.ReviewBoundary}" Classes="caption" TextWrapping="Wrap" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

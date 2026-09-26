@@ -34,6 +34,13 @@ public interface IJellyfinMediaPreviewClient
         CancellationToken cancellationToken = default) =>
         Task.FromException<MediaItemDetails>(new NotSupportedException("Item details are not supported by this client."));
 
+    Task<MediaItemDetails?> GetSeriesContinuationAsync(
+        AuthenticatedSession session,
+        string seriesId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromException<MediaItemDetails?>(
+            new NotSupportedException("Series continuation is not supported by this client."));
+
     Task<IReadOnlyList<MediaSeason>> GetSeasonsAsync(
         AuthenticatedSession session,
         string seriesId,
