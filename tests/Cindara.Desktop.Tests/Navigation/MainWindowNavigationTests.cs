@@ -1469,7 +1469,7 @@ public sealed class MainWindowNavigationTests
     });
 
     [Fact]
-    public Task ControllerChangesAndBackgroundActionsDoNotStealFocus() => TestAppBuilder.Run(() =>
+    public Task ControllerChangesAndBackgroundActionsDoNotStealFocusAndResumeOnActivation() => TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
@@ -1489,6 +1489,14 @@ public sealed class MainWindowNavigationTests
         Assert.Same(focused, Focused(fixture.Window));
         Assert.True(fixture.Model.IsDesignGalleryVisible);
         Assert.Equal(WindowState.FullScreen, fixture.Window.WindowState);
+
+        fixture.Window.ActivateForTest();
+        fixture.Flush();
+        Assert.True(fixture.Window.IsActive);
+        Assert.True(fixture.Input.ApplicationActive);
+        Assert.Same(focused, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.Menu);
+        Assert.Equal(WindowState.Normal, fixture.Window.WindowState);
     });
 
     [Fact]
@@ -1988,6 +1996,10 @@ public sealed class MainWindowNavigationTests
     {
         public void DeactivateForTest() => typeof(WindowBase)
             .GetMethod("HandleDeactivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(this, null);
+
+        public void ActivateForTest() => typeof(WindowBase)
+            .GetMethod("HandleActivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .Invoke(this, null);
     }
 

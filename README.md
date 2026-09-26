@@ -129,7 +129,8 @@ it again. Account switching and sign-out clear that data.
 
 SDL3 handles controller hotplug, directional repeat, and active-device prompts
 without resetting focus. Input received while the window is inactive is
-discarded; held controls must return to neutral after reactivation. Xbox uses
+discarded; controller input resumes when the window regains focus, and held
+controls must return to neutral after reactivation. Xbox uses
 A/B, PlayStation Cross/Circle, and Nintendo B/A for the same physical
 south/east accept/back positions. Keyboard and mouse remain available without
 a controller.

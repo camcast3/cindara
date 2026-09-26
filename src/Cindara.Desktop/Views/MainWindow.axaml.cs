@@ -58,8 +58,13 @@ public partial class MainWindow : Window
         _controllerTimer.Tick += OnControllerTimerTick;
         Opened += OnOpened;
         Closed += OnClosed;
-        Activated += (_, _) => OnApplicationActiveChanged();
-        Deactivated += (_, _) => OnApplicationActiveChanged();
+        PropertyChanged += (_, change) =>
+        {
+            if (change.Property == IsActiveProperty)
+            {
+                OnApplicationActiveChanged();
+            }
+        };
         LayoutUpdated += (_, _) =>
         {
             if (IsActive && !_closed)
