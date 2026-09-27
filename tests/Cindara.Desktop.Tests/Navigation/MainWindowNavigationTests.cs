@@ -1542,10 +1542,8 @@ public sealed class MainWindowNavigationTests
         Assert.Same(continuing, Focused(fixture.Window));
     });
 
-    [Theory]
-    [InlineData("Season")]
-    [InlineData("Episode")]
-    public Task SearchSeasonAndEpisodeDoNotGetReroutedToSeriesPreview(string type) => TestAppBuilder.Run(async () =>
+    [Fact]
+    public Task SearchExcludesSeasonsAndEpisodesWhileSeriesOpensOverview() => TestAppBuilder.Run(async () =>
     {
         using var fixture = new ShellFixture();
         fixture.SignIn();
@@ -1553,14 +1551,14 @@ public sealed class MainWindowNavigationTests
             .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
         var search = fixture.Model.SearchBrowser!;
         search.Query = "Series";
-        await search.LoadPageCommand.ExecuteAsync(0);
+        await search.RefreshCommand.ExecuteAsync(null);
         fixture.Flush();
+        Assert.All(search.Items, item => Assert.True(item.MediaType is "Movie" or "Series"));
         var source = fixture.Shell.SearchView.GetVisualDescendants().OfType<Button>()
-            .First(button => button.DataContext is MediaPreviewCardViewModel item && item.MediaType == type);
-        Assert.Equal("series-parent", ((MediaPreviewCardViewModel)source.DataContext!).SeriesId);
+            .First(button => button.DataContext is MediaPreviewCardViewModel { MediaType: "Series" });
         fixture.Click(source);
-        Assert.True(fixture.IsModalVisible);
-        Assert.False(fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!.IsVisible);
+        Assert.True(fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!.IsVisible);
+        Assert.False(fixture.IsModalVisible);
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(source, Focused(fixture.Window));
         Assert.Equal("Series", search.Query);
@@ -2750,10 +2748,7 @@ public sealed class MainWindowNavigationTests
                 Enumerable.Range(startIndex, count)
                     .Select(index => new MediaPreviewItem(
                         $"search-{index}", $"{query} {index}", string.Empty, types[index % types.Length],
-                        null, null, "Search result.", string.Empty, null)
-                    {
-                        SeriesId = types[index % types.Length] is "Season" or "Episode" ? "series-parent" : null,
-                    })
+                        null, null, "Search result.", string.Empty, null))
                     .ToArray(),
                 startIndex,
                 80));
