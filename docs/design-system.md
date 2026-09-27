@@ -21,8 +21,9 @@ Home/Trending/Activity/Profile top bar. Home focuses the media content and Setti
 opens the signed-in settings. Libraries use the account's actual server-provided
 entries rather than hard-coded TV/Movie/Anime shortcuts. Search retains the accepted
 combined poster grid and temporary full-screen controller keyboard. Full movie
-details are the current #5 review batch; series navigation and playback remain
-assigned to later #5 batches and #4.
+details are accepted in #34. The read-only series overview is the next #5 review
+batch; season/episode browsing and playback remain assigned to later #5 batches
+and #4.
 
 ## Implemented shell navigation
 
@@ -140,6 +141,9 @@ Poster width is computed from the actual destination width, remains at
 least 120 logical pixels, and is capped at the approved couch-readable density;
 its 2:3 ratio is preserved. Library metadata appends in bounded batches while
 virtualized rows prevent the complete library from realizing controls at once.
+Library columns use the measured poster viewport after the letter rail, scrollbars,
+and row padding; compact windows may need one column rather than clipping a
+second poster. Down in that single column still advances to the next item.
 Ten-foot typography and bounded forms use a capped 1.5 density scale. This is
 separate from OS display scaling: a physical 4K display at 200% still supplies a
 1920x1080 logical viewport and does not receive the density scale twice.
@@ -383,7 +387,8 @@ batch preserves posters and the buffer, replacing its first blank with a
 Retry loading more tile until explicitly retried. Lightweight
 metadata is retained; decoded artwork outside nearby rows is disposed and can reload
 through the session byte cache.
-Selecting a movie opens full movie details; other cards retain their metadata summary.
+Selecting a movie opens full movie details and a series opens its overview;
+season and episode cards retain their metadata summary in this review batch.
 Back restores the exact
 card, loaded batches, and scroll position. Returning from Home or Settings reuses
 the grid.
@@ -443,8 +448,41 @@ a fresh read before another mutation. No optimistic or blind-toggle retry is use
 artwork, access, and session state are explicit, not populated with sample data.
 
 Playback/resume position and trailer availability are text only until the player
-is integrated. Continue Watching retains its existing summary. Series overview
-and season/episode navigation require their own subsequent owner-accepted batch.
+is integrated. Continue Watching retains its existing summary.
+
+### Series overview (review batch)
+
+The first series increment uses a separate full-screen scope with Back, series
+artwork and metadata, an informational resumable/next-episode summary, Full
+details, Credits, and a horizontal season-poster row. It shares the movie detail
+reader and credits popup rather than duplicating mutation or artwork logic.
+Series mutation controls and episode browsing are not exposed in this increment.
+Recently Added Home entries returned as seasons/episodes still represent series
+posters and open their parent series overview. Continue Watching retains its
+separate routing; direct season/episode Search entries remain unchanged until
+the episode-browser increment.
+
+Season posters preserve their 2:3 geometry and rounded clipping with or without
+artwork. Their height uses 34% of the logical viewport (previously 26%), with a
+130-pixel minimum and a maximum of 525 pixels times the shared card-density scale.
+The larger posters show fewer seasons at once while retaining horizontal traversal.
+Watched uses a teal check, unwatched an outlined circle, and missing
+user state an explicit unknown badge. State is exposed through accessible item
+labels, not repeated in captions beneath every poster. The overview has no
+permanent preview disclaimer; the season information action explains availability.
+Only focused posters draw a selection
+outline. Left/right traverses all seasons and scrolls them into view; Up restores
+the originating overview action and Down restores the last season. Accept opens
+read-only season information, never playback or a pretend episode browser.
+Back from that information restores exact season focus and horizontal offset;
+Back from the overview restores the original media source and its query/offset.
+
+The overview uses shared logical-viewport density. Compact windows omit the main
+poster and allow the copy to scroll; Full details preserves untruncated metadata.
+Loading failures offer error-only Retry. Unknown progress never becomes a fake
+remaining-time estimate. Account changes and Back cancel obsolete work and
+dispose decoded artwork. This batch requires live TV/Anime traversal and manual
+owner acceptance before season tabs and episode selection advance.
 
 ### Search
 
@@ -533,6 +571,17 @@ including initial focus, deterministic spatial movement, removed/disabled contro
 saved-account selection, modal trapping/restoration, controller text entry, active
 device prompts, inactive-window rejection, gallery round trips, and settings.
 Layout tests cover 1920x1080 and 3840x2160, plus a 1x/2x DPI transition.
+Async callbacks use Avalonia's asynchronous dispatch overload so the application
+and dispatcher pump live until all awaited assertions finish. Regression coverage
+checks delayed UI continuations, exception propagation, and per-test cleanup.
+Oversized posters are checked against their actual scroll viewport: full width
+must fit and the available vertical area must be filled, without shrinking the
+owner-approved poster sizes. Dialog bodies use a constrained grid so header and
+padding cannot push keyboard actions below the window.
+
+CI runs the complete suite on Windows and Ubuntu. Two minutes without test
+activity produces a hang report and fails the run; test steps and jobs also have
+bounded timeouts instead of remaining pending for hours.
 
 Run the affected surfaces with:
 

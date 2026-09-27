@@ -11,7 +11,7 @@ public sealed class LocalizationTestGroup
 
 internal sealed class CultureScope : IDisposable
 {
-    private readonly string _locale = Loc.Culture.Name;
+    private readonly CultureInfo _locale = Loc.Culture;
     private readonly CultureInfo _current = CultureInfo.CurrentCulture;
     private readonly CultureInfo _currentUi = CultureInfo.CurrentUICulture;
     private readonly CultureInfo? _default = CultureInfo.DefaultThreadCurrentCulture;
@@ -24,7 +24,9 @@ internal sealed class CultureScope : IDisposable
 
     public void Dispose()
     {
-        Loc.Configure(_locale);
+        // An invariant culture has an empty name; Configure then uses CurrentCulture.
+        CultureInfo.CurrentCulture = _locale;
+        Loc.Configure(_locale.Name);
         CultureInfo.CurrentCulture = _current;
         CultureInfo.CurrentUICulture = _currentUi;
         CultureInfo.DefaultThreadCurrentCulture = _default;

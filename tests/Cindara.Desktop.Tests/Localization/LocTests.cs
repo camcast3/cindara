@@ -10,6 +10,25 @@ namespace Cindara.Desktop.Tests.Localization;
 public sealed class LocTests
 {
     [Theory]
+    [InlineData("qps-ploc")]
+    [InlineData("qps-plocm")]
+    public void PseudoScopeRestoresInvariantCultureWithoutLeakingToLaterTests(string pseudo)
+    {
+        using var restore = new CultureScope("en");
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        Loc.Configure(null);
+        Assert.Equal(string.Empty, Loc.Culture.Name);
+        using (new CultureScope(pseudo))
+        {
+            Assert.True(Loc.IsPseudoLocalized);
+        }
+        Assert.Equal(string.Empty, Loc.Culture.Name);
+        Assert.False(Loc.IsPseudoLocalized);
+        Assert.False(Loc.IsRightToLeft);
+        Assert.Equal("Checking server...", Loc.Get("Status.CheckingServer"));
+    }
+
+    [Theory]
     [InlineData("en", "Checking server...")]
     [InlineData("en-US", "Checking server...")]
     [InlineData("fr", "Checking server...")]

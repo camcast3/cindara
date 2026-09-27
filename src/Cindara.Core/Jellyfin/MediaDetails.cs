@@ -56,7 +56,8 @@ public sealed record MediaSeason(
     string Name,
     int? SeasonNumber,
     MediaUserState UserState,
-    bool HasPrimaryImage);
+    bool HasPrimaryImage,
+    bool HasUserState = true);
 
 public sealed record MediaEpisode(
     string Id,

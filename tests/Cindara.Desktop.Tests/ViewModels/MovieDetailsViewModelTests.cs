@@ -90,7 +90,7 @@ public sealed class MovieDetailsViewModelTests
         {
             var diagnostics = new LocalDiagnostics(directory.FullName);
             var client = new Client { WriteGate = new() };
-            using var model = new MovieDetailsViewModel(client, Session, _ => Task.CompletedTask, diagnostics);
+            using var model = new MediaDetailsViewModel(client, Session, _ => Task.CompletedTask, diagnostics);
             await model.OpenAsync("movie", "Card");
             var save = model.ToggleWatchedCommand.ExecuteAsync(null);
             Assert.True(model.IsSaving);
@@ -127,7 +127,7 @@ public sealed class MovieDetailsViewModelTests
     {
         var client = new Client { WriteError = error };
         var rejected = 0;
-        using var model = new MovieDetailsViewModel(client, Session, _ => { rejected++; return Task.CompletedTask; });
+        using var model = new MediaDetailsViewModel(client, Session, _ => { rejected++; return Task.CompletedTask; });
         await model.OpenAsync("movie", "Card");
         Assert.False(model.NeedsRetry);
         await model.ToggleFavoriteCommand.ExecuteAsync(null);
@@ -156,7 +156,7 @@ public sealed class MovieDetailsViewModelTests
     {
         var client = new Client { WriteError = MediaPreviewError.AccessDenied };
         var rejected = 0;
-        using var model = new MovieDetailsViewModel(client, Session, _ => { rejected++; return Task.CompletedTask; });
+        using var model = new MediaDetailsViewModel(client, Session, _ => { rejected++; return Task.CompletedTask; });
         await model.OpenAsync("movie", "Card");
         await model.ToggleFavoriteCommand.ExecuteAsync(null);
         Assert.Equal(1, rejected);
@@ -232,7 +232,7 @@ public sealed class MovieDetailsViewModelTests
     {
         var client = new Client { Artwork = [1], Value = Details() with { HasPrimaryImage = true } };
         var attempts = 0;
-        using var model = new MovieDetailsViewModel(client, Session, _ => Task.CompletedTask,
+        using var model = new MediaDetailsViewModel(client, Session, _ => Task.CompletedTask,
             decode: _ =>
             {
                 attempts++;
@@ -246,7 +246,7 @@ public sealed class MovieDetailsViewModelTests
         Assert.Equal(2, attempts);
     }
 
-    private static MovieDetailsViewModel Model(Client client) => new(client, Session, _ => Task.CompletedTask);
+    private static MediaDetailsViewModel Model(Client client) => new(client, Session, _ => Task.CompletedTask);
 
     [Fact]
     public async Task TrackSummariesStayCompactWithoutRepeatingDefaultsOrListingEveryLanguage()

@@ -145,7 +145,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public bool HasSearchBrowser => SearchBrowser is not null;
 
     [ObservableProperty]
-    private MovieDetailsViewModel? _movieDetails;
+    private MediaDetailsViewModel? _movieDetails;
+
+    [ObservableProperty]
+    private SeriesOverviewViewModel? _seriesOverview;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasLibraryLayout))]
@@ -477,9 +480,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
             SearchBrowser = new SearchBrowserViewModel(_mediaPreviewClient, session,
                 exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
-            MovieDetails = new MovieDetailsViewModel(_mediaPreviewClient, session,
+            MovieDetails = new MediaDetailsViewModel(_mediaPreviewClient, session,
                 exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
             MovieDetails.UserStateChanged += ApplyMediaUserState;
+            SeriesOverview = new SeriesOverviewViewModel(_mediaPreviewClient, session,
+                exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
             if (_libraryLayoutStore is not null)
             {
                 LibraryLayout = new LibraryLayoutViewModel(session.Profile, home.Libraries, _libraryLayoutStore, _diagnostics);
@@ -683,6 +688,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void ClearDesignGallery()
     {
+        SeriesOverview?.Dispose();
+        SeriesOverview = null;
         var details = MovieDetails;
         MovieDetails = null;
         if (details is not null)

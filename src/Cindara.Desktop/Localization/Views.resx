@@ -3,6 +3,20 @@
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
   <data name="Brand.Name" xml:space="preserve"><value>Cindara</value></data>
+  <data name="Series.Title" xml:space="preserve"><value>Series overview</value></data>
+  <data name="Series.NoArtwork" xml:space="preserve"><value>No artwork</value></data>
+  <data name="Series.UnknownEpisode" xml:space="preserve"><value>{0} (progress not provided)</value></data>
+  <data name="Series.Seasons" xml:space="preserve"><value>Seasons</value></data>
+  <data name="Series.Loading" xml:space="preserve"><value>Loading seasons and next episode...</value></data>
+  <data name="Series.NoSeasons" xml:space="preserve"><value>No seasons are available for this series.</value></data>
+  <data name="Series.NoContinuation" xml:space="preserve"><value>No resumable or next episode is available.</value></data>
+  <data name="Series.ContinuationUnknown" xml:space="preserve"><value>Next episode is unavailable. Retry to check again.</value></data>
+  <data name="Series.NextEpisode" xml:space="preserve"><value>Next episode: {0}</value></data>
+  <data name="Series.ResumeEpisode" xml:space="preserve"><value>In progress: {0}</value></data>
+  <data name="Series.Remaining" xml:space="preserve"><value>{0} remaining</value></data>
+  <data name="Series.RemainingUnknown" xml:space="preserve"><value>Time remaining not provided</value></data>
+  <data name="Series.SeasonHelp" xml:space="preserve"><value>Show season information</value></data>
+  <data name="Series.ReviewBoundary" xml:space="preserve"><value>Read-only series preview. Episode browsing and playback are not available yet.</value></data>
   <data name="Brand.Monogram" xml:space="preserve"><value>C</value></data>
   <data name="Auth.Tagline" xml:space="preserve"><value>Your media. Native everywhere.</value></data>
   <data name="Auth.Server" xml:space="preserve"><value>Jellyfin server</value></data>

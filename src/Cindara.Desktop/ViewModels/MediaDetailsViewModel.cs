@@ -9,8 +9,9 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Cindara.Desktop.ViewModels;
 
-public sealed partial class MovieDetailsViewModel : ObservableObject, IDisposable
+public sealed partial class MediaDetailsViewModel : ObservableObject, IDisposable
 {
+    private readonly string _mediaType;
     private readonly IJellyfinMediaPreviewClient _client;
     private readonly AuthenticatedSession _session;
     private readonly Func<MediaPreviewException, Task> _onAccessDenied;
@@ -25,13 +26,17 @@ public sealed partial class MovieDetailsViewModel : ObservableObject, IDisposabl
     private bool _stateKnown;
     private string? _itemId;
 
-    internal MovieDetailsViewModel(
+    internal MediaDetailsViewModel(
         IJellyfinMediaPreviewClient client,
         AuthenticatedSession session,
         Func<MediaPreviewException, Task> onAccessDenied,
         LocalDiagnostics? diagnostics = null,
-        Func<byte[], PreviewImage>? decode = null)
+        Func<byte[], PreviewImage>? decode = null,
+        string mediaType = "Movie")
     {
+        if (mediaType is not ("Movie" or "Series" or "Episode"))
+            throw new ArgumentOutOfRangeException(nameof(mediaType));
+        _mediaType = mediaType;
         _client = client;
         _session = session;
         _onAccessDenied = onAccessDenied;
@@ -164,8 +169,8 @@ public sealed partial class MovieDetailsViewModel : ObservableObject, IDisposabl
         {
             var details = await _client.GetItemDetailsAsync(_session, itemId, token);
             if (!IsCurrent(generation, token)) return;
-            if (details.Id != itemId || details.MediaType != "Movie")
-                throw new MediaPreviewException(MediaPreviewError.InvalidResponse, "Unexpected movie details.");
+            if (details.Id != itemId || details.MediaType != _mediaType)
+                throw new MediaPreviewException(MediaPreviewError.InvalidResponse, "Unexpected media details.");
             ClearImages();
             Details = details;
             Title = details.Name;

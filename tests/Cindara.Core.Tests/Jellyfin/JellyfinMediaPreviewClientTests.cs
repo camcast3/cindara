@@ -101,6 +101,8 @@ public sealed class JellyfinMediaPreviewClientTests
                 Assert.Equal("TV Shows", rail.Title);
                 var episode = Assert.Single(rail.Items);
                 Assert.Equal("Second Nature", episode.Name);
+                Assert.Equal("second-nature", episode.SeriesId);
+                Assert.Equal("Episode", episode.MediaType);
                 Assert.Equal(new MediaPreviewMetadata("Return Migration", "Second Nature", 1, 6,
                     null, null, null, true), episode.Metadata);
             },
@@ -124,6 +126,8 @@ public sealed class JellyfinMediaPreviewClientTests
                     {
                         Assert.Equal("That Time I Got Reincarnated as a Slime", season.Name);
                         Assert.Equal("Season 3", season.Metadata?.Name);
+                        Assert.Equal("slime", season.SeriesId);
+                        Assert.Equal("Season", season.MediaType);
                         Assert.True(season.Metadata?.PreferSeriesTitle);
                     });
             });
@@ -967,9 +971,9 @@ public sealed class JellyfinMediaPreviewClientTests
                 return parentId switch
                 {
                     "tv" => Json(
-                        """[{"Id":"episode-2","Name":"Return Migration","Type":"Episode","SeriesName":"Second Nature","ParentIndexNumber":1,"IndexNumber":6,"ImageTags":{}}]"""),
+                        """[{"Id":"episode-2","Name":"Return Migration","Type":"Episode","SeriesId":"second-nature","SeriesName":"Second Nature","ParentIndexNumber":1,"IndexNumber":6,"ImageTags":{}}]"""),
                     "anime" => Json(
-                        """[{"Id":"anime-1","Name":"Skyward","Type":"Series","ProductionYear":2025,"ImageTags":{}},{"Id":"season-3","Name":"Season 3","Type":"Season","SeriesName":"That Time I Got Reincarnated as a Slime","IndexNumber":3,"ImageTags":{}}]"""),
+                        """[{"Id":"anime-1","Name":"Skyward","Type":"Series","ProductionYear":2025,"ImageTags":{}},{"Id":"season-3","Name":"Season 3","Type":"Season","SeriesId":"slime","SeriesName":"That Time I Got Reincarnated as a Slime","IndexNumber":3,"ImageTags":{}}]"""),
                     "movies" => Json(
                         """[{"Id":"movie-1","Name":"Moon Garden","Type":"Movie","ProductionYear":2026,"RunTimeTicks":39000000000,"OfficialRating":"PG-13","ImageTags":{}}]"""),
                     _ => throw new InvalidOperationException($"Unexpected parent: {parentId}"),

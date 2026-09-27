@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -48,7 +49,12 @@ public partial class LibraryBrowserView : UserControl
         InitializeComponent();
         BuildLetterChoices();
         SizeChanged += (_, args) => UpdateCardLayout(args.NewSize.Width);
-        LayoutUpdated += (_, _) => UpdateArtworkWindowFromRealizedCards();
+        LibraryRows.SizeChanged += (_, _) => UpdateCardLayout(Bounds.Width);
+        LayoutUpdated += (_, _) =>
+        {
+            UpdateCardLayout(Bounds.Width);
+            UpdateArtworkWindowFromRealizedCards();
+        };
         DataContextChanged += (_, _) =>
         {
             if (_model is not null)
@@ -107,11 +113,15 @@ public partial class LibraryBrowserView : UserControl
         var gridSpacing = topLevel?.Resources["Cindara.Media.GridSpacing"] is double spacingValue
             ? spacingValue
             : 24;
-        var availableWidth = Math.Max(posterWidth, width - 64);
+        var viewport = LibraryRows.GetVisualDescendants().OfType<ScrollContentPresenter>().FirstOrDefault();
+        var viewportWidth = viewport is { Bounds.Width: > 0 } ? viewport.Bounds.Width
+            : LibraryRows.Bounds.Width > 0 ? LibraryRows.Bounds.Width : width - 64;
+        var availableWidth = Math.Max(posterWidth, viewportWidth - gridSpacing - LibraryRows.Padding.Left
+            - LibraryRows.Padding.Right);
         var columns = Math.Clamp(
             (int)Math.Floor((availableWidth + gridSpacing)
                 / (posterWidth + gridSpacing)),
-            2,
+            1,
             14);
         if (_columns != columns)
         {
@@ -194,12 +204,13 @@ public partial class LibraryBrowserView : UserControl
             NavigationDirection.Right => rtl ? -1 : 1,
             _ => 0,
         };
-        if (step == -1 && index % Columns == 0)
+        if (direction is NavigationDirection.Left or NavigationDirection.Right && step == -1 && index % Columns == 0)
         {
             return false;
         }
 
-        if (step == 1 && (index % Columns == Columns - 1 || index == _model.Items.Count - 1))
+        if (direction is NavigationDirection.Left or NavigationDirection.Right
+            && step == 1 && (index % Columns == Columns - 1 || index == _model.Items.Count - 1))
         {
             ActiveLetterButton()?.Focus(NavigationMethod.Directional);
             return true;

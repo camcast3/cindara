@@ -24,7 +24,7 @@ public partial class MovieCreditsView : UserControl
     public Button BackAction => CreditsBack;
     public int Columns { get; private set; } = 1;
 
-    public void ShowCredits(MovieDetailsViewModel details, MovieCreditViewModel? selected)
+    public void ShowCredits(MediaDetailsViewModel details, MovieCreditViewModel? selected)
     {
         DataContext = details;
         CreditEntries.ItemsSource = details.Credits.Select(credit => new MovieCreditEntry(credit, credit == selected)).ToArray();

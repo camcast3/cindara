@@ -4,7 +4,7 @@
              xmlns:vm="using:Cindara.Desktop.ViewModels"
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.MovieCreditsView"
-             x:DataType="vm:MovieDetailsViewModel">
+             x:DataType="vm:MediaDetailsViewModel">
     <UserControl.Styles>
         <Style Selector="Border.credit-entry">
             <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Surface}" />

@@ -197,6 +197,71 @@ public sealed class MediaSearchAndDetailsTests
         Assert.All(handler.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
     }
 
+    [Fact]
+    public async Task SeriesResumeIsScopedReadOnlyAndDoesNotFetchGlobalHome()
+    {
+        using var handler = new Handler((_, _) => Json("""
+            {"Items":[{"Id":"e","Name":"Episode","Type":"Episode","SeriesId":"series/id",
+             "RunTimeTicks":18000000000,"UserData":{"Played":false,"IsFavorite":false,"PlaybackPositionTicks":9000000000}}]}
+            """));
+        using var client = Client(handler);
+        var result = await client.GetSeriesContinuationAsync(Session, "series/id");
+        Assert.Equal("e", result!.Id);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Get, request.Method);
+        Assert.Contains("ParentId=series%2Fid", request.Uri.Query, StringComparison.Ordinal);
+        Assert.Contains("Limit=1", request.Uri.Query, StringComparison.Ordinal);
+        Assert.Contains("SortBy=DatePlayed", request.Uri.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SeriesWithoutResumeUsesScopedNextUpIncludingUnstartedSeries()
+    {
+        using var handler = new Handler((request, _) => Json(request.RequestUri!.AbsolutePath.EndsWith("/Resume", StringComparison.Ordinal)
+            ? """{"Items":[]}"""
+            : """{"Items":[{"Id":"first","Name":"First","Type":"Episode","SeriesId":"series"}]}"""));
+        using var client = Client(handler);
+        Assert.Equal("first", (await client.GetSeriesContinuationAsync(Session, "series"))!.Id);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Contains("SeriesId=series", handler.Requests[1].Uri.Query, StringComparison.Ordinal);
+        Assert.Contains("DisableFirstEpisode=false", handler.Requests[1].Uri.Query, StringComparison.Ordinal);
+        Assert.All(handler.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
+    }
+
+    [Fact]
+    public async Task SeriesAtNinetyPercentUsesExistingFollowingEpisodeRule()
+    {
+        using var handler = new Handler((request, _) => Json(request.RequestUri!.AbsolutePath.EndsWith("/Resume", StringComparison.Ordinal)
+            ? """{"Items":[{"Id":"old","Name":"Old","Type":"Episode","SeriesId":"series","UserData":{"PlayedPercentage":90}}]}"""
+            : """{"Items":[{"Id":"next","Name":"Next","Type":"Episode","SeriesId":"series","UserData":{"Played":false}}]}"""));
+        using var client = Client(handler);
+        Assert.Equal("next", (await client.GetSeriesContinuationAsync(Session, "series"))!.Id);
+        Assert.Contains("StartItemId=old", handler.Requests[1].Uri.Query, StringComparison.Ordinal);
+        Assert.Contains("StartIndex=1", handler.Requests[1].Uri.Query, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""{"Items":[{"Id":"e","Name":"Wrong series","Type":"Episode","SeriesId":"other"}]}""")]
+    [InlineData("""{"Items":[{"Id":"e","Name":"Wrong type","Type":"Movie","SeriesId":"series"}]}""")]
+    [InlineData("""{"Items":[{"Id":"a","Name":"A","Type":"Episode","SeriesId":"series"},{"Id":"b","Name":"B","Type":"Episode","SeriesId":"series"}]}""")]
+    public async Task SeriesContinuationRejectsMismatchedOrUnboundedResponses(string response)
+    {
+        using var handler = new Handler((_, _) => Json(response));
+        using var client = Client(handler);
+        Assert.Equal(MediaPreviewError.InvalidResponse, (await Assert.ThrowsAsync<MediaPreviewException>(
+            () => client.GetSeriesContinuationAsync(Session, "series"))).Error);
+    }
+
+    [Fact]
+    public async Task SeasonsKeepUnknownStateRatherThanInventingUnwatched()
+    {
+        using var handler = new Handler((_, _) => Json("""
+            {"Items":[{"Id":"s","Name":"Season","Type":"Season","SeriesId":"series","IndexNumber":1}]}
+            """));
+        using var client = Client(handler);
+        Assert.False(Assert.Single(await client.GetSeasonsAsync(Session, "series")).HasUserState);
+    }
+
     private static HttpResponseMessage Json(string json) =>
         new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 
