@@ -1558,6 +1558,9 @@ public sealed class MainWindowNavigationTests
         Assert.Equal(12, seasons.Length);
         Assert.All(seasons, card => Assert.InRange(card.Bounds.Width / card.Bounds.Height, 0.66, 0.68));
         Assert.Equal(Loc.Get("Details.StateUnknown"), AutomationProperties.GetItemStatus(seasons[2]));
+        Assert.DoesNotContain(overview.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == Loc.Get("Details.Watched") || text.Text == Loc.Get("Details.Unwatched")
+                || text.Text == Loc.Get("Series.ReviewBoundary"));
         var info = overview.FindControl<Button>("InformationButton")!;
         info.Focus();
         fixture.Input.Press(ControllerAction.NavigateDown);

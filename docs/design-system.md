@@ -461,7 +461,10 @@ the episode-browser increment.
 
 Season posters preserve their 2:3 geometry and rounded clipping with or without
 artwork. Watched uses a teal check, unwatched an outlined circle, and missing
-user state an explicit unknown label. Only focused posters draw a selection
+user state an explicit unknown badge. State is exposed through accessible item
+labels, not repeated in captions beneath every poster. The overview has no
+permanent preview disclaimer; the season information action explains availability.
+Only focused posters draw a selection
 outline. Left/right traverses all seasons and scrolls them into view; Up restores
 the originating overview action and Down restores the last season. Accept opens
 read-only season information, never playback or a pretend episode browser.
