@@ -229,7 +229,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 $"Users/{Uri.EscapeDataString(session.UserId)}/Items"
                 + $"?SearchTerm={Uri.EscapeDataString(normalizedQuery)}&StartIndex={startIndex}&Limit={MediaSearchPage.PageSize}"
                 + "&Recursive=true&SortBy=SortName&SortOrder=Ascending&EnableTotalRecordCount=true"
-                + $"&IncludeItemTypes=Movie,Series,Season,Episode&Fields={ItemFields}",
+                + $"&IncludeItemTypes=Movie,Series&Fields={ItemFields}",
                 "search results").ConfigureAwait(false);
             if (result?.Items is not { } sources || result.TotalRecordCount is not { } total
                 || total < 0 || startIndex > 0 && startIndex >= total
@@ -990,14 +990,12 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             preferSeriesTitle);
 
     private static bool IsSupportedSearchType(string? type) =>
-        type is "Movie" or "Series" or "Season" or "Episode";
+        type is "Movie" or "Series";
 
     private static int SearchTypeOrder(string? type) => type switch
     {
         "Movie" => 0,
         "Series" => 1,
-        "Season" => 2,
-        "Episode" => 3,
         _ => int.MaxValue,
     };
 

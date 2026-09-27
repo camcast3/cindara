@@ -376,15 +376,18 @@ public sealed class MainWindowNavigationTests
             .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
         var search = fixture.Model.SearchBrowser!;
         search.Query = "movie";
-        await search.LoadPageCommand.ExecuteAsync(0);
+        await search.RefreshCommand.ExecuteAsync(null);
         fixture.Flush();
         var searchView = fixture.Shell.SearchView;
+        searchView.FindControl<ListBox>("SearchRows")!.ScrollIntoView(20 / search.Rows[0].Items.Count);
+        fixture.Flush();
         var card = searchView.GetVisualDescendants().OfType<Button>()
             .Single(button => button.DataContext is MediaPreviewCardViewModel { Id: "search-20" });
         card.Focus();
         card.BringIntoView();
         fixture.Flush();
-        var scroll = searchView.FindControl<ScrollViewer>("SearchScroll")!;
+        var scroll = searchView.FindControl<ListBox>("SearchRows")!
+            .GetVisualDescendants().OfType<ScrollViewer>().First();
         var offset = scroll.Offset;
         var items = search.Items;
         fixture.Click(card);
@@ -395,6 +398,42 @@ public sealed class MainWindowNavigationTests
         Assert.Equal(offset, scroll.Offset);
         Assert.Same(items, search.Items);
         Assert.Equal("movie", search.Query);
+        Assert.Equal(0, fixture.Preview.StateWrites);
+    });
+
+    [Fact]
+    public Task SearchControllerTraversesBatchBoundaryWithoutPageControls() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        var search = fixture.Model.SearchBrowser!;
+        search.Query = "many";
+        await search.RefreshCommand.ExecuteAsync(null);
+        fixture.Flush();
+        var view = fixture.Shell.SearchView;
+        Assert.Equal(40, search.Items.Count);
+        Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(),
+            button => button.Name is "PreviousSearchPage" or "NextSearchPage");
+        var rows = view.FindControl<ListBox>("SearchRows")!;
+        var columns = search.Rows[0].Items.Count;
+        rows.ScrollIntoView(39 / columns);
+        fixture.Flush();
+        var last = view.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaPreviewCardViewModel { Id: "search-39" });
+        last.Focus();
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        if (search.LoadMoreCommand.ExecutionTask is { } loading)
+            await loading;
+        fixture.Flush();
+        Assert.Equal(80, search.Items.Count);
+        Assert.Equal(2, fixture.Preview.SearchCalls);
+        Assert.Equal("search-43", Assert.IsType<MediaPreviewCardViewModel>(
+            Focused(fixture.Window).DataContext).Id);
+        Assert.Equal("many", search.Query);
+        Assert.All(search.Items, item => Assert.True(item.MediaType is "Movie" or "Series"));
+        Assert.False(search.HasMore);
         Assert.Equal(0, fixture.Preview.StateWrites);
     });
 
@@ -1422,18 +1461,21 @@ public sealed class MainWindowNavigationTests
         fixture.Click(fixture.Modal.GetVisualDescendants().OfType<Button>()
             .Single(button => Equals(button.Content, Loc.Get("Keyboard.Done"))));
         Assert.False(fixture.IsModalVisible);
-        await search.LoadPageCommand.ExecuteAsync(0);
+        await search.RefreshCommand.ExecuteAsync(null);
         fixture.Flush();
 
         Assert.Equal(MediaSearchPage.PageSize, search.Items.Count);
         var cards = view.GetVisualDescendants().OfType<Button>()
             .Where(button => button.Classes.Contains("search-card")).ToArray();
-        Assert.Equal(MediaSearchPage.PageSize, cards.Length);
-        var selected = cards[17];
+        Assert.InRange(cards.Length, 1, MediaSearchPage.PageSize);
+        var selected = cards.First(button =>
+            button.DataContext is MediaPreviewCardViewModel { MediaType: "Series" });
         selected.Focus();
-        view.FindControl<ScrollViewer>("SearchScroll")!.Offset = new Vector(0, 500);
+        var searchRows = view.FindControl<ListBox>("SearchRows")!;
+        selected.BringIntoView();
         fixture.Flush();
-        var offset = view.FindControl<ScrollViewer>("SearchScroll")!.Offset;
+        var searchScroll = searchRows.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var offset = searchScroll.Offset;
         fixture.Click(selected);
         Assert.True(fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!.IsVisible);
         fixture.Input.Press(ControllerAction.Back);
@@ -1447,7 +1489,7 @@ public sealed class MainWindowNavigationTests
         fixture.Click(searchSource);
         Assert.Equal("space", query.Text);
         Assert.Same(selected, Focused(fixture.Window));
-        Assert.Equal(offset, view.FindControl<ScrollViewer>("SearchScroll")!.Offset);
+        Assert.Equal(offset, searchScroll.Offset);
         fixture.Input.Press(ControllerAction.Back);
         Assert.True(fixture.Model.IsDesignGalleryVisible);
         Assert.Same(searchSource, Focused(fixture.Window));
@@ -1545,12 +1587,13 @@ public sealed class MainWindowNavigationTests
             .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
         var search = fixture.Model.SearchBrowser!;
         search.Query = "Series";
-        await search.LoadPageCommand.ExecuteAsync(0);
+        await search.RefreshCommand.ExecuteAsync(null);
         fixture.Flush();
         var source = fixture.Shell.SearchView.GetVisualDescendants().OfType<Button>()
             .First(button => button.DataContext is MediaPreviewCardViewModel { MediaType: "Series" });
         source.Focus();
-        var searchScroll = fixture.Shell.SearchView.FindControl<ScrollViewer>("SearchScroll")!;
+        var searchScroll = fixture.Shell.SearchView.FindControl<ListBox>("SearchRows")!
+            .GetVisualDescendants().OfType<ScrollViewer>().First();
         var searchOffset = searchScroll.Offset;
         fixture.Click(source);
         var overview = fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!;
@@ -1625,7 +1668,7 @@ public sealed class MainWindowNavigationTests
         var search = fixture.Model.SearchBrowser!;
         var query = searchView.FindControl<TextBox>("SearchTextBox")!;
         query.Text = "reference";
-        await search.LoadPageCommand.ExecuteAsync(0);
+        await search.RefreshCommand.ExecuteAsync(null);
         fixture.Flush();
 
         AssertInsideWindow(fixture.Window, query);
@@ -1635,12 +1678,12 @@ public sealed class MainWindowNavigationTests
         Assert.False(fixture.Window.FindControl<Button>("DiagnosticsButton")!.IsEffectivelyVisible);
         var searchCards = searchView.GetVisualDescendants().OfType<Button>()
             .Where(button => button.Classes.Contains("search-card")).ToArray();
-        Assert.Equal(MediaSearchPage.PageSize, searchCards.Length);
-        searchCards[^1].Focus();
-        searchCards[^1].BringIntoView();
+        Assert.InRange(searchCards.Length, 1, MediaSearchPage.PageSize);
+        searchCards[0].Focus();
+        searchCards[0].BringIntoView();
         fixture.Flush();
-        Assert.Same(searchCards[^1], Focused(fixture.Window));
-        AssertCardVisibleInViewport(fixture.Window, searchCards[^1]);
+        Assert.Same(searchCards[0], Focused(fixture.Window));
+        AssertCardVisibleInViewport(fixture.Window, searchCards[0]);
 
         query.Focus();
         fixture.Input.Press(ControllerAction.Accept);
@@ -2701,7 +2744,7 @@ public sealed class MainWindowNavigationTests
             CancellationToken cancellationToken = default)
         {
             SearchCalls++;
-            var types = new[] { "Movie", "Series", "Season", "Episode" };
+            var types = new[] { "Movie", "Series" };
             var count = Math.Min(MediaSearchPage.PageSize, 80 - startIndex);
             return Task.FromResult(new MediaSearchPage(
                 Enumerable.Range(startIndex, count)

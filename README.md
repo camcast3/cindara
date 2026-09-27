@@ -41,8 +41,8 @@ movie card opens full movie details; a series opens its overview and season post
 Season and episode cards still open a read-only summary.
 Back restores the exact card, query controls, loaded
 batches, and grid position. Search supports debounced physical-keyboard
-input, a temporary full-screen controller keyboard, one combined movie/series/season/
-episode poster grid, bounded paging, cancellation, and exact query/focus/scroll
+input, a temporary full-screen controller keyboard, one combined movie/series
+poster grid with incremental scrolling in batches of 40, cancellation, and exact query/focus/scroll
 restoration. The first series overview batch is awaiting owner acceptance;
 season/episode browsing and downloads remain deferred. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
