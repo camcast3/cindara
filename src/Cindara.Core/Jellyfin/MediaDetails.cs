@@ -74,4 +74,5 @@ public sealed record MediaEpisode(
     MediaUserState UserState,
     bool HasPrimaryImage,
     IReadOnlyList<MediaRating>? Ratings = null,
-    bool HasUserState = true);
+    bool HasUserState = true,
+    bool HasThumbImage = false);

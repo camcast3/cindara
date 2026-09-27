@@ -280,17 +280,37 @@ public sealed class MediaSearchAndDetailsTests
         using var handler = new Handler((_, _) => Json("""
             {"Items":[{"Id":"e","Name":"Pilot","Type":"Episode","SeriesId":"series",
              "SeasonId":"specials","IndexNumber":0,"CommunityRating":8.5,
+             "ImageTags":{"Thumb":"still"},
              "People":[{"Id":"director","Name":"Director","Type":"Director"}]}]}
             """));
         using var client = Client(handler);
         var episode = Assert.Single(await client.GetEpisodesAsync(Session, "series", "specials"));
         Assert.Equal(0, episode.EpisodeNumber);
         Assert.False(episode.HasUserState);
+        Assert.True(episode.HasThumbImage);
         Assert.Equal(8.5, Assert.Single(episode.Ratings!).Value);
         Assert.Equal("Director", Assert.Single(episode.Credits).Name);
         var request = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Get, request.Method);
         Assert.Contains("SeasonId=specials", request.Uri.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EpisodeThumbnailUsesLandscapeWithPrimaryFallback()
+    {
+        using var handler = new Handler((request, _) =>
+            request.RequestUri!.AbsolutePath.EndsWith("/Thumb", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent([1, 2, 3]),
+                });
+        using var client = Client(handler);
+        Assert.Equal([1, 2, 3], await client.GetEpisodeThumbnailAsync(Session, "episode"));
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.EndsWith("/Images/Thumb", handler.Requests[0].Uri.AbsolutePath, StringComparison.Ordinal);
+        Assert.EndsWith("/Images/Primary", handler.Requests[1].Uri.AbsolutePath, StringComparison.Ordinal);
+        Assert.Contains("maxWidth=720", handler.Requests[0].Uri.Query, StringComparison.Ordinal);
     }
 
     [Theory]

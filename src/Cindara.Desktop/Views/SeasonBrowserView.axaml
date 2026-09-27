@@ -5,8 +5,19 @@
              x:Class="Cindara.Desktop.Views.SeasonBrowserView"
              x:DataType="vm:SeasonBrowserViewModel"
              Background="{DynamicResource Cindara.Brush.Background}">
+    <UserControl.Styles>
+        <Style Selector="Button.episode-card">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.episode-card:pointerover:not(:focus) /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+    </UserControl.Styles>
     <Grid Margin="{DynamicResource Cindara.Adaptive.SafeMargin}"
-          RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="16">
+          RowDefinitions="Auto,Auto,Auto,*" RowSpacing="12">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
             <Button x:Name="BrowserBack" Content="{loc:Tr Action.Back}" Click="OnBack"
                     AutomationProperties.AutomationId="SeasonBrowserBack" />
@@ -36,48 +47,135 @@
             <Button Grid.Column="1" Content="{loc:Tr Details.Retry}"
                     IsVisible="{Binding NeedsRetry}" Command="{Binding RetryCommand}" />
         </Grid>
-        <ScrollViewer x:Name="EpisodeScroll" Grid.Row="3" Height="150"
-                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
-            <ItemsControl ItemsSource="{Binding Episodes}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="12" /></ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:EpisodeCardViewModel">
-                        <Button Classes="card" Width="205" Height="135" Click="OnEpisode"
-                                GotFocus="OnEpisodeFocus"
-                                AutomationProperties.Name="{Binding Name}"
-                                AutomationProperties.ItemStatus="{Binding Progress}"
-                                AutomationProperties.HelpText="{loc:Tr Season.SelectHelp}">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="{Binding Number}" Classes="heading" />
-                                <TextBlock Text="{Binding Name}" MaxLines="2"
-                                           TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding Progress}" Classes="caption" />
-                            </StackPanel>
-                        </Button>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
-        <ScrollViewer x:Name="EpisodeDetailsScroll" Grid.Row="4" VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Spacing="12">
-                <TextBlock Text="{Binding EpisodeTitle}" Classes="title" TextWrapping="Wrap"
-                           AutomationProperties.AutomationId="SelectedEpisodeTitle"
-                           AutomationProperties.LiveSetting="Polite" />
-                <TextBlock Text="{Binding EpisodeNumber}" Classes="heading" />
-                <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding Ratings}" />
-                <TextBlock Text="{Binding Synopsis}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding Director}" TextWrapping="Wrap" />
-                <TextBlock Text="{loc:Tr Details.Credits}" Classes="heading" />
-                <TextBlock Text="{Binding Credits}" TextWrapping="Wrap" />
-                <Image Source="{Binding Artwork}" Height="130" Stretch="UniformToFill"
-                       IsVisible="{Binding HasArtwork}" />
+        <ScrollViewer x:Name="EpisodeDetailsScroll" Grid.Row="3"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="24">
+                <Grid x:Name="SeasonHero" ColumnDefinitions="Auto,*,*" ColumnSpacing="24">
+                    <Border x:Name="SeasonPoster" Width="180" Height="270"
+                            CornerRadius="{DynamicResource Cindara.Radius.Large}" ClipToBounds="True"
+                            Background="{DynamicResource Cindara.Brush.SurfaceRaised}">
+                        <Grid>
+                            <TextBlock Text="{loc:Tr Library.ArtworkUnavailable}"
+                                       IsVisible="{Binding !HasSeasonPoster}"
+                                       VerticalAlignment="Center" TextAlignment="Center"
+                                       Margin="12" TextWrapping="Wrap" />
+                            <Image Source="{Binding SeasonPoster}" Stretch="UniformToFill" />
+                        </Grid>
+                    </Border>
+                    <StackPanel x:Name="SeasonSummary" Grid.Column="1" Spacing="10">
+                        <TextBlock Text="{Binding SeasonTitle}" Classes="title" TextWrapping="Wrap"
+                                   AutomationProperties.AutomationId="SeasonTitle" />
+                        <TextBlock Text="{Binding SeasonMetadata}" Classes="secondary" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding SeasonOverview}" TextWrapping="Wrap" />
+                        <TextBlock Text="{loc:Tr Details.PlaybackUnavailable}" Classes="caption" />
+                    </StackPanel>
+                    <StackPanel x:Name="SelectedDetails" Grid.Column="2" Spacing="8">
+                        <TextBlock Text="{Binding EpisodeTitle}" Classes="heading" TextWrapping="Wrap"
+                                   AutomationProperties.AutomationId="SelectedEpisodeTitle"
+                                   AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Text="{Binding EpisodeNumber}" Classes="secondary" />
+                        <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Ratings}" />
+                        <TextBlock Text="{Binding Synopsis}" TextWrapping="Wrap" MaxLines="4"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Director}" TextWrapping="Wrap" />
+                        <TextBlock Text="{loc:Tr Details.Credits}" Classes="label" />
+                        <TextBlock Text="{Binding CreditsPreview}" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+                <StackPanel Spacing="10" IsVisible="{Binding HasSeasonCredits}">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{loc:Tr Season.CastCrew}" Classes="heading" />
+                        <Button x:Name="CreditsLeft" Grid.Column="1" Content="{loc:Tr Details.PreviousCredits}"
+                                Click="OnCreditsLeft" />
+                        <Button x:Name="CreditsRight" Grid.Column="2" Content="{loc:Tr Details.NextCredits}"
+                                Click="OnCreditsRight" />
+                    </Grid>
+                    <ScrollViewer x:Name="CreditsScroll" HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding SeasonCredits}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="16" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MovieCreditViewModel">
+                                    <StackPanel Width="116" Spacing="4"
+                                                AutomationProperties.Name="{Binding Name}">
+                                        <Border Width="90" Height="90" CornerRadius="45"
+                                                ClipToBounds="True" HorizontalAlignment="Center"
+                                                Background="{DynamicResource Cindara.Brush.SurfaceRaised}">
+                                            <Grid>
+                                                <TextBlock Text="{loc:Tr Details.NoPhoto}" TextAlignment="Center"
+                                                           VerticalAlignment="Center" IsVisible="{Binding !HasImage}" />
+                                                <Image Source="{Binding Image}" Stretch="UniformToFill" />
+                                            </Grid>
+                                        </Border>
+                                        <TextBlock Text="{Binding Name}" MaxLines="2"
+                                                   TextTrimming="CharacterEllipsis" TextAlignment="Center" />
+                                        <TextBlock Text="{Binding Role}" Classes="caption" MaxLines="1"
+                                                   TextTrimming="CharacterEllipsis" TextAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </StackPanel>
+                <TextBlock Text="{Binding CreditsMessage}" IsVisible="{Binding HasCreditsMessage}"
+                           Classes="caption" AutomationProperties.LiveSetting="Polite" />
+                <StackPanel Spacing="12">
+                    <TextBlock Text="{Binding EpisodeCount}" Classes="heading" />
+                    <ItemsControl x:Name="EpisodeGrid" ItemsSource="{Binding Episodes}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:EpisodeCardViewModel">
+                                <Button Classes="card episode-card"
+                                        Width="{DynamicResource Cindara.Season.EpisodeWidth}"
+                                        Margin="0,0,16,16" Click="OnEpisode" GotFocus="OnEpisodeFocus"
+                                        AutomationProperties.Name="{Binding Name}"
+                                        AutomationProperties.ItemStatus="{Binding Progress}"
+                                        AutomationProperties.HelpText="{loc:Tr Season.SelectHelp}">
+                                    <StackPanel Spacing="6">
+                                        <Border Height="{DynamicResource Cindara.Season.ImageHeight}"
+                                                CornerRadius="{DynamicResource Cindara.Radius.Medium}"
+                                                ClipToBounds="True" Background="{DynamicResource Cindara.Brush.SurfaceRaised}">
+                                            <Grid>
+                                                <TextBlock Text="{loc:Tr Library.ArtworkUnavailable}"
+                                                           IsVisible="{Binding !HasImage}"
+                                                           TextAlignment="Center" TextWrapping="Wrap"
+                                                           VerticalAlignment="Center" Margin="8" />
+                                                <Image Source="{Binding Image}" Stretch="UniformToFill" />
+                                                <Border IsVisible="{Binding IsWatched}"
+                                                        Background="{DynamicResource Cindara.Brush.Surface}"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                        CornerRadius="14" Padding="6" Margin="6">
+                                                    <Path Width="16" Height="16" Data="M 2,8 L 6,12 L 14,3"
+                                                          StrokeThickness="2"
+                                                          Stroke="{DynamicResource Cindara.Brush.Accent}" />
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                        <TextBlock Text="{Binding Number}" Classes="caption" />
+                                        <TextBlock Text="{Binding Name}" MaxLines="2"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Progress}" Classes="caption" />
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+                <StackPanel Spacing="8" IsVisible="{Binding HasSelectedEpisode}">
+                    <TextBlock Text="{loc:Tr Details.MoreInformation}" Classes="heading" />
+                    <TextBlock Text="{Binding EpisodeTitle}" Classes="label" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Synopsis}" TextWrapping="Wrap" />
+                    <TextBlock Text="{loc:Tr Details.Credits}" Classes="label" />
+                    <TextBlock Text="{Binding Credits}" TextWrapping="Wrap" />
+                </StackPanel>
                 <TextBlock Text="{Binding ArtworkMessage}" IsVisible="{Binding HasArtworkMessage}"
                            Classes="caption" />
-                <TextBlock Text="{loc:Tr Details.PlaybackUnavailable}" Classes="caption" />
             </StackPanel>
         </ScrollViewer>
     </Grid>

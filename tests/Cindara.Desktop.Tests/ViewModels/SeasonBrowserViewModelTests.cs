@@ -28,6 +28,10 @@ public sealed class SeasonBrowserViewModelTests
         Assert.Contains("Director", model.Director, StringComparison.Ordinal);
         Assert.Contains("8.5", model.Ratings, StringComparison.Ordinal);
         Assert.Equal("Synopsis 2", model.Synopsis);
+        Assert.Equal("Specials", model.SeasonTitle);
+        Assert.Equal("Season synopsis", model.SeasonOverview);
+        Assert.Equal(2, model.SeasonCredits.Count);
+        Assert.Equal(Loc.Format("Season.EpisodeCount", 2), model.EpisodeCount);
         Assert.Equal(Loc.Get("Season.ProgressUnknown"), model.Episodes[0].Progress);
         Assert.Equal(Loc.Format("Season.Progress", 45), model.Episodes[1].Progress);
         await model.SelectEpisodeAsync(model.Episodes[0]);
@@ -66,6 +70,48 @@ public sealed class SeasonBrowserViewModelTests
         Assert.Equal(0, client.Writes);
     }
 
+    [Fact]
+    public async Task SeasonPosterCreditsAndEpisodeStillsAreDecodedAndDisposed()
+    {
+        var client = new Client { WithImages = true };
+        var decoder = new TestPreviewImageDecoder();
+        using var model = new SeasonBrowserViewModel(client, Session, _ => Task.CompletedTask,
+            decode: decoder.Decode);
+        await model.OpenAsync("series", "specials", "Show");
+        Assert.True(model.HasSeasonPoster);
+        Assert.All(model.Episodes, episode => Assert.True(episode.HasImage));
+        Assert.True(model.SeasonCredits[0].HasImage);
+        Assert.Equal(2, client.ThumbnailReads);
+        await model.SelectSeasonAsync("season-1");
+        Assert.All(decoder.Resources.Take(4), resource => Assert.Equal(1, resource.DisposeCount));
+        model.Close();
+        Assert.All(decoder.Resources, resource => Assert.Equal(1, resource.DisposeCount));
+        Assert.Equal(0, client.Writes);
+    }
+
+    [Fact]
+    public async Task MissingSeasonCreditsUseReadOnlyParentSeriesCredits()
+    {
+        var client = new Client { NoSeasonCredits = true };
+        using var model = Model(client);
+        await model.OpenAsync("series", "season-1", "Show");
+        Assert.Equal("Actor", Assert.Single(model.SeasonCredits).Name);
+        Assert.False(model.HasCreditsMessage);
+        Assert.Equal(0, client.Writes);
+    }
+
+    [Fact]
+    public async Task LongEpisodeCreditsHaveBoundedPreviewAndCompleteReadBelow()
+    {
+        var client = new Client { ManyEpisodeCredits = true };
+        using var model = Model(client);
+        await model.OpenAsync("series", "season-1", "Show");
+        Assert.Contains("Credit 1", model.CreditsPreview, StringComparison.Ordinal);
+        Assert.DoesNotContain("Credit 8", model.CreditsPreview, StringComparison.Ordinal);
+        Assert.Contains("Credit 8", model.Credits, StringComparison.Ordinal);
+        Assert.True(model.HasSelectedEpisode);
+    }
+
     [Theory]
     [InlineData(MediaPreviewError.Forbidden)]
     [InlineData(MediaPreviewError.NotFound)]
@@ -100,6 +146,10 @@ public sealed class SeasonBrowserViewModelTests
         public bool Empty { get; set; }
         public int Writes { get; private set; }
         public MediaPreviewError? Error { get; set; }
+        public bool WithImages { get; set; }
+        public bool NoSeasonCredits { get; set; }
+        public bool ManyEpisodeCredits { get; set; }
+        public int ThumbnailReads { get; private set; }
         public TaskCompletionSource<IReadOnlyList<MediaEpisode>>? Gate
         {
             get => _gate;
@@ -114,13 +164,30 @@ public sealed class SeasonBrowserViewModelTests
                 new("specials", "Specials", 0, new(false, false, null, null), false),
                 new("season-1", "Season 1", 1, new(false, false, null, null), false),
             ]);
+        public Task<MediaItemDetails> GetItemDetailsAsync(AuthenticatedSession session, string itemId,
+            CancellationToken cancellationToken = default) => Task.FromResult(new MediaItemDetails(
+                itemId, itemId, itemId == "series" ? "Series" : "Season", "series", "Show", itemId, null, null, 2026, null,
+                null, "PG", [], [], "Season synopsis",
+                NoSeasonCredits ? itemId == "series"
+                    ? [new("actor", "Actor", "Role", "Actor", null)] : []
+                    : [new("actor", "Actor", "Role", "Actor", WithImages ? "image" : null),
+                       new("director", "Director", null, "Director", null)],
+                [], new(false, false, null, null), WithImages, false));
         public Task<IReadOnlyList<MediaEpisode>> GetEpisodesAsync(AuthenticatedSession session,
             string seriesId, string seasonId, CancellationToken cancellationToken = default) =>
             Gate?.Task ?? (Error is { } error
                 ? Task.FromException<IReadOnlyList<MediaEpisode>>(new MediaPreviewException(error, "error"))
                 : Task.FromResult<IReadOnlyList<MediaEpisode>>(Empty ? [] : seasonId == "specials"
-                    ? [Episode("episode-1", seasonId, 1), Episode("episode-2", seasonId, 2)]
-                    : [Episode("episode-3", seasonId, 3)]));
+                    ? [WithArt(Episode("episode-1", seasonId, 1)), WithArt(Episode("episode-2", seasonId, 2))]
+                    : [WithArt(Episode("episode-3", seasonId, 3))]));
+        private MediaEpisode WithArt(MediaEpisode episode) =>
+            episode with
+            {
+                HasPrimaryImage = WithImages,
+                Credits = ManyEpisodeCredits ? Enumerable.Range(1, 8)
+                    .Select(index => new MediaCredit($"credit-{index}", $"Credit {index}", null, "Actor", null))
+                    .ToArray() : episode.Credits,
+            };
         public Task<MediaUserState> SetFavoriteAsync(AuthenticatedSession session, string itemId,
             bool isFavorite, CancellationToken cancellationToken = default)
         {
@@ -135,7 +202,14 @@ public sealed class SeasonBrowserViewModelTests
         }
         public void ClearImageCache() { }
         public Task<byte[]?> GetLibraryArtworkAsync(AuthenticatedSession session, string itemId,
-            CancellationToken cancellationToken = default) => Task.FromResult<byte[]?>(null);
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<byte[]?>(WithImages ? [1, 2, 3] : null);
+        public Task<byte[]?> GetEpisodeThumbnailAsync(AuthenticatedSession session, string itemId,
+            CancellationToken cancellationToken = default)
+        {
+            ThumbnailReads++;
+            return Task.FromResult<byte[]?>(WithImages ? [1, 2, 3] : null);
+        }
         public Task<MediaPreviewHome> GetHomeAsync(AuthenticatedSession session,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,

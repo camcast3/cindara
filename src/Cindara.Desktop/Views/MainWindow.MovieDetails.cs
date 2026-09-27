@@ -82,7 +82,7 @@ public partial class MainWindow
         _navigation.Forget("season-browser");
         _navigation.SetScope(SeasonBrowser, SeasonBrowser.BackAction, "season-browser");
         await browser.OpenAsync(seriesId, seasonId, title, episodeId);
-        if (SeasonBrowser.IsVisible && browser.IsOpen)
+        if (SeasonBrowser.IsVisible && browser.IsOpen && episodeId is not null)
             Dispatcher.UIThread.Post(() => SeasonBrowser.FocusSelectedEpisode(episodeId), DispatcherPriority.Loaded);
     }
 

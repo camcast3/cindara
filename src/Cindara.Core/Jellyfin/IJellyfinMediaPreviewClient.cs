@@ -84,4 +84,10 @@ public interface IJellyfinMediaPreviewClient
         AuthenticatedSession session,
         string itemId,
         CancellationToken cancellationToken = default);
+
+    Task<byte[]?> GetEpisodeThumbnailAsync(
+        AuthenticatedSession session,
+        string itemId,
+        CancellationToken cancellationToken = default) =>
+        GetLibraryArtworkAsync(session, itemId, cancellationToken);
 }

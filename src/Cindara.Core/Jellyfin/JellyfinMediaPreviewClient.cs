@@ -371,7 +371,8 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 CreateUserState(item.UserData),
                 item.ImageTags?.ContainsKey("Primary") is true,
                 CreateRatings(item),
-                item.UserData?.Played is not null),
+                item.UserData?.Played is not null,
+                item.ImageTags?.ContainsKey("Thumb") is true),
             cancellationToken,
             item => item.Type == "Episode" && item.SeriesId == seriesId
                 && item.SeasonId == seasonId).ConfigureAwait(false);
@@ -401,6 +402,18 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
         return await GetArtworkAsync(load, itemId, landscape: false).ConfigureAwait(false);
+    }
+
+    public async Task<byte[]?> GetEpisodeThumbnailAsync(
+        AuthenticatedSession session,
+        string itemId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSession(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
+        return await GetArtworkAsync(load, itemId, landscape: true).ConfigureAwait(false);
     }
 
     public async Task<byte[]?> GetDetailBackdropAsync(

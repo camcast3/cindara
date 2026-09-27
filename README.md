@@ -150,12 +150,14 @@ error-only Retry reads again, and superseded responses cannot replace the screen
 ### Read-only season and episode browser (#5)
 
 Selecting a season opens its episode browser with season tabs (including specials
-and empty seasons), a horizontal numbered episode strip, and watched/progress
+and empty seasons), a season poster/synopsis, an informational cast-and-crew
+rail, and a responsive grid of episode thumbnails with numbers and watched/progress
 labels. Focus or Accept updates the selected episode's title, number, air date,
-runtime, rating, synopsis, director, credits, and artwork when available.
+runtime, rating, synopsis, director, and credits when available.
 Accept never starts playback. Playback is clearly unavailable; the browser has
 no Favorite, watched, Play, Resume, or trailer action. Read above/below actions
-scroll long episode information with a controller. Changing seasons cancels
+scroll long season/episode information, and cast/crew paging controls move
+through available credits with a controller. Changing seasons cancels
 outstanding requests; Back restores the overview's selected season and scroll
 or the exact originating Home/library card. Missing artwork, unknown watch
 state, unavailable episodes, and empty seasons are explicit states. This batch
