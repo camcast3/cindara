@@ -493,9 +493,11 @@ owner acceptance before season tabs and episode selection advance.
         [Previous] [Item range / total] [Next]
 ```
 
-Initial focus: search field. Controller Accept opens a temporary full-screen
-keyboard overlay; Done restores the exact grid focus/offset and Back dismisses
-the keyboard before leaving Search. Physical keyboard input remains direct.
+Initial focus: search field. The search field is centered at a bounded width.
+Controller Accept opens a temporary full-screen keyboard overlay with a compact,
+centered prompt, draft field, keys, and actions; narrow viewports scroll the
+keyboard actions into view. Done restores the exact grid focus/offset and Back
+dismisses the keyboard before leaving Search. Physical keyboard input remains direct.
 Supported Jellyfin types share one combined poster grid with title/year; richer
 metadata appears only after opening details. Empty, loading, canceled, retry,
 paging, and expired-session states are explicit.

@@ -17,7 +17,6 @@ public sealed class MediaSearchAndDetailsTests
     {
         using var handler = new Handler((_, _) => Json("""
             {"Items":[
-              {"Id":"e","Name":"Zulu","Type":"Episode","SeriesName":"Show","SeriesId":"s","SeasonId":"season","ParentIndexNumber":1,"IndexNumber":2},
               {"Id":"m2","Name":"beta","Type":"Movie"},
               {"Id":"s","Name":"Alpha","Type":"Series"},
               {"Id":"m1","Name":"Alpha","Type":"Movie"}
@@ -27,15 +26,28 @@ public sealed class MediaSearchAndDetailsTests
 
         var page = await client.SearchAsync(Session, "  alpha & beta  ", 0);
 
-        Assert.Equal(["m1", "m2", "s", "e"], page.Items.Select(item => item.Id));
+        Assert.Equal(["m1", "m2", "s"], page.Items.Select(item => item.Id));
         Assert.Equal(44, page.TotalRecordCount);
         Assert.True(page.HasNextPage);
         var request = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Get, request.Method);
         Assert.Contains("SearchTerm=alpha%20%26%20beta", request.Uri.Query, StringComparison.Ordinal);
         Assert.Contains("Limit=40", request.Uri.Query, StringComparison.Ordinal);
-        Assert.Contains("IncludeItemTypes=Movie,Series,Season,Episode", request.Uri.Query, StringComparison.Ordinal);
+        Assert.Contains("IncludeItemTypes=Movie,Series", request.Uri.Query, StringComparison.Ordinal);
+        Assert.DoesNotContain("Episode", request.Uri.Query, StringComparison.Ordinal);
         Assert.Contains("SortBy=SortName", request.Uri.Query, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Episode")]
+    [InlineData("Season")]
+    public async Task SearchRejectsNonTitleResultsEvenWhenServerIgnoresTypeFilter(string type)
+    {
+        using var handler = new Handler((_, _) =>
+            Json($$"""{"Items":[{"Id":"unexpected","Name":"Unexpected","Type":"{{type}}"}],"TotalRecordCount":1}"""));
+        using var client = Client(handler);
+        Assert.Equal(MediaPreviewError.InvalidResponse, (await Assert.ThrowsAsync<MediaPreviewException>(
+            () => client.SearchAsync(Session, "title", 0))).Error);
     }
 
     [Theory]

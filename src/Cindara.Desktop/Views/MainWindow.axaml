@@ -238,7 +238,7 @@
                             MaxHeight="{DynamicResource Cindara.Adaptive.ModalMaxHeight}"
                             Margin="{DynamicResource Cindara.Adaptive.SafeMargin}"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Grid RowDefinitions="Auto,*" RowSpacing="24">
+                        <Grid x:Name="ModalContent" RowDefinitions="Auto,*" RowSpacing="24">
                             <TextBlock x:Name="ModalTitle" Classes="title"
                                        automation:AutomationProperties.LiveSetting="Assertive" />
                             <ScrollViewer Grid.Row="1" MaxHeight="{DynamicResource Cindara.Adaptive.DialogMaxHeight}"

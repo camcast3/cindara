@@ -4,8 +4,9 @@
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.SearchBrowserView"
              x:DataType="vm:SearchBrowserViewModel">
-    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
-        <Grid x:Name="SearchEntry" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="14">
+        <Grid x:Name="SearchEntry" ColumnDefinitions="*,Auto" ColumnSpacing="12"
+              MaxWidth="840" HorizontalAlignment="Center">
             <TextBox x:Name="SearchTextBox"
                      MaxLength="200"
                      Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -22,70 +23,89 @@
         <StackPanel Grid.Row="1" Spacing="8">
             <TextBlock Classes="secondary" Text="{Binding Message}" IsVisible="{Binding HasMessage}"
                        TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+            <TextBlock Classes="caption" Text="{Binding CountDescription}"
+                       AutomationProperties.LiveSetting="Polite" />
             <WrapPanel Orientation="Horizontal">
                 <Button x:Name="CancelSearch" Content="{loc:Tr Action.CancelLoading}"
                         Margin="0,0,16,8" IsVisible="{Binding IsLoading}"
                         Click="OnCancelClicked" />
+                <Button x:Name="CancelMore" Content="{loc:Tr Action.CancelLoading}"
+                        Margin="0,0,16,8" IsVisible="{Binding IsLoadingMore}"
+                        Click="OnCancelClicked" />
                 <Button x:Name="RetrySearch" Content="{loc:Tr Search.Retry}"
                         Margin="0,0,16,8" IsVisible="{Binding CanRetry}"
-                        Command="{Binding LoadPageCommand}" CommandParameter="{Binding RetryIndex}" />
+                        Command="{Binding RetryCommand}" />
+                <Button x:Name="RetryMore" Content="{loc:Tr Search.RetryMore}"
+                        Margin="0,0,16,8" IsVisible="{Binding CanRetryMore}"
+                        Command="{Binding RetryCommand}" />
+                <Button Content="{loc:Tr Library.RetryArtwork}" IsVisible="{Binding CanRetryArtwork}"
+                        Command="{Binding RetryArtworkCommand}" />
             </WrapPanel>
         </StackPanel>
 
-        <ScrollViewer x:Name="SearchScroll" Grid.Row="2"
-                      HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="SearchCards" ItemsSource="{Binding Items}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <UniformGrid x:Name="SearchCardGrid" Columns="7" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
-                        <StackPanel Margin="{DynamicResource Cindara.Media.GridCardMargin}"
-                                    Spacing="7"
-                                    Width="{DynamicResource Cindara.Media.GridPosterWidth}"
-                                    HorizontalAlignment="Center">
-                            <Button Classes="card search-card"
-                                    Height="{DynamicResource Cindara.Media.GridPosterHeight}"
-                                    HorizontalAlignment="Stretch"
-                                    AutomationProperties.Name="{Binding Name}"
-                                    AutomationProperties.HelpText="{Binding Subtitle}"
-                                    GotFocus="OnCardFocused" Click="OnCardClicked">
-                                <Grid>
-                                    <Border IsVisible="{Binding IsArtworkLoading}"
-                                            Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
-                                            Opacity="0.55" />
-                                    <TextBlock Text="{Binding ArtworkPlaceholder}"
-                                               IsVisible="{Binding ShowArtworkPlaceholder}" TextWrapping="Wrap"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                               Margin="12" />
-                                    <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
-                                </Grid>
-                            </Button>
-                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
-                                       Opacity="{Binding MetadataOpacity}"
-                                       MaxLines="2" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Classes="caption" Text="{Binding Subtitle}"
-                                       Opacity="{Binding MetadataOpacity}"
-                                       TextWrapping="Wrap" MaxLines="1"
-                                       TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
-
-        <WrapPanel Grid.Row="3" Orientation="Horizontal">
-            <Button x:Name="PreviousSearchPage" Content="{loc:Tr Search.Previous}"
-                    Margin="0,0,16,8" IsEnabled="{Binding HasPreviousPage}"
-                    Command="{Binding LoadPageCommand}" CommandParameter="{Binding PreviousIndex}" />
-            <TextBlock Text="{Binding PageDescription}" VerticalAlignment="Center"
-                       Margin="0,0,16,8" AutomationProperties.LiveSetting="Polite" />
-            <Button x:Name="NextSearchPage" Content="{loc:Tr Search.Next}"
-                    Margin="0,0,0,8" IsEnabled="{Binding HasNextPage}"
-                    Command="{Binding LoadPageCommand}" CommandParameter="{Binding NextIndex}" />
-        </WrapPanel>
+        <ListBox x:Name="SearchRows" Grid.Row="2" Classes="library-grid"
+                 ItemsSource="{Binding Rows}" SelectionMode="Single"
+                 Background="Transparent" BorderThickness="0" Padding="6,4,6,8">
+            <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                    <Setter Property="Focusable" Value="False" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListBox.Styles>
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:LibraryGridRowViewModel">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Cindara.Media.GridSpacing}"
+                                Margin="{DynamicResource Cindara.Media.GridCardMargin}">
+                        <ItemsControl ItemsSource="{Binding Items}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="{DynamicResource Cindara.Media.GridSpacing}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MediaPreviewCardViewModel">
+                                    <StackPanel Spacing="7" Width="{DynamicResource Cindara.Media.GridPosterWidth}">
+                                        <Button Classes="card search-card"
+                                                Height="{DynamicResource Cindara.Media.GridPosterHeight}"
+                                                AutomationProperties.Name="{Binding Name}"
+                                                AutomationProperties.HelpText="{Binding Subtitle}"
+                                                GotFocus="OnCardFocused" Click="OnCardClicked">
+                                            <Border ClipToBounds="True"
+                                                    CornerRadius="{DynamicResource Cindara.Radius.Medium}">
+                                                <Grid>
+                                                    <Border IsVisible="{Binding IsArtworkLoading}"
+                                                            Background="{DynamicResource Cindara.Brush.SurfaceRaised}"
+                                                            Opacity="0.55" />
+                                                    <TextBlock Text="{Binding ArtworkPlaceholder}"
+                                                               IsVisible="{Binding ShowArtworkPlaceholder}"
+                                                               TextWrapping="Wrap" HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" Margin="12" />
+                                                    <Image Source="{Binding Artwork}" Stretch="UniformToFill" />
+                                                </Grid>
+                                            </Border>
+                                        </Button>
+                                        <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
+                                                   Opacity="{Binding MetadataOpacity}"
+                                                   Height="{DynamicResource Cindara.Media.GridTitleHeight}"
+                                                   MaxLines="2" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Classes="caption" Text="{Binding Subtitle}"
+                                                   Opacity="{Binding MetadataOpacity}" TextWrapping="Wrap"
+                                                   Height="{DynamicResource Cindara.Media.GridSubtitleHeight}"
+                                                   MaxLines="1" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
     </Grid>
 </UserControl>
