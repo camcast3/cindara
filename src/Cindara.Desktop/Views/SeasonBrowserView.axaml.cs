@@ -11,9 +11,6 @@ namespace Cindara.Desktop.Views;
 
 public partial class SeasonBrowserView : UserControl
 {
-    private Button? _lastEpisode;
-    private StackPanel? _lastCredit;
-
     public SeasonBrowserView()
     {
         InitializeComponent();
@@ -26,9 +23,7 @@ public partial class SeasonBrowserView : UserControl
 
     public void ResetPosition()
     {
-        _lastEpisode = null;
-        _lastCredit = null;
-        HeroScroll.Offset = default;
+        BrowserScroll.Offset = default;
         EpisodeScroll.Offset = default;
         CreditsScroll.Offset = default;
     }
@@ -53,9 +48,8 @@ public partial class SeasonBrowserView : UserControl
         {
             if (direction == NavigationDirection.Down && focus == BrowserBack)
             {
-                (episodes.FirstOrDefault(card => card.DataContext is EpisodeCardViewModel episode
-                    && ReferenceEquals(episode, (DataContext as SeasonBrowserViewModel)?.SelectedEpisode))
-                    ?? episodes.FirstOrDefault())?.Focus(NavigationMethod.Directional);
+                EpisodeScroll.Offset = default;
+                episodes.FirstOrDefault()?.Focus(NavigationMethod.Directional);
                 return true;
             }
             return false;
@@ -72,15 +66,20 @@ public partial class SeasonBrowserView : UserControl
         if (direction == NavigationDirection.Up)
         {
             if (episodes.Contains(focus)) BrowserBack.Focus(NavigationMethod.Directional);
-            else (_lastEpisode is not null && episodes.Contains(_lastEpisode)
-                ? _lastEpisode : episodes.FirstOrDefault())?.Focus(NavigationMethod.Directional);
+            else
+            {
+                EpisodeScroll.Offset = default;
+                episodes.FirstOrDefault()?.Focus(NavigationMethod.Directional);
+            }
             return true;
         }
         if (direction == NavigationDirection.Down)
         {
             if (episodes.Contains(focus))
-                (_lastCredit is not null && credits.Contains(_lastCredit)
-                    ? _lastCredit : credits.FirstOrDefault())?.Focus(NavigationMethod.Directional);
+            {
+                CreditsScroll.Offset = default;
+                credits.FirstOrDefault()?.Focus(NavigationMethod.Directional);
+            }
             return true;
         }
         return false;
@@ -98,7 +97,6 @@ public partial class SeasonBrowserView : UserControl
     {
         if (sender is Button { DataContext: EpisodeCardViewModel episode } card)
         {
-            _lastEpisode = card;
             card.BringIntoView();
             EpisodeRequested?.Invoke(this, episode);
         }
@@ -108,7 +106,6 @@ public partial class SeasonBrowserView : UserControl
     {
         if (sender is StackPanel card)
         {
-            _lastCredit = card;
             card.BringIntoView();
         }
     }
@@ -121,23 +118,22 @@ public partial class SeasonBrowserView : UserControl
         var density = ResponsiveDensityProfile.Create(size.Width, size.Height);
         var margin = AdaptiveLayoutProfile.Create(size.Width, size.Height).SafeMargin;
         var width = size.Width - 2 * margin;
-        var columns = width >= 1800 ? 7 : width >= 1250 ? 5 : width >= 900 ? 4 : width >= 600 ? 3 : 2;
-        var cardWidth = Math.Clamp(Math.Min((width - 16) / columns - 16, size.Height * 0.4), 135, 360);
+        var cardWidth = Math.Min(348 * Math.Clamp(size.Width / 1600, 1, 1.55),
+            Math.Max(160, width - 16));
         Resources["Cindara.Season.EpisodeWidth"] = cardWidth;
         Resources["Cindara.Season.ImageHeight"] = cardWidth * 9 / 16;
-        Resources["Cindara.Season.EpisodeSectionHeight"] = cardWidth * 9 / 16 + 76;
-        var castHeight = Math.Clamp(size.Height * (size.Height < 600 ? 0.22 : 0.28), 100, 440);
+        Resources["Cindara.Season.EpisodeSectionHeight"] = cardWidth * 9 / 16 + 110;
+        var castHeight = Math.Clamp(size.Height * 0.35, 180, 440);
         Resources["Cindara.Season.CastHeight"] = castHeight;
         Resources["Cindara.Season.CreditWidth"] = Math.Clamp(castHeight * 0.6, 90, 260);
-        Resources["Cindara.Season.CreditImageHeight"] = Math.Max(55, castHeight - 64);
+        Resources["Cindara.Season.CreditImageHeight"] = Math.Max(55, castHeight - 100);
         Resources["Cindara.Season.ReadingWidth"] = 1120 * density.TypeScale;
 
         var compact = width < 900 || size.Height < 600;
         SeasonPoster.IsVisible = !compact;
         if (!compact)
         {
-            var posterWidth = Math.Min(280 * density.CardScale,
-                Math.Max(120, size.Height - castHeight - cardWidth * 9 / 16 - 170) * 2 / 3);
+            var posterWidth = Math.Clamp(320 * density.CardScale, 220, 440);
             SeasonPoster.Width = posterWidth;
             SeasonPoster.Height = posterWidth * 1.5;
         }

@@ -153,13 +153,17 @@ Selecting a season opens a separate episode browser, including specials and
 empty seasons. The focused episode's title, number, air date, runtime, rating,
 synopsis, director, credits, and available video/audio/subtitle information
 appear in the hero beside season artwork. A single horizontal strip of episode
-stills shows numbers and watch/progress indicators; the cast-and-crew portrait
-rail sits below it. Focus or Accept selects an episode and loads its technical
-details read-only, canceling obsolete requests.
+stills uses Home-sized cards with numbers and watch/progress indicators. The
+cast-and-crew portrait rail below follows the selected episode, showing an
+explicit empty state when it has no credits. The larger season poster and
+generous row spacing sit within one vertical scrolling surface. Focus or
+Accept selects an episode and loads its technical details read-only, canceling
+obsolete requests.
 Accept never starts playback in this batch; episode activation is reserved for
 the eventual player integration. Playback is clearly unavailable; the browser has
 no Favorite, watched, Play, Resume, or trailer action. Up/down moves between
-Back, episode cards, and cast portraits; left/right scrolls their rails.
+Back, episode cards, and cast portraits like Home, entering each row at its
+first card; left/right scrolls the current rail.
 Back from a directly opened season or episode first shows its parent series
 overview with the matching season selected, then returns to the exact originating
 Home/library card on the next Back. Missing artwork, unknown watch state,

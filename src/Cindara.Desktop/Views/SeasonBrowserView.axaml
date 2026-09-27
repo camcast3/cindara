@@ -17,7 +17,7 @@
         </Style>
     </UserControl.Styles>
     <Grid Margin="{DynamicResource Cindara.Adaptive.SafeMargin}"
-          RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="10">
+          RowDefinitions="Auto,Auto,*" RowSpacing="10">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
             <Button x:Name="BrowserBack" Content="{loc:Tr Action.Back}" Click="OnBack"
                     AutomationProperties.AutomationId="SeasonBrowserBack" />
@@ -30,8 +30,9 @@
             <Button Grid.Column="1" Content="{loc:Tr Details.Retry}"
                     IsVisible="{Binding NeedsRetry}" Command="{Binding RetryCommand}" />
         </Grid>
-        <ScrollViewer x:Name="HeroScroll" Grid.Row="2"
+        <ScrollViewer x:Name="BrowserScroll" Grid.Row="2"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="32">
             <Grid x:Name="SeasonHero" ColumnDefinitions="Auto,*" ColumnSpacing="32">
                 <Border x:Name="SeasonPoster" Width="180" Height="270"
                         VerticalAlignment="Center"
@@ -86,8 +87,7 @@
                     <TextBlock Text="{loc:Tr Details.PlaybackUnavailable}" Classes="caption" />
                 </StackPanel>
             </Grid>
-        </ScrollViewer>
-        <Grid x:Name="EpisodeSection" Grid.Row="3" RowDefinitions="Auto,*" RowSpacing="8"
+        <Grid x:Name="EpisodeSection" RowDefinitions="Auto,*" RowSpacing="8"
               Height="{DynamicResource Cindara.Season.EpisodeSectionHeight}">
             <TextBlock Text="{Binding EpisodeCount}" Classes="heading" />
             <ScrollViewer x:Name="EpisodeScroll" Grid.Row="1"
@@ -100,6 +100,7 @@
                         <DataTemplate x:DataType="vm:EpisodeCardViewModel">
                             <StackPanel Width="{DynamicResource Cindara.Season.EpisodeWidth}" Spacing="5">
                                 <Button Classes="card episode-card"
+                                        Width="{DynamicResource Cindara.Season.EpisodeWidth}"
                                         Height="{DynamicResource Cindara.Season.ImageHeight}"
                                         Click="OnEpisode" GotFocus="OnEpisodeFocus"
                                         AutomationProperties.Name="{Binding Name}"
@@ -143,15 +144,15 @@
                 </ItemsControl>
             </ScrollViewer>
         </Grid>
-        <Grid x:Name="CastSection" Grid.Row="4" RowDefinitions="Auto,*" RowSpacing="8"
+        <Grid x:Name="CastSection" RowDefinitions="Auto,*" RowSpacing="8"
               Height="{DynamicResource Cindara.Season.CastHeight}">
             <TextBlock Text="{loc:Tr Season.CastCrew}" Classes="heading" />
-            <TextBlock Grid.Row="1" Text="{loc:Tr Details.NoCredits}"
-                       IsVisible="{Binding !HasSeasonCredits}" />
+            <TextBlock Grid.Row="1" Text="{Binding EpisodeCreditsStatus}"
+                       IsVisible="{Binding !HasEpisodeCredits}" />
             <ScrollViewer x:Name="CreditsScroll" Grid.Row="1" HorizontalScrollBarVisibility="Hidden"
                           VerticalScrollBarVisibility="Disabled"
-                          IsVisible="{Binding HasSeasonCredits}">
-                <ItemsControl x:Name="CastRail" ItemsSource="{Binding SeasonCredits}">
+                          IsVisible="{Binding HasEpisodeCredits}">
+                <ItemsControl x:Name="CastRail" ItemsSource="{Binding EpisodeCredits}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="16" /></ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
@@ -179,5 +180,7 @@
                 </ItemsControl>
             </ScrollViewer>
         </Grid>
+          </StackPanel>
+        </ScrollViewer>
     </Grid>
 </UserControl>

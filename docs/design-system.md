@@ -474,9 +474,12 @@ Only focused posters draw a selection
 outline. Left/right traverses all seasons and scrolls them into view; Up restores
 the originating overview action and Down restores the last season. Accept opens
 the separate read-only episode browser, never playback. Its selected episode
-hero sits above a single horizontal strip of episode cards and a portrait
-cast/crew rail. Episode focus reads technical track details without mutating
-user state. Back restores exact season focus and horizontal offset; direct
+hero and larger season poster sit above a single Home-sized horizontal strip
+of episode cards and a portrait cast/crew rail with generous row spacing.
+The credits follow the focused episode and show an explicit empty state where
+none are available. Up/down enters the first card of the adjacent row and
+resets its horizontal offset; left/right scrolls within it. Episode focus reads
+technical track details without mutating user state. Back restores exact season focus and horizontal offset; direct
 season/episode entries first return to their parent series overview, then to
 their original media source and query/offset.
 

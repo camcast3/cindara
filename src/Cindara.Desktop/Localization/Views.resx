@@ -27,7 +27,6 @@
   <data name="Season.Progress" xml:space="preserve"><value>{0:N0}% watched</value></data>
   <data name="Season.SelectHelp" xml:space="preserve"><value>Select episode details. Playback is not available.</value></data>
   <data name="Season.CastCrew" xml:space="preserve"><value>Cast &amp; crew</value></data>
-  <data name="Season.CreditsUnavailable" xml:space="preserve"><value>Cast and crew could not be loaded from the parent series.</value></data>
   <data name="Season.EpisodeCount" xml:space="preserve"><value>{0:N0} episodes</value></data>
   <data name="Season.MoreCredits" xml:space="preserve"><value> (+{0:N0} more below)</value></data>
   <data name="Brand.Monogram" xml:space="preserve"><value>C</value></data>

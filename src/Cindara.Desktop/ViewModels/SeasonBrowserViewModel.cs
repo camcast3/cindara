@@ -47,11 +47,9 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
     public bool HasMessage => Message.Length > 0;
     public string ArtworkMessage { get; private set; } = string.Empty;
     public bool HasArtworkMessage => ArtworkMessage.Length > 0;
-    public string CreditsMessage { get; private set; } = string.Empty;
-    public bool HasCreditsMessage => CreditsMessage.Length > 0;
     public IReadOnlyList<MediaSeason> Seasons { get; private set; } = [];
     public IReadOnlyList<EpisodeCardViewModel> Episodes { get; private set; } = [];
-    public IReadOnlyList<MovieCreditViewModel> SeasonCredits { get; private set; } = [];
+    public IReadOnlyList<MovieCreditViewModel> EpisodeCredits { get; private set; } = [];
     public MediaItemDetails? SeasonDetails { get; private set; }
     public MediaSeason? SelectedSeason { get; private set; }
     public EpisodeCardViewModel? SelectedEpisode { get; private set; }
@@ -71,7 +69,9 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
         ? LocaleFormat.Details(details.ProductionYear, details.RunTimeTicks, details.OfficialRating)
         : string.Empty;
     public string EpisodeCount => Loc.Format("Season.EpisodeCount", Episodes.Count);
-    public bool HasSeasonCredits => SeasonCredits.Count > 0;
+    public bool HasEpisodeCredits => EpisodeCredits.Count > 0;
+    public string EpisodeCreditsStatus => IsEpisodeDetailsLoading ? Loc.Get("Season.LoadingEpisodeDetails")
+        : HasEpisodeDetailsMessage ? EpisodeDetailsMessage : Loc.Get("Details.NoCredits");
     public IImage? SeasonPoster => _seasonPoster?.Source;
     public bool HasSeasonPoster => SeasonPoster is not null;
     public string EpisodeNumber => SelectedEpisode is { } selected
@@ -92,7 +92,9 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
     public string Synopsis => string.IsNullOrWhiteSpace(SelectedEpisode?.Episode.Overview)
         ? Loc.Get("Details.NoSynopsis") : SelectedEpisode.Episode.Overview;
     public string Director => Loc.Format("Details.DirectorSummary",
-        string.Join(Loc.Get("Format.DetailSeparator"), SelectedEpisode?.Episode.Credits
+        string.Join(Loc.Get("Format.DetailSeparator"),
+            (SelectedEpisodeDetails?.Credits is { Count: > 0 } details
+                ? details : SelectedEpisode?.Episode.Credits ?? [])
             .Where(credit => credit.CreditType == "Director").Select(credit => credit.Name) ?? [])
             is { Length: > 0 } names ? names : Loc.Get("Details.NotProvided"));
     public string Credits => string.Join(Loc.Get("Format.DetailSeparator"),
@@ -100,7 +102,8 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
             .Select(credit => string.IsNullOrWhiteSpace(credit.Role)
             ? credit.Name : Loc.Format("Details.CreditRole", credit.Name, credit.Role)))
         is { Length: > 0 } names ? names : Loc.Get("Details.NoCredits");
-    public string CreditsPreview => SelectedEpisode?.Episode.Credits is { Count: > 0 } credits
+    public string CreditsPreview => (SelectedEpisodeDetails?.Credits is { Count: > 0 } details
+        ? details : SelectedEpisode?.Episode.Credits) is { Count: > 0 } credits
         ? string.Join(Loc.Get("Format.DetailSeparator"), credits.Take(4).Select(credit => credit.Name))
             + (credits.Count > 4 ? Loc.Format("Season.MoreCredits", credits.Count - 4) : string.Empty)
         : Loc.Get("Details.NoCredits");
@@ -184,34 +187,8 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
             if (episodes.Any(episode => episode.SeriesId != _seriesId || episode.SeasonId != seasonId)
                 || episodes.Select(episode => episode.Id).Distinct(StringComparer.Ordinal).Count() != episodes.Count)
                 throw new MediaPreviewException(MediaPreviewError.InvalidResponse, "Unexpected season episodes.");
-            var credits = details.Credits;
-            CreditsMessage = string.Empty;
-            if (credits.Count == 0)
-            {
-                try
-                {
-                    var series = await _client.GetItemDetailsAsync(_session, _seriesId, token);
-                    if (!Current(generation, token)) return;
-                    if (series.Id != _seriesId || series.MediaType != "Series")
-                        throw new MediaPreviewException(MediaPreviewError.InvalidResponse, "Unexpected parent series.");
-                    credits = series.Credits;
-                }
-                catch (MediaPreviewException exception)
-                {
-                    if (!Current(generation, token)) return;
-                    _diagnostics?.Record(DiagnosticArea.Network, DiagnosticAction.LoadDetails,
-                        DiagnosticOutcome.Failed, DiagnosticLevel.Warning, exception);
-                    CreditsMessage = Loc.Get("Season.CreditsUnavailable");
-                    if (exception.Error == MediaPreviewError.AccessDenied)
-                    {
-                        await _onAccessDenied(exception);
-                        return;
-                    }
-                }
-            }
             Episodes = episodes.Select(episode => new EpisodeCardViewModel(episode)).ToArray();
             SeasonDetails = details;
-            SeasonCredits = credits.Take(16).Select(credit => new MovieCreditViewModel(credit)).ToArray();
             SelectedEpisode = Episodes.FirstOrDefault(episode => episode.Episode.Id == episodeId)
                 ?? (Episodes.Count > 0 ? Episodes[0] : null);
             Finish(episodeId is not null && SelectedEpisode?.Episode.Id != episodeId
@@ -254,20 +231,24 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
         _requestedEpisode = episode.Episode.Id;
         SelectedEpisodeDetails = null;
         EpisodeDetailsMessage = string.Empty;
-        if (_episodeDetailsById.TryGetValue(episode.Episode.Id, out var cached))
-        {
-            SelectedEpisodeDetails = cached;
-            Notify();
-            return Task.CompletedTask;
-        }
-
+        SetEpisodeCredits(episode.Episode.Credits);
         _episodeDetailLoad = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = _episodeDetailLoad.Token;
         var generation = _episodeDetailGeneration;
+        if (_episodeDetailsById.TryGetValue(episode.Episode.Id, out var cached))
+        {
+            SelectedEpisodeDetails = cached;
+            SetEpisodeCredits(cached.Credits.Count > 0 ? cached.Credits : episode.Episode.Credits);
+            Notify();
+            _episodeDetailTask = LoadEpisodeCreditArtworkAsync(episode, generation, token);
+            return _episodeDetailTask;
+        }
+
         IsEpisodeDetailsLoading = true;
         EpisodeDetailsMessage = Loc.Get("Season.LoadingEpisodeDetails");
         Notify();
-        _episodeDetailTask = LoadEpisodeDetailsAsync(episode, generation, token);
+        _episodeDetailTask = Task.WhenAll(LoadEpisodeDetailsAsync(episode, generation, token),
+            LoadEpisodeCreditArtworkAsync(episode, generation, token));
         return _episodeDetailTask;
     }
 
@@ -282,9 +263,12 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
                 throw new MediaPreviewException(MediaPreviewError.InvalidResponse, "Unexpected episode details.");
             _episodeDetailsById[episode.Episode.Id] = details;
             SelectedEpisodeDetails = details;
+            var creditsChanged = SetEpisodeCredits(details.Credits.Count > 0
+                ? details.Credits : episode.Episode.Credits);
             EpisodeDetailsMessage = string.Empty;
             IsEpisodeDetailsLoading = false;
             Notify();
+            if (creditsChanged) await LoadEpisodeCreditArtworkAsync(episode, generation, token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -318,6 +302,55 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
         IsEpisodeDetailsLoading = false;
     }
 
+    private bool SetEpisodeCredits(IReadOnlyList<MediaCredit> credits)
+    {
+        var shown = credits.Take(16).ToArray();
+        if (EpisodeCredits.Select(card => card.Credit).SequenceEqual(shown)) return false;
+        foreach (var credit in EpisodeCredits) credit.Dispose();
+        EpisodeCredits = shown.Select(credit => new MovieCreditViewModel(credit)).ToArray();
+        Notify();
+        return true;
+    }
+
+    private async Task LoadEpisodeCreditArtworkAsync(EpisodeCardViewModel episode, long generation,
+        CancellationToken token)
+    {
+        var jobs = new ConcurrentQueue<MovieCreditViewModel>(
+            EpisodeCredits.Where(credit => credit.Credit.ImageTag is not null && !credit.HasImage));
+        async Task Worker()
+        {
+            while (jobs.TryDequeue(out var credit) && CurrentEpisodeDetails(episode, generation, token))
+            {
+                try
+                {
+                    var bytes = await _client.GetLibraryArtworkAsync(_session, credit.Credit.Id, token);
+                    if (!CurrentEpisodeDetails(episode, generation, token)) return;
+                    if (EpisodeCredits.Contains(credit))
+                    {
+                        if (bytes is not null) credit.SetImage(_decode(bytes));
+                        else ArtworkMessage = Loc.Get("Season.ArtworkUnavailable");
+                    }
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
+                catch (MediaPreviewException exception)
+                {
+                    if (!CurrentEpisodeDetails(episode, generation, token)) return;
+                    if (exception.Error == MediaPreviewError.InvalidResponse) _client.ClearImageCache();
+                    _diagnostics?.Record(DiagnosticArea.Network, DiagnosticAction.LoadArtwork,
+                        DiagnosticOutcome.Failed, DiagnosticLevel.Warning, exception);
+                    ArtworkMessage = Loc.Get("Season.ArtworkUnavailable");
+                    if (exception.Error == MediaPreviewError.AccessDenied)
+                    {
+                        await _onAccessDenied(exception);
+                        return;
+                    }
+                }
+                Notify();
+            }
+        }
+        await Task.WhenAll(Enumerable.Range(0, Math.Min(4, jobs.Count)).Select(_ => Worker()));
+    }
+
     private async Task LoadArtworkAsync(MediaItemDetails details, long generation, CancellationToken token)
     {
         var jobs = new ConcurrentQueue<(string Id, bool Thumbnail, Action<PreviewImage> Apply)>();
@@ -325,8 +358,6 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
             jobs.Enqueue((details.Id, false, image => _seasonPoster = image));
         foreach (var card in Episodes.Where(card => card.Episode.HasPrimaryImage || card.Episode.HasThumbImage))
             jobs.Enqueue((card.Episode.Id, true, card.SetImage));
-        foreach (var credit in SeasonCredits.Where(credit => credit.Credit.ImageTag is not null))
-            jobs.Enqueue((credit.Credit.Id, false, credit.SetImage));
 
         async Task Worker()
         {
@@ -384,7 +415,6 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
         SelectedEpisode = null;
         SeasonDetails = null;
         ArtworkMessage = string.Empty;
-        CreditsMessage = string.Empty;
         Notify();
         return result;
     }
@@ -413,8 +443,8 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
         _seasonPoster?.Dispose();
         _seasonPoster = null;
         foreach (var episode in Episodes) episode.Dispose();
-        foreach (var credit in SeasonCredits) credit.Dispose();
-        SeasonCredits = [];
+        foreach (var credit in EpisodeCredits) credit.Dispose();
+        EpisodeCredits = [];
     }
     private void Notify()
     {
@@ -442,7 +472,6 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
         SelectedEpisode = null;
         NeedsRetry = false;
         Message = string.Empty;
-        CreditsMessage = string.Empty;
         Notify();
     }
 

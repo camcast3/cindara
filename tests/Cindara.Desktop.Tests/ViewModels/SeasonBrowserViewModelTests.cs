@@ -34,7 +34,7 @@ public sealed class SeasonBrowserViewModelTests
         Assert.Equal(1, client.EpisodeDetailReads);
         Assert.Equal("Specials", model.SeasonTitle);
         Assert.Equal("Season synopsis", model.SeasonOverview);
-        Assert.Equal(2, model.SeasonCredits.Count);
+        Assert.Equal(2, model.EpisodeCredits.Count);
         Assert.Equal(Loc.Format("Season.EpisodeCount", 2), model.EpisodeCount);
         Assert.Equal(Loc.Get("Season.ProgressUnknown"), model.Episodes[0].Progress);
         Assert.Equal(Loc.Format("Season.Progress", 45), model.Episodes[1].Progress);
@@ -118,7 +118,7 @@ public sealed class SeasonBrowserViewModelTests
         await model.OpenAsync("series", "specials", "Show");
         Assert.True(model.HasSeasonPoster);
         Assert.All(model.Episodes, episode => Assert.True(episode.HasImage));
-        Assert.True(model.SeasonCredits[0].HasImage);
+        Assert.True(model.EpisodeCredits[0].HasImage);
         Assert.Equal(2, client.ThumbnailReads);
         await model.SelectSeasonAsync("season-1");
         Assert.All(decoder.Resources.Take(4), resource => Assert.Equal(1, resource.DisposeCount));
@@ -128,13 +128,19 @@ public sealed class SeasonBrowserViewModelTests
     }
 
     [Fact]
-    public async Task MissingSeasonCreditsUseReadOnlyParentSeriesCredits()
+    public async Task EpisodeCreditsFollowSelectionAndShowAnExplicitEmptyState()
     {
-        var client = new Client { NoSeasonCredits = true };
+        var client = new Client { NoSecondEpisodeCredits = true };
         using var model = Model(client);
-        await model.OpenAsync("series", "season-1", "Show");
-        Assert.Equal("Actor", Assert.Single(model.SeasonCredits).Name);
-        Assert.False(model.HasCreditsMessage);
+        await model.OpenAsync("series", "specials", "Show");
+        Assert.Equal("Actor 1", model.EpisodeCredits[0].Name);
+        await model.SelectEpisodeAsync(model.Episodes[1]);
+        Assert.Empty(model.EpisodeCredits);
+        Assert.False(model.HasEpisodeCredits);
+        await model.SelectEpisodeAsync(model.Episodes[0]);
+        Assert.Equal("Actor 1", model.EpisodeCredits[0].Name);
+        Assert.Equal(0, client.SeriesDetailReads);
+        Assert.Equal(0, client.Writes);
         Assert.Equal(0, client.Writes);
     }
 
@@ -178,17 +184,23 @@ public sealed class SeasonBrowserViewModelTests
     [Fact]
     public async Task EpisodeDetailErrorsRemainVisibleAndAllowFocusRetry()
     {
-        var client = new Client { EpisodeDetailsError = MediaPreviewError.Forbidden };
+        var client = new Client
+        {
+            EpisodeDetailsError = MediaPreviewError.Forbidden,
+            NoSecondEpisodeCredits = true,
+        };
         using var model = Model(client);
         await model.OpenAsync("series", "specials", "Show");
         await model.SelectEpisodeAsync(model.Episodes[1]);
         Assert.False(model.HasEpisodeDetails);
         Assert.True(model.HasEpisodeDetailsMessage);
         Assert.False(model.IsEpisodeDetailsLoading);
+        Assert.Equal(model.EpisodeDetailsMessage, model.EpisodeCreditsStatus);
         client.EpisodeDetailsError = null;
         await model.SelectEpisodeAsync(model.Episodes[1]);
         Assert.Equal("episode-2", model.SelectedEpisodeDetails!.Id);
         Assert.False(model.HasEpisodeDetailsMessage);
+        Assert.Equal(Loc.Get("Details.NoCredits"), model.EpisodeCreditsStatus);
         Assert.Equal(0, client.Writes);
     }
 
@@ -246,10 +258,11 @@ public sealed class SeasonBrowserViewModelTests
         public int Writes { get; private set; }
         public MediaPreviewError? Error { get; set; }
         public bool WithImages { get; set; }
-        public bool NoSeasonCredits { get; set; }
+        public bool NoSecondEpisodeCredits { get; set; }
         public bool ManyEpisodeCredits { get; set; }
         public int ThumbnailReads { get; private set; }
         public int EpisodeDetailReads { get; private set; }
+        public int SeriesDetailReads { get; private set; }
         public TaskCompletionSource<MediaItemDetails>? EpisodeGate { get; set; }
         public MediaPreviewError? EpisodeDetailsError { get; set; }
         public bool InvalidEpisodeParent { get; set; }
@@ -273,6 +286,7 @@ public sealed class SeasonBrowserViewModelTests
         {
             var episode = itemId.StartsWith("episode-", StringComparison.Ordinal);
             if (episode) EpisodeDetailReads++;
+            if (itemId == "series") SeriesDetailReads++;
             if (itemId == "episode-2" && EpisodeGate is { } gate) return gate.Task;
             if (itemId == "episode-2" && EpisodeDetailsError is { } error)
                 return Task.FromException<MediaItemDetails>(new MediaPreviewException(error, "episode details unavailable"));
@@ -291,9 +305,9 @@ public sealed class SeasonBrowserViewModelTests
                     ? Enumerable.Range(1, 8)
                         .Select(index => new MediaCredit($"credit-{index}", $"Credit {index}", null, "Actor", null))
                         .ToArray()
-                    : NoSeasonCredits ? itemId == "series"
-                    ? [new("actor", "Actor", "Role", "Actor", null)] : []
-                    : [new("actor", "Actor", "Role", "Actor", WithImages ? "image" : null),
+                    : episode && itemId == "episode-2" && NoSecondEpisodeCredits ? []
+                    : [new("actor", episode ? itemId == "episode-1" ? "Actor 1" : "Actor 2" : "Actor",
+                           "Role", "Actor", WithImages ? "image" : null),
                        new("director", "Director", null, "Director", null)],
                 episode && !NoEpisodeTracks ? [new MediaTrackInfo("Video", "h264", "1080p H.264", null, 1920, 1080,
                     null, true, false)] : [], new(false, false, null, null), WithImages, false);
@@ -309,7 +323,8 @@ public sealed class SeasonBrowserViewModelTests
             episode with
             {
                 HasPrimaryImage = WithImages,
-                Credits = ManyEpisodeCredits ? Enumerable.Range(1, 8)
+                Credits = NoSecondEpisodeCredits && episode.Id == "episode-2" ? []
+                    : ManyEpisodeCredits ? Enumerable.Range(1, 8)
                     .Select(index => new MediaCredit($"credit-{index}", $"Credit {index}", null, "Actor", null))
                     .ToArray() : episode.Credits,
             };
