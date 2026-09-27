@@ -34,11 +34,42 @@ public sealed class SeasonBrowserViewModelTests
         Assert.Equal(Loc.Format("Season.EpisodeCount", 2), model.EpisodeCount);
         Assert.Equal(Loc.Get("Season.ProgressUnknown"), model.Episodes[0].Progress);
         Assert.Equal(Loc.Format("Season.Progress", 45), model.Episodes[1].Progress);
+        Assert.False(model.Episodes[0].IsUnwatched);
+        Assert.False(model.Episodes[0].IsInProgress);
+        Assert.True(model.Episodes[1].IsInProgress);
+        Assert.False(model.Episodes[1].IsUnwatched);
+        Assert.NotNull(model.Episodes[1].ProgressArc);
         await model.SelectEpisodeAsync(model.Episodes[0]);
         Assert.Equal("episode-1", model.SelectedEpisode!.Episode.Id);
         Assert.Equal(0, client.Writes);
         model.Close();
         Assert.Empty(model.Episodes);
+    }
+
+    [Fact]
+    public void EpisodeCardsUseTheSameThreeIconStatesWithoutGuessingUnknownState()
+    {
+        var episode = Episode("episode", "season-1", 1);
+        using var unwatched = new EpisodeCardViewModel(episode with
+        {
+            HasUserState = true,
+            UserState = new(false, false, 0, null),
+        });
+        using var watched = new EpisodeCardViewModel(episode with
+        {
+            HasUserState = true,
+            UserState = new(false, true, 100, null),
+        });
+        using var unknown = new EpisodeCardViewModel(episode with { HasUserState = false });
+        Assert.True(unwatched.IsUnwatched);
+        Assert.False(unwatched.IsInProgress);
+        Assert.True(watched.IsWatched);
+        Assert.False(watched.IsUnwatched);
+        Assert.Null(watched.ProgressArc);
+        Assert.False(unknown.IsUnwatched);
+        Assert.False(unknown.IsInProgress);
+        Assert.Null(unknown.ProgressArc);
+        Assert.Equal(Loc.Get("Season.ProgressUnknown"), unknown.Progress);
     }
 
     [Fact]

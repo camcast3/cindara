@@ -1,10 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Cindara.Desktop.ViewModels"
+             xmlns:views="using:Cindara.Desktop.Views"
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.SeasonBrowserView"
              x:DataType="vm:SeasonBrowserViewModel"
              Background="{DynamicResource Cindara.Brush.Background}">
+    <UserControl.Resources>
+        <views:WatchStateRingConverter x:Key="WatchStateRingConverter" />
+    </UserControl.Resources>
     <UserControl.Styles>
         <Style Selector="Button.episode-card">
             <Setter Property="Padding" Value="0" />
@@ -50,7 +54,7 @@
         <ScrollViewer x:Name="EpisodeDetailsScroll" Grid.Row="3"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Spacing="24">
-                <Grid x:Name="SeasonHero" ColumnDefinitions="Auto,*,*" ColumnSpacing="24">
+                <Grid x:Name="SeasonHero" ColumnDefinitions="Auto,*" ColumnSpacing="24">
                     <Border x:Name="SeasonPoster" Width="180" Height="270"
                             CornerRadius="{DynamicResource Cindara.Radius.Large}" ClipToBounds="True"
                             Background="{DynamicResource Cindara.Brush.SurfaceRaised}">
@@ -68,20 +72,6 @@
                         <TextBlock Text="{Binding SeasonMetadata}" Classes="secondary" TextWrapping="Wrap" />
                         <TextBlock Text="{Binding SeasonOverview}" TextWrapping="Wrap" />
                         <TextBlock Text="{loc:Tr Details.PlaybackUnavailable}" Classes="caption" />
-                    </StackPanel>
-                    <StackPanel x:Name="SelectedDetails" Grid.Column="2" Spacing="8">
-                        <TextBlock Text="{Binding EpisodeTitle}" Classes="heading" TextWrapping="Wrap"
-                                   AutomationProperties.AutomationId="SelectedEpisodeTitle"
-                                   AutomationProperties.LiveSetting="Polite" />
-                        <TextBlock Text="{Binding EpisodeNumber}" Classes="secondary" />
-                        <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding Ratings}" />
-                        <TextBlock Text="{Binding Synopsis}" TextWrapping="Wrap" MaxLines="4"
-                                   TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding Director}" TextWrapping="Wrap" />
-                        <TextBlock Text="{loc:Tr Details.Credits}" Classes="label" />
-                        <TextBlock Text="{Binding CreditsPreview}" TextWrapping="Wrap" MaxLines="2"
-                                   TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </Grid>
                 <StackPanel Spacing="10" IsVisible="{Binding HasSeasonCredits}">
@@ -125,6 +115,11 @@
                            Classes="caption" AutomationProperties.LiveSetting="Polite" />
                 <StackPanel Spacing="12">
                     <TextBlock Text="{Binding EpisodeCount}" Classes="heading" />
+                    <StackPanel Spacing="3" IsVisible="{Binding HasSelectedEpisode}">
+                        <TextBlock Text="{Binding EpisodeTitle}" Classes="label" TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Text="{Binding EpisodeNumber}" Classes="caption" />
+                    </StackPanel>
                     <ItemsControl x:Name="EpisodeGrid" ItemsSource="{Binding Episodes}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
@@ -147,30 +142,43 @@
                                                            TextAlignment="Center" TextWrapping="Wrap"
                                                            VerticalAlignment="Center" Margin="8" />
                                                 <Image Source="{Binding Image}" Stretch="UniformToFill" />
-                                                <Border IsVisible="{Binding IsWatched}"
-                                                        Background="{DynamicResource Cindara.Brush.Surface}"
+                                                <Border Background="{DynamicResource Cindara.Brush.Surface}"
                                                         HorizontalAlignment="Right" VerticalAlignment="Top"
                                                         CornerRadius="14" Padding="6" Margin="6">
-                                                    <Path Width="16" Height="16" Data="M 2,8 L 6,12 L 14,3"
-                                                          StrokeThickness="2"
-                                                          Stroke="{DynamicResource Cindara.Brush.Accent}" />
+                                                    <Grid Width="20" Height="20">
+                                                        <Ellipse IsVisible="{Binding IsUnwatched}" StrokeThickness="2"
+                                                                 Stroke="{DynamicResource Cindara.Brush.TextSecondary}" />
+                                                        <Path IsVisible="{Binding IsInProgress}"
+                                                              Data="{Binding ProgressArc, Converter={StaticResource WatchStateRingConverter}}"
+                                                              StrokeThickness="2" Stroke="{DynamicResource Cindara.Brush.Accent}" />
+                                                        <Ellipse IsVisible="{Binding IsWatched}" StrokeThickness="2"
+                                                                 Stroke="{DynamicResource Cindara.Brush.Accent}" />
+                                                        <Path IsVisible="{Binding IsWatched}" Data="M 2,10 L 7,16 L 18,3"
+                                                              StrokeThickness="3" Stroke="{DynamicResource Cindara.Brush.Accent}" />
+                                                        <TextBlock Text="?" IsVisible="{Binding !Episode.HasUserState}" />
+                                                    </Grid>
                                                 </Border>
                                             </Grid>
                                         </Border>
                                         <TextBlock Text="{Binding Number}" Classes="caption" />
                                         <TextBlock Text="{Binding Name}" MaxLines="2"
                                                    TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding Progress}" Classes="caption" />
                                     </StackPanel>
                                 </Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-                <StackPanel Spacing="8" IsVisible="{Binding HasSelectedEpisode}">
+                <StackPanel x:Name="SelectedDetails" Spacing="8" IsVisible="{Binding HasSelectedEpisode}">
                     <TextBlock Text="{loc:Tr Details.MoreInformation}" Classes="heading" />
-                    <TextBlock Text="{Binding EpisodeTitle}" Classes="label" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding EpisodeTitle}" Classes="heading" TextWrapping="Wrap"
+                               AutomationProperties.AutomationId="SelectedEpisodeTitle"
+                               AutomationProperties.LiveSetting="Polite" />
+                    <TextBlock Text="{Binding EpisodeNumber}" Classes="secondary" />
+                    <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Ratings}" />
                     <TextBlock Text="{Binding Synopsis}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Director}" TextWrapping="Wrap" />
                     <TextBlock Text="{loc:Tr Details.Credits}" Classes="label" />
                     <TextBlock Text="{Binding Credits}" TextWrapping="Wrap" />
                 </StackPanel>

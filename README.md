@@ -139,7 +139,7 @@ The overview reads only the selected series' resumable/next episode. It follows
 Home's 90% completion cutoff, shows remaining time only when runtime and position
 are known, and can show the first episode of an unstarted series. It does not
 load the global Home feed or update playback history.
-Season posters use watched/unwatched indicators, with an explicit unknown state
+Season posters use icon-only watched/unwatched/partial-progress indicators, with an explicit unknown state
 when Jellyfin omits user state. Every season remains traversable without artwork.
 Left/right scrolls the season row; Accept opens the episode browser.
 Back restores the exact season, row offset, and originating Search/library/Home
@@ -151,10 +151,14 @@ error-only Retry reads again, and superseded responses cannot replace the screen
 
 Selecting a season opens its episode browser with season tabs (including specials
 and empty seasons), a season poster/synopsis, an informational cast-and-crew
-rail, and a responsive grid of episode thumbnails with numbers and watched/progress
-labels. Focus or Accept updates the selected episode's title, number, air date,
+rail, and a responsive grid of episode thumbnails with numbers and icon-only
+watch/progress indicators (accessible watch-state text remains available).
+The selected episode's name and number stay above the grid while its full
+details appear below the grid rather than sharing the season hero. Focus or
+Accept updates its title, number, air date,
 runtime, rating, synopsis, director, and credits when available.
-Accept never starts playback. Playback is clearly unavailable; the browser has
+Accept never starts playback in this batch; episode activation is reserved for
+the eventual player integration. Playback is clearly unavailable; the browser has
 no Favorite, watched, Play, Resume, or trailer action. Read above/below actions
 scroll long season/episode information, and cast/crew paging controls move
 through available credits with a controller. Changing seasons cancels

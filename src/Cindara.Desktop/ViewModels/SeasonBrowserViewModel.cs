@@ -368,12 +368,16 @@ public sealed class EpisodeCardViewModel(MediaEpisode episode) : ObservableObjec
     public string Name => Episode.Name;
     public string Number => Episode.EpisodeNumber?.ToString(Loc.Culture) ?? Loc.Get("Format.Episode");
     public bool IsWatched => Episode.HasUserState && Episode.UserState.IsPlayed;
+    public bool IsInProgress => Episode.HasUserState && !IsWatched
+        && Episode.UserState.PlayedPercentage is > 0 and < 100;
+    public string? ProgressArc => IsInProgress ? WatchStateRing.FromPercentage(Episode.UserState.PlayedPercentage) : null;
+    public bool IsUnwatched => Episode.HasUserState && !IsWatched && !IsInProgress;
     public IImage? Image => _image?.Source;
     public bool HasImage => Image is not null;
     public string Status => Progress;
     public string Progress => !Episode.HasUserState ? Loc.Get("Season.ProgressUnknown")
         : IsWatched ? Loc.Get("Details.Watched")
-        : Episode.UserState.PlayedPercentage is > 0 and < 100 ? Loc.Format("Season.Progress", Episode.UserState.PlayedPercentage)
+        : IsInProgress ? Loc.Format("Season.Progress", Episode.UserState.PlayedPercentage!.Value)
         : Loc.Get("Details.Unwatched");
 
     internal void SetImage(PreviewImage image)

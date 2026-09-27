@@ -223,9 +223,14 @@ public sealed class SeasonCardViewModel(MediaSeason season) : ObservableObject, 
     public MediaSeason Season { get; } = season;
     public string Name => Season.Name;
     public bool IsWatched => Season.HasUserState && Season.UserState.IsPlayed;
-    public bool IsUnwatched => Season.HasUserState && !Season.UserState.IsPlayed;
-    public string WatchedState => Loc.Get(!Season.HasUserState ? "Details.StateUnknown"
-        : IsWatched ? "Details.Watched" : "Details.Unwatched");
+    public bool IsInProgress => Season.HasUserState && !IsWatched
+        && Season.UserState.PlayedPercentage is > 0 and < 100;
+    public string? ProgressArc => IsInProgress ? WatchStateRing.FromPercentage(Season.UserState.PlayedPercentage) : null;
+    public bool IsUnwatched => Season.HasUserState && !IsWatched && !IsInProgress;
+    public string WatchedState => !Season.HasUserState ? Loc.Get("Details.StateUnknown")
+        : IsWatched ? Loc.Get("Details.Watched")
+        : IsInProgress ? Loc.Format("Season.Progress", Season.UserState.PlayedPercentage!.Value)
+        : Loc.Get("Details.Unwatched");
     public IImage? Image => _image?.Source;
     public bool HasImage => Image is not null;
 

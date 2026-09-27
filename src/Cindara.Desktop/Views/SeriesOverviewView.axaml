@@ -1,10 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Cindara.Desktop.ViewModels"
+             xmlns:views="using:Cindara.Desktop.Views"
              xmlns:loc="using:Cindara.Desktop.Localization"
              x:Class="Cindara.Desktop.Views.SeriesOverviewView"
              x:DataType="vm:SeriesOverviewViewModel"
              Background="{DynamicResource Cindara.Brush.Background}">
+    <UserControl.Resources>
+        <views:WatchStateRingConverter x:Key="WatchStateRingConverter" />
+    </UserControl.Resources>
     <UserControl.Styles>
         <Style Selector="Button.season-card">
             <Setter Property="Padding" Value="0" />
@@ -101,6 +105,11 @@
                                                         <Grid Width="20" Height="20">
                                                             <Ellipse IsVisible="{Binding IsUnwatched}" StrokeThickness="2"
                                                                      Stroke="{DynamicResource Cindara.Brush.TextSecondary}" />
+                                                            <Path IsVisible="{Binding IsInProgress}"
+                                                                  Data="{Binding ProgressArc, Converter={StaticResource WatchStateRingConverter}}"
+                                                                  StrokeThickness="2" Stroke="{DynamicResource Cindara.Brush.Accent}" />
+                                                            <Ellipse IsVisible="{Binding IsWatched}" StrokeThickness="2"
+                                                                     Stroke="{DynamicResource Cindara.Brush.Accent}" />
                                                             <Path IsVisible="{Binding IsWatched}" Data="M 2,10 L 7,16 L 18,3"
                                                                   StrokeThickness="3" Stroke="{DynamicResource Cindara.Brush.Accent}" />
                                                             <TextBlock Text="?" IsVisible="{Binding !Season.HasUserState}" />

@@ -163,11 +163,11 @@ public partial class SeasonBrowserView : UserControl
         Resources["Cindara.Season.EpisodeWidth"] = cardWidth;
         Resources["Cindara.Season.ImageHeight"] = cardWidth * 9 / 16;
         var compact = width < 900;
-        SeasonPoster.IsVisible = !compact;
-        SeasonHero.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "Auto,*,*");
+        SeasonPoster.Width = compact ? 120 : 180;
+        SeasonPoster.Height = compact ? 180 : 270;
+        SeasonHero.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "Auto,*");
         SeasonHero.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto");
         Grid.SetColumn(SeasonSummary, compact ? 0 : 1);
-        Grid.SetColumn(SelectedDetails, compact ? 0 : 2);
-        Grid.SetRow(SelectedDetails, compact ? 1 : 0);
+        Grid.SetRow(SeasonSummary, compact ? 1 : 0);
     }
 }

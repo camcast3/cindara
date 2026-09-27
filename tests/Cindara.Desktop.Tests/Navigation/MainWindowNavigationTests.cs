@@ -1526,6 +1526,7 @@ public sealed class MainWindowNavigationTests
         var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
         Assert.True(browser.IsEffectivelyVisible);
         Assert.False(fixture.IsModalVisible);
+        Assert.True(browser.FindControl<Border>("SeasonPoster")!.IsVisible);
         Assert.True(fixture.Model.SeasonBrowser!.SelectedEpisode is not null,
             $"Season browser: {fixture.Model.SeasonBrowser.Message}; selected season: {fixture.Model.SeasonBrowser.SelectedSeason?.Id}");
         Assert.Equal("series-parent", fixture.Model.SeasonBrowser.SelectedEpisode.Episode.SeriesId);
@@ -1547,9 +1548,18 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(type == "Episode" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
         Assert.Equal(type == "Episode" ? "episode-1" : "episode-2",
             fixture.Model.SeasonBrowser.SelectedEpisode!.Episode.Id);
+        Assert.Equal(fixture.Model.SeasonBrowser.EpisodeTitle,
+            browser.FindControl<StackPanel>("SelectedDetails")!
+                .GetVisualDescendants().OfType<TextBlock>()
+                .Single(text => AutomationProperties.GetAutomationId(text) == "SelectedEpisodeTitle").Text);
         fixture.Input.Press(ControllerAction.Accept);
         Assert.True(browser.IsVisible);
         Assert.False(fixture.IsModalVisible);
+        Assert.Equal(type == "Episode" ? "episode-1" : "episode-2",
+            fixture.Model.SeasonBrowser.SelectedEpisode!.Episode.Id);
+        Assert.DoesNotContain(browser.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == Loc.Get("Details.Watched") || text.Text == Loc.Get("Details.Unwatched")
+                || text.Text == Loc.Format("Season.Progress", 45));
         Assert.Equal(0, fixture.Preview.StateWrites);
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(source, Focused(fixture.Window));
@@ -1648,6 +1658,7 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.Accept);
         var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
         Assert.True(browser.IsEffectivelyVisible);
+        Assert.True(browser.FindControl<Border>("SeasonPoster")!.IsVisible);
         Assert.False(fixture.IsModalVisible);
         Assert.Equal("season-12", fixture.Model.SeasonBrowser!.SelectedSeason!.Id);
         Assert.Equal("Season 12", fixture.Model.SeasonBrowser.SeasonTitle);
@@ -1668,6 +1679,8 @@ public sealed class MainWindowNavigationTests
             text => text.Text == Loc.Format("Season.EpisodeCount", 16));
         Assert.Contains(browser.GetVisualDescendants().OfType<TextBlock>(),
             text => text.Text == Loc.Get("Details.PlaybackUnavailable"));
+        Assert.DoesNotContain(browser.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == Loc.Get("Details.Watched") || text.Text == Loc.Get("Details.Unwatched"));
         Capture(fixture.Window, $"season-browser-{cultureName}-{width}-{scale}");
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(seasons[^1], Focused(fixture.Window));

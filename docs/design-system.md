@@ -466,7 +466,8 @@ Season posters preserve their 2:3 geometry and rounded clipping with or without
 artwork. Their height uses 34% of the logical viewport (previously 26%), with a
 130-pixel minimum and a maximum of 525 pixels times the shared card-density scale.
 The larger posters show fewer seasons at once while retaining horizontal traversal.
-Watched uses a teal check, unwatched an outlined circle, and missing
+Watched uses a teal check inside a circle, in-progress a partial ring,
+unwatched an outlined circle, and missing
 user state an explicit unknown badge. State is exposed through accessible item
 labels, not repeated in captions beneath every poster. The overview has no
 permanent preview disclaimer; the season information action explains availability.
