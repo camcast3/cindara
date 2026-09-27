@@ -5,7 +5,8 @@
              x:Class="Cindara.Desktop.Views.SearchBrowserView"
              x:DataType="vm:SearchBrowserViewModel">
     <Grid RowDefinitions="Auto,Auto,*" RowSpacing="14">
-        <Grid x:Name="SearchEntry" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+        <Grid x:Name="SearchEntry" ColumnDefinitions="*,Auto" ColumnSpacing="12"
+              MaxWidth="840" HorizontalAlignment="Center">
             <TextBox x:Name="SearchTextBox"
                      MaxLength="200"
                      Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

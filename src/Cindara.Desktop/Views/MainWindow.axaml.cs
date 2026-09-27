@@ -878,6 +878,9 @@ public partial class MainWindow : Window
         ModalDialog.MaxWidth = 1200;
         ModalDialog.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         ModalDialog.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+        ModalContent.MaxWidth = double.PositiveInfinity;
+        ModalContent.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        ModalContent.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
         if (_keyboardDraft is not null)
         {
             _keyboardDraft.Text = string.Empty;
@@ -921,6 +924,9 @@ public partial class MainWindow : Window
         if (fullScreen)
         {
             BeginFullScreenModal(title);
+            ModalContent.MaxWidth = 840;
+            ModalContent.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+            ModalContent.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         }
         else
         {
@@ -938,7 +944,14 @@ public partial class MainWindow : Window
         draft.CaretIndex = draft.Text?.Length ?? 0;
         _keyboardDraft = draft;
         ModalActions.Children.Add(draft);
-        var keys = new UniformGrid { Columns = 12, FlowDirection = Avalonia.Media.FlowDirection.LeftToRight };
+        var columns = ClientSize.Width < 900 ? 10 : 12;
+        var keys = new UniformGrid
+        {
+            Columns = columns,
+            Width = columns * (columns == 10 ? 54 : 62),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            FlowDirection = Avalonia.Media.FlowDirection.LeftToRight,
+        };
         var letters = new List<Button>();
         foreach (var character in "1234567890-=" + "qwertyuiop[]" + "asdfghjkl;'\\"
                      + "zxcvbnm,./`" + "!@#$%^&*()_+{}:\"|<>?~")
@@ -959,7 +972,10 @@ public partial class MainWindow : Window
         }
 
         ModalActions.Children.Add(keys);
-        var actions = new WrapPanel();
+        var actions = new WrapPanel
+        {
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+        };
         AddKeyboardAction(Loc.Get("Keyboard.Shift"), () =>
         {
             foreach (var letter in letters)

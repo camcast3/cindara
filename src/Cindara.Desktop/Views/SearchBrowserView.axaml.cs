@@ -151,6 +151,7 @@ public partial class SearchBrowserView : UserControl
     {
         if (size.Width <= 0 || size.Height <= 0)
             return;
+        SearchEntry.Width = Math.Min(840, size.Width);
         var stackEntry = size.Width < 900;
         SearchEntry.ColumnDefinitions = stackEntry
             ? new ColumnDefinitions("*") : new ColumnDefinitions("*,Auto");

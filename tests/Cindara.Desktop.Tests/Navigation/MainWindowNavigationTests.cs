@@ -1771,6 +1771,75 @@ public sealed class MainWindowNavigationTests
         Assert.Equal(new string('A', query.MaxLength), query.Text);
     });
 
+    [Theory]
+    [InlineData(720, 480)]
+    [InlineData(1280, 800)]
+    [InlineData(3440, 1440)]
+    [InlineData(3840, 2160)]
+    public Task SearchKeyboardKeepsPromptKeysAndActionsTogetherAtEveryViewport(int width, int height) =>
+        TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        fixture.Flush();
+
+        var entry = fixture.Shell.SearchView.FindControl<Grid>("SearchEntry")!;
+        var query = fixture.Shell.SearchView.FindControl<TextBox>("SearchTextBox")!;
+        Assert.InRange(entry.Bounds.Width, 200, 840);
+        Assert.InRange(Math.Abs(entry.TranslatePoint(default, fixture.Window)!.Value.X
+            + entry.Bounds.Width / 2 - fixture.Window.ClientSize.Width / 2), 0, 170);
+        AssertInsideWindow(fixture.Window, entry);
+
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        var dialog = fixture.Window.FindControl<Border>("ModalDialog")!;
+        var panel = fixture.Window.FindControl<Grid>("ModalContent")!;
+        var title = fixture.Window.FindControl<TextBlock>("ModalTitle")!;
+        var draft = fixture.Modal.Children.OfType<TextBox>().Single();
+        var keys = fixture.Modal.Children.OfType<UniformGrid>().Single();
+        var actions = fixture.Modal.Children.OfType<WrapPanel>().Single();
+        Assert.True(dialog.Bounds.Width > fixture.Window.ClientSize.Width * .8);
+        Assert.InRange(panel.Bounds.Width, 500, 840);
+        Assert.InRange(Math.Abs(panel.TranslatePoint(default, fixture.Window)!.Value.X
+            + panel.Bounds.Width / 2 - fixture.Window.ClientSize.Width / 2), 0, 2);
+        Assert.InRange(draft.Bounds.Width, keys.Bounds.Width - 1, 840);
+        Assert.InRange(keys.Bounds.Width, 540, 744);
+        Assert.Equal(width < 900 ? 10 : 12, keys.Columns);
+        Assert.Equal(Loc.Get("Search.Name"), title.Text);
+        AssertInsideWindow(fixture.Window, dialog);
+        AssertInsideWindow(fixture.Window, title);
+        AssertInsideWindow(fixture.Window, draft);
+        Capture(fixture.Window, $"search-keyboard-{width}");
+        var first = keys.Children.OfType<Button>().First();
+        var second = keys.Children.OfType<Button>().Skip(1).First();
+        Assert.InRange(second.Bounds.X - first.Bounds.Right, 5, 16);
+        Assert.InRange(first.Bounds.Width, 48, 60);
+        Assert.Same(first, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Same(second, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.Equal("2", draft.Text);
+
+        for (var step = 0; step < 16 && !actions.Children.Contains(Focused(fixture.Window)); step++)
+            fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Contains(Focused(fixture.Window), actions.Children);
+        AssertCardVisibleInViewport(fixture.Window, Focused(fixture.Window));
+        var done = actions.Children.OfType<Button>()
+            .Single(button => Equals(button.Content, Loc.Get("Keyboard.Done")));
+        done.BringIntoView();
+        fixture.Flush();
+        AssertInsideWindow(fixture.Window, done);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.False(fixture.IsModalVisible);
+        Assert.Equal(string.Empty, query.Text);
+        Assert.Same(query, Focused(fixture.Window));
+    });
+
     [Fact]
     public Task LibraryReferenceGridExposesFiltersSortAndAllLetterChoices() => TestAppBuilder.Run(async () =>
     {
