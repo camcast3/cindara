@@ -124,7 +124,7 @@ public partial class MainWindow : Window
         };
         GalleryView.LibraryRequested += OnLibraryRequested;
         GalleryView.ItemRequested += (_, item) => ShowMediaItem(item,
-            _viewModel?.DesignGallery?.ContinueWatching.Contains(item) is true);
+            _viewModel?.DesignGallery?.ContinueWatching.Contains(item) is true, fromHome: true);
         Shell.LibraryView.ItemRequested += (_, item) => ShowMediaItem(item);
         Shell.LibraryView.FilterRequested += (_, _) => ShowLibraryFilter();
         Shell.LibraryView.SortRequested += (_, _) => ShowLibrarySort();

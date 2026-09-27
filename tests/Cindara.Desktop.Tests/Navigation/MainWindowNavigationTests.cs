@@ -1450,6 +1450,77 @@ public sealed class MainWindowNavigationTests
     });
 
     [Theory]
+    [InlineData("Season")]
+    [InlineData("Episode")]
+    public Task HomeGroupedSeriesPostersOpenParentAndRestoreSourceWithoutChangingContinueWatching(string type) =>
+        TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = 1280;
+        fixture.Window.Height = 720;
+        fixture.Preview.HomeSeriesEntryType = type;
+        fixture.SignIn();
+        var gallery = fixture.Model.DesignGallery!;
+        var recent = Assert.Single(gallery.RecentlyAddedLibraries);
+        var target = recent.Items[^1];
+        Assert.Equal(type, target.MediaType);
+        Assert.Equal("series-parent", target.SeriesId);
+        var source = fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => ReferenceEquals(button.DataContext, target));
+        source.Focus();
+        source.BringIntoView();
+        fixture.Flush();
+        var scroll = source.GetVisualAncestors().OfType<ScrollViewer>().First();
+        var offset = scroll.Offset;
+        Assert.True(offset.X > 0);
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        var overview = fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!;
+        Assert.True(overview.IsEffectivelyVisible);
+        Assert.False(fixture.IsModalVisible);
+        Assert.Equal("series-parent", fixture.Model.SeriesOverview!.Summary.Details!.Id);
+        Assert.Same(overview.BackAction, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(source, Focused(fixture.Window));
+        Assert.Equal(offset, scroll.Offset);
+        Assert.Equal(1, fixture.Preview.Calls);
+        Assert.Equal(0, fixture.Preview.StateWrites);
+
+        var continuing = fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => ReferenceEquals(button.DataContext, gallery.ContinueWatching[0]));
+        fixture.Click(continuing);
+        Assert.True(fixture.IsModalVisible);
+        Assert.False(overview.IsVisible);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(continuing, Focused(fixture.Window));
+    });
+
+    [Theory]
+    [InlineData("Season")]
+    [InlineData("Episode")]
+    public Task SearchSeasonAndEpisodeDoNotGetReroutedToSeriesPreview(string type) => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        var search = fixture.Model.SearchBrowser!;
+        search.Query = "Series";
+        await search.LoadPageCommand.ExecuteAsync(0);
+        fixture.Flush();
+        var source = fixture.Shell.SearchView.GetVisualDescendants().OfType<Button>()
+            .First(button => button.DataContext is MediaPreviewCardViewModel item && item.MediaType == type);
+        Assert.Equal("series-parent", ((MediaPreviewCardViewModel)source.DataContext!).SeriesId);
+        fixture.Click(source);
+        Assert.True(fixture.IsModalVisible);
+        Assert.False(fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!.IsVisible);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(source, Focused(fixture.Window));
+        Assert.Equal("Series", search.Query);
+    });
+
+    [Theory]
     [InlineData(720, 480, "en", 1.5)]
     [InlineData(1280, 720, "en", 1)]
     [InlineData(1920, 1080, "en", 1)]
@@ -2525,6 +2596,7 @@ public sealed class MainWindowNavigationTests
     {
         public MediaPreviewError? DetailError { get; set; }
         public bool PopulatedMovie { get; set; }
+        public string? HomeSeriesEntryType { get; set; }
         public int StateWrites { get; private set; }
         private MediaUserState _userState = new(false, false, 0, 0);
         public Task<MediaItemDetails> GetItemDetailsAsync(AuthenticatedSession session, string itemId,
@@ -2532,7 +2604,7 @@ public sealed class MainWindowNavigationTests
             ? Task.FromException<MediaItemDetails>(new MediaPreviewException(error, "details"))
             : Task.FromResult(new MediaItemDetails(
                 itemId, PopulatedMovie ? "A movie with a rather long title for a compact viewport" : "Movie details",
-                itemId.StartsWith("search-", StringComparison.Ordinal)
+                itemId == "series-parent" || itemId.StartsWith("search-", StringComparison.Ordinal)
                     && int.Parse(itemId.AsSpan(7), System.Globalization.CultureInfo.InvariantCulture) % 4 == 1
                     ? "Series" : "Movie", null, null, null, null, null, 2026, null,
                 TimeSpan.FromMinutes(65).Ticks, "PG", ["Drama", "Science Fiction"], [new("Community", 8.2)],
@@ -2589,7 +2661,10 @@ public sealed class MainWindowNavigationTests
                 Enumerable.Range(startIndex, count)
                     .Select(index => new MediaPreviewItem(
                         $"search-{index}", $"{query} {index}", string.Empty, types[index % types.Length],
-                        null, null, "Search result.", string.Empty, null))
+                        null, null, "Search result.", string.Empty, null)
+                    {
+                        SeriesId = types[index % types.Length] is "Season" or "Episode" ? "series-parent" : null,
+                    })
                     .ToArray(),
                 startIndex,
                 80));
@@ -2650,6 +2725,16 @@ public sealed class MainWindowNavigationTests
             var overview = LongDescription
                 ? string.Concat(Enumerable.Repeat("A long readable media description. ", 100)) : "Your media description.";
             var item = new MediaPreviewItem("movie", "First movie", "2026", "Movie", null, null, overview, "1h 5m", 40);
+            if (HomeSeriesEntryType is { } type)
+            {
+                var child = item with { Id = "child", Name = "Series title", MediaType = type, SeriesId = "series-parent" };
+                return new MediaPreviewHome(child, [child with { MediaType = "Episode" }],
+                    [new MediaPreviewRail("tv", "TV", Enumerable.Range(0, 12)
+                        .Select(index => child with { Id = $"child-{index}" }).ToArray(), "TV")])
+                {
+                    Libraries = [new MediaLibrary("tv", "TV", "tvshows")],
+                };
+            }
             if (LayoutLibraries)
             {
                 MediaLibrary[] libraries =

@@ -130,6 +130,10 @@ poster/backdrop, metadata, available ratings, synopsis, Full details, and
 informational Credits. Shared `MediaDetailsViewModel` preserves the accepted
 movie loading, artwork lifetime, and mutation behavior without duplicating it.
 The series surface does not expose mutations in this increment.
+Home's Recently Added rows also present season/episode entries as series posters;
+those open the parent series using Jellyfin's series ID, not the old child-item
+summary. This does not reroute Continue Watching or direct season/episode results
+in Search.
 
 The overview reads only the selected series' resumable/next episode. It follows
 Home's 90% completion cutoff, shows remaining time only when runtime and position

@@ -15,4 +15,5 @@ public sealed record MediaPreviewItem(
     MediaPreviewMetadata? Metadata = null)
 {
     public string? ArtworkItemId { get; init; }
+    public string? SeriesId { get; init; }
 }

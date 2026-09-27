@@ -14,10 +14,13 @@ public partial class MainWindow
     private Control DetailsSurface => SeriesOverview.IsVisible ? SeriesOverview : MovieDetails;
     private Button DetailsBackAction => SeriesOverview.IsVisible ? SeriesOverview.BackAction : MovieDetails.BackAction;
 
-    private async void ShowMediaItem(MediaPreviewCardViewModel item, bool continueWatching = false)
+    private async void ShowMediaItem(MediaPreviewCardViewModel item, bool continueWatching = false, bool fromHome = false)
     {
         if (ModalOverlay.IsVisible || IsDetailsVisible) return;
-        if (item.MediaType == "Series" && !continueWatching && _viewModel?.SeriesOverview is { } series)
+        // Home presents recently added seasons/episodes as series posters, unlike direct Search results.
+        var seriesId = item.MediaType == "Series" ? item.Id
+            : fromHome && item.MediaType is "Season" or "Episode" ? item.SeriesId : null;
+        if (!string.IsNullOrWhiteSpace(seriesId) && !continueWatching && _viewModel?.SeriesOverview is { } series)
         {
             RememberDetailsSource();
             _activeMovieDetails = series.Summary;
@@ -26,7 +29,7 @@ public partial class MainWindow
             SeriesOverview.ResetPosition();
             _navigation.Forget("series-overview");
             _navigation.SetScope(SeriesOverview, SeriesOverview.BackAction, "series-overview");
-            await series.OpenAsync(item.Id, item.Name);
+            await series.OpenAsync(seriesId, item.HeroName);
             return;
         }
         if (item.MediaType != "Movie" || continueWatching || _viewModel?.MovieDetails is not { } details)

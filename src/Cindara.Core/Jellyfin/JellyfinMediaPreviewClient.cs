@@ -840,7 +840,10 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             item.Type ?? "Unknown", artwork, backdrop ?? artwork, item.Overview, string.Empty,
             GetPlayedPercentage(item) is { } percentage ? Math.Clamp(percentage, 0, 100) : null,
             HeroName: BuildName(item, preferSeriesTitle: true),
-            Metadata: CreateMetadata(item, preferSeriesTitle: !landscape));
+            Metadata: CreateMetadata(item, preferSeriesTitle: !landscape))
+        {
+            SeriesId = item.SeriesId,
+        };
 
     private async Task<byte[]?> GetArtworkAsync(
         PreviewLoad load,

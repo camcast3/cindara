@@ -454,6 +454,10 @@ artwork and metadata, an informational resumable/next-episode summary, Full
 details, Credits, and a horizontal season-poster row. It shares the movie detail
 reader and credits popup rather than duplicating mutation or artwork logic.
 Series mutation controls and episode browsing are not exposed in this increment.
+Recently Added Home entries returned as seasons/episodes still represent series
+posters and open their parent series overview. Continue Watching retains its
+separate routing; direct season/episode Search entries remain unchanged until
+the episode-browser increment.
 
 Season posters preserve their 2:3 geometry and rounded clipping with or without
 artwork. Watched uses a teal check, unwatched an outlined circle, and missing
