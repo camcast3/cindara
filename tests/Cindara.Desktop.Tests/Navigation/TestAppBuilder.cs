@@ -16,5 +16,10 @@ public static class TestAppBuilder
         .Dispatch(test, CancellationToken.None);
 
     public static Task Run(Func<Task> test) => HeadlessUnitTestSession.GetOrStartForAssembly(typeof(TestAppBuilder).Assembly)
-        .Dispatch(test, CancellationToken.None).Unwrap();
+        .Dispatch<int>(async () =>
+        {
+            // Use the async overload so Avalonia pumps the dispatcher until the test finishes.
+            await test();
+            return 0;
+        }, CancellationToken.None);
 }

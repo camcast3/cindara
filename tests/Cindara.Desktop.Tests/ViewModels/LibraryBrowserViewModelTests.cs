@@ -234,7 +234,9 @@ public sealed class LibraryBrowserViewModelTests
             {
                 Assert.False(Avalonia.Threading.Dispatcher.UIThread.CheckAccess());
                 created++;
-                return new MediaPreviewCardViewModel(item with { Artwork = artwork });
+                var card = new MediaPreviewCardViewModel(item with { Artwork = artwork });
+                Assert.True(card.HasArtwork);
+                return card;
             });
         model.PropertyChanged += (_, args) =>
         {
@@ -246,7 +248,8 @@ public sealed class LibraryBrowserViewModelTests
         await model.OpenLibraryCommand.ExecuteAsync(Library);
         Assert.Equal(MediaLibraryPage.PageSize, created);
         Assert.Equal(MediaLibraryPage.PageSize, model.Items.Count);
-        Assert.All(model.Items, item => Assert.True(item.HasArtwork));
+        Assert.All(model.Items.Take(24), item => Assert.True(item.HasArtwork));
+        Assert.All(model.Items.Skip(24), item => Assert.False(item.HasArtwork));
     });
 
     [Theory]

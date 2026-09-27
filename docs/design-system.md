@@ -141,6 +141,9 @@ Poster width is computed from the actual destination width, remains at
 least 120 logical pixels, and is capped at the approved couch-readable density;
 its 2:3 ratio is preserved. Library metadata appends in bounded batches while
 virtualized rows prevent the complete library from realizing controls at once.
+Library columns use the measured poster viewport after the letter rail, scrollbars,
+and row padding; compact windows may need one column rather than clipping a
+second poster. Down in that single column still advances to the next item.
 Ten-foot typography and bounded forms use a capped 1.5 density scale. This is
 separate from OS display scaling: a physical 4K display at 200% still supplies a
 1920x1080 logical viewport and does not receive the density scale twice.
@@ -568,6 +571,17 @@ including initial focus, deterministic spatial movement, removed/disabled contro
 saved-account selection, modal trapping/restoration, controller text entry, active
 device prompts, inactive-window rejection, gallery round trips, and settings.
 Layout tests cover 1920x1080 and 3840x2160, plus a 1x/2x DPI transition.
+Async callbacks use Avalonia's asynchronous dispatch overload so the application
+and dispatcher pump live until all awaited assertions finish. Regression coverage
+checks delayed UI continuations, exception propagation, and per-test cleanup.
+Oversized posters are checked against their actual scroll viewport: full width
+must fit and the available vertical area must be filled, without shrinking the
+owner-approved poster sizes. Dialog bodies use a constrained grid so header and
+padding cannot push keyboard actions below the window.
+
+CI runs the complete suite on Windows and Ubuntu. Two minutes without test
+activity produces a hang report and fails the run; test steps and jobs also have
+bounded timeouts instead of remaining pending for hours.
 
 Run the affected surfaces with:
 
