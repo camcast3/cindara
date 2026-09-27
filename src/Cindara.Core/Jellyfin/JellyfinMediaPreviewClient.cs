@@ -369,9 +369,12 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 item.Overview,
                 CreateCredits(item.People),
                 CreateUserState(item.UserData),
-                item.ImageTags?.ContainsKey("Primary") is true),
+                item.ImageTags?.ContainsKey("Primary") is true,
+                CreateRatings(item),
+                item.UserData?.Played is not null),
             cancellationToken,
-            item => !string.IsNullOrWhiteSpace(item.SeriesId)).ConfigureAwait(false);
+            item => item.Type == "Episode" && item.SeriesId == seriesId
+                && item.SeasonId == seasonId).ConfigureAwait(false);
     }
 
     public Task<MediaUserState> SetFavoriteAsync(
@@ -843,6 +846,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             Metadata: CreateMetadata(item, preferSeriesTitle: !landscape))
         {
             SeriesId = item.SeriesId,
+            SeasonId = item.SeasonId,
         };
 
     private async Task<byte[]?> GetArtworkAsync(
@@ -1004,17 +1008,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
 
     private static MediaItemDetails CreateDetails(JellyfinItem item)
     {
-        var ratings = new List<MediaRating>(2);
-        if (item.CommunityRating is { } community)
-        {
-            ratings.Add(new("Community", community));
-        }
-
-        if (item.CriticRating is { } critic)
-        {
-            ratings.Add(new("Critic", critic));
-        }
-
+        var ratings = CreateRatings(item);
         var streams = (item.MediaSources ?? []).SelectMany(source => source.MediaStreams ?? [])
             .Concat(item.MediaStreams ?? [])
             .Select(stream => new MediaTrackInfo(
@@ -1053,6 +1047,21 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             item.LocalTrailerCount,
             item.RemoteTrailers is { Length: > 0 },
             item.UserData?.IsFavorite is not null && item.UserData.Played is not null);
+    }
+
+    private static List<MediaRating> CreateRatings(JellyfinItem item)
+    {
+        var ratings = new List<MediaRating>(2);
+        if (item.CommunityRating is { } community)
+        {
+            ratings.Add(new("Community", community));
+        }
+
+        if (item.CriticRating is { } critic)
+        {
+            ratings.Add(new("Critic", critic));
+        }
+        return ratings;
     }
 
     private static MediaCredit[] CreateCredits(IReadOnlyList<JellyfinPerson>? people) =>

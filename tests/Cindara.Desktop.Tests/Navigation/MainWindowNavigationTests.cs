@@ -1523,10 +1523,24 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
         var overview = fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!;
-        Assert.True(overview.IsEffectivelyVisible);
+        var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
+        Assert.True(browser.IsEffectivelyVisible);
         Assert.False(fixture.IsModalVisible);
-        Assert.Equal("series-parent", fixture.Model.SeriesOverview!.Summary.Details!.Id);
-        Assert.Same(overview.BackAction, Focused(fixture.Window));
+        Assert.True(fixture.Model.SeasonBrowser!.SelectedEpisode is not null,
+            $"Season browser: {fixture.Model.SeasonBrowser.Message}; selected season: {fixture.Model.SeasonBrowser.SelectedSeason?.Id}");
+        Assert.Equal("series-parent", fixture.Model.SeasonBrowser.SelectedEpisode.Episode.SeriesId);
+        Assert.Equal(type == "Season" ? "season-12" : "season-1",
+            fixture.Model.SeasonBrowser.SelectedSeason!.Id);
+        Assert.Equal(type == "Episode" ? "episode-2" : "episode-1",
+            (Focused(fixture.Window) as Button)?.DataContext is EpisodeCardViewModel episode
+                ? episode.Episode.Id : null);
+        fixture.Input.Press(type == "Episode" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Equal(type == "Episode" ? "episode-1" : "episode-2",
+            fixture.Model.SeasonBrowser.SelectedEpisode!.Episode.Id);
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(browser.IsVisible);
+        Assert.False(fixture.IsModalVisible);
+        Assert.Equal(0, fixture.Preview.StateWrites);
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(source, Focused(fixture.Window));
         Assert.Equal(offset, scroll.Offset);
@@ -1622,7 +1636,12 @@ public sealed class MainWindowNavigationTests
         var offset = scroll.Offset;
         Assert.True(offset.X > 0);
         fixture.Input.Press(ControllerAction.Accept);
-        Assert.True(fixture.IsModalVisible);
+        var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
+        Assert.True(browser.IsEffectivelyVisible);
+        Assert.False(fixture.IsModalVisible);
+        Assert.Equal("season-12", fixture.Model.SeasonBrowser!.SelectedSeason!.Id);
+        Assert.Contains(browser.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == Loc.Get("Details.PlaybackUnavailable"));
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(seasons[^1], Focused(fixture.Window));
         Assert.Equal(offset, scroll.Offset);
@@ -2775,6 +2794,16 @@ public sealed class MainWindowNavigationTests
             CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<MediaSeason>>(
                 Enumerable.Range(1, 12).Select(number => new MediaSeason($"season-{number}", $"Season {number}",
                     number, new(false, number == 1, 0, 0), false, number != 3)).ToArray());
+        public Task<IReadOnlyList<MediaEpisode>> GetEpisodesAsync(AuthenticatedSession session, string seriesId,
+            string seasonId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<MediaEpisode>>(
+            [
+                new("episode-1", "Pilot", seriesId, seasonId, 1, 1, null,
+                    TimeSpan.FromMinutes(30).Ticks, "PG", "Episode synopsis", [],
+                    new(false, false, 25, 0), false),
+                new("episode-2", "Next", seriesId, seasonId, 1, 2, null,
+                    null, null, null, [], new(false, true, 100, 0), false),
+            ]);
         public Task<MediaItemDetails?> GetSeriesContinuationAsync(AuthenticatedSession session, string seriesId,
             CancellationToken cancellationToken = default) => Task.FromResult<MediaItemDetails?>(null);
         public Task<MediaUserState> SetFavoriteAsync(AuthenticatedSession session, string itemId, bool isFavorite,
@@ -2880,10 +2909,20 @@ public sealed class MainWindowNavigationTests
             var item = new MediaPreviewItem("movie", "First movie", "2026", "Movie", null, null, overview, "1h 5m", 40);
             if (HomeSeriesEntryType is { } type)
             {
-                var child = item with { Id = "child", Name = "Series title", MediaType = type, SeriesId = "series-parent" };
+                var child = item with
+                {
+                    Id = type == "Season" ? "season-1" : "episode-1",
+                    Name = "Series title",
+                    MediaType = type,
+                    SeriesId = "series-parent",
+                    SeasonId = type == "Episode" ? "season-1" : null,
+                };
                 return new MediaPreviewHome(child, [child with { MediaType = "Episode" }],
                     [new MediaPreviewRail("tv", "TV", Enumerable.Range(0, 12)
-                        .Select(index => child with { Id = $"child-{index}" }).ToArray(), "TV")])
+                        .Select(index => child with
+                        {
+                            Id = type == "Season" ? $"season-{index + 1}" : "episode-2",
+                        }).ToArray(), "TV")])
                 {
                     Libraries = [new MediaLibrary("tv", "TV", "tvshows")],
                 };

@@ -16,4 +16,5 @@ public sealed record MediaPreviewItem(
 {
     public string? ArtworkItemId { get; init; }
     public string? SeriesId { get; init; }
+    public string? SeasonId { get; init; }
 }

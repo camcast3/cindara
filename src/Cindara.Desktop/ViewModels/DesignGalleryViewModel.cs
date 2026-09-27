@@ -200,6 +200,7 @@ public sealed class MediaPreviewCardViewModel : ObservableObject, IDisposable
         Name = item.Name;
         MediaType = item.MediaType;
         SeriesId = item.SeriesId;
+        SeasonId = item.SeasonId;
         HeroName = item.HeroName ?? item.Name;
         Overview = item.Overview ?? string.Empty;
         if (item.Metadata is { } metadata)
@@ -241,6 +242,7 @@ public sealed class MediaPreviewCardViewModel : ObservableObject, IDisposable
     public string Id { get; }
     public string MediaType { get; }
     public string? SeriesId { get; }
+    public string? SeasonId { get; }
 
     public string Subtitle { get; }
 

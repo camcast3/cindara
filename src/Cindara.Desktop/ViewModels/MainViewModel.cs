@@ -151,6 +151,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private SeriesOverviewViewModel? _seriesOverview;
 
     [ObservableProperty]
+    private SeasonBrowserViewModel? _seasonBrowser;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasLibraryLayout))]
     [NotifyPropertyChangedFor(nameof(SidebarLibraries))]
     private LibraryLayoutViewModel? _libraryLayout;
@@ -485,6 +488,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             MovieDetails.UserStateChanged += ApplyMediaUserState;
             SeriesOverview = new SeriesOverviewViewModel(_mediaPreviewClient, session,
                 exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
+            SeasonBrowser = new SeasonBrowserViewModel(_mediaPreviewClient, session,
+                exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
             if (_libraryLayoutStore is not null)
             {
                 LibraryLayout = new LibraryLayoutViewModel(session.Profile, home.Libraries, _libraryLayoutStore, _diagnostics);
@@ -688,6 +693,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void ClearDesignGallery()
     {
+        SeasonBrowser?.Dispose();
+        SeasonBrowser = null;
         SeriesOverview?.Dispose();
         SeriesOverview = null;
         var details = MovieDetails;

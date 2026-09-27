@@ -9,15 +9,26 @@ public partial class MainWindow
 {
     private MediaDetailsViewModel? _activeMovieDetails;
     private Control? _detailsReturnFocus;
+    private Control? _browserReturnFocus;
+    private bool _browserFromSeries;
     private MovieCreditsView? _creditsView;
-    private bool IsDetailsVisible => MovieDetails.IsVisible || SeriesOverview.IsVisible;
-    private Control DetailsSurface => SeriesOverview.IsVisible ? SeriesOverview : MovieDetails;
-    private Button DetailsBackAction => SeriesOverview.IsVisible ? SeriesOverview.BackAction : MovieDetails.BackAction;
+    private bool IsDetailsVisible => MovieDetails.IsVisible || SeriesOverview.IsVisible || SeasonBrowser.IsVisible;
+    private Control DetailsSurface => SeasonBrowser.IsVisible ? SeasonBrowser
+        : SeriesOverview.IsVisible ? SeriesOverview : MovieDetails;
+    private Button DetailsBackAction => SeasonBrowser.IsVisible ? SeasonBrowser.BackAction
+        : SeriesOverview.IsVisible ? SeriesOverview.BackAction : MovieDetails.BackAction;
 
     private async void ShowMediaItem(MediaPreviewCardViewModel item, bool continueWatching = false, bool fromHome = false)
     {
         if (ModalOverlay.IsVisible || IsDetailsVisible) return;
-        // Home presents recently added seasons/episodes as series posters, unlike direct Search results.
+        if (!continueWatching && item.MediaType is "Season" or "Episode"
+            && !string.IsNullOrWhiteSpace(item.SeriesId)
+            && (item.MediaType == "Season" || !string.IsNullOrWhiteSpace(item.SeasonId)))
+        {
+            ShowSeasonBrowser(item.SeriesId, item.MediaType == "Season" ? item.Id : item.SeasonId,
+                item.HeroName, item.MediaType == "Episode" ? item.Id : null);
+            return;
+        }
         var seriesId = item.MediaType == "Series" ? item.Id
             : fromHome && item.MediaType is "Season" or "Episode" ? item.SeriesId : null;
         if (!string.IsNullOrWhiteSpace(seriesId) && !continueWatching && _viewModel?.SeriesOverview is { } series)
@@ -57,17 +68,52 @@ public partial class MainWindow
         Shell.SearchView.SuspendFocusMemory();
     }
 
-    private void ShowSeasonInformation(SeasonCardViewModel season)
+    private async void ShowSeasonBrowser(string? seriesId, string? seasonId, string title, string? episodeId = null)
     {
-        if (ModalOverlay.IsVisible || !SeriesOverview.IsVisible) return;
-        BeginModal(season.Name);
-        ModalActions.Children.Add(new TextBlock { Text = season.WatchedState });
-        ModalActions.Children.Add(new TextBlock
+        if (ModalOverlay.IsVisible || SeasonBrowser.IsVisible || string.IsNullOrWhiteSpace(seriesId)
+            || string.IsNullOrWhiteSpace(seasonId) || _viewModel?.SeasonBrowser is not { } browser) return;
+        _browserFromSeries = SeriesOverview.IsVisible;
+        if (!_browserFromSeries) RememberDetailsSource();
+        _browserReturnFocus = FocusManager?.GetFocusedElement() as Control;
+        SeasonBrowser.ResetPosition();
+        SeasonBrowser.IsVisible = true;
+        SeriesOverview.IsEnabled = false;
+        MainSurface.IsEnabled = false;
+        _navigation.Forget("season-browser");
+        _navigation.SetScope(SeasonBrowser, SeasonBrowser.BackAction, "season-browser");
+        await browser.OpenAsync(seriesId, seasonId, title, episodeId);
+        if (SeasonBrowser.IsVisible && browser.IsOpen)
+            Dispatcher.UIThread.Post(() => SeasonBrowser.FocusSelectedEpisode(episodeId), DispatcherPriority.Loaded);
+    }
+
+    private void CloseSeasonBrowser(bool force = false)
+    {
+        if (!SeasonBrowser.IsVisible) return;
+        _viewModel?.SeasonBrowser?.Close();
+        SeasonBrowser.IsVisible = false;
+        SeriesOverview.IsEnabled = true;
+        var focus = _browserReturnFocus;
+        _browserReturnFocus = null;
+        var fromSeries = _browserFromSeries && SeriesOverview.IsVisible;
+        _browserFromSeries = false;
+        if (force) return;
+        if (!fromSeries)
         {
-            Text = Loc.Get("Series.ReviewBoundary"),
-            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-        });
-        FocusModal(AddModalButton(Loc.Get("Action.Back"), DismissModal));
+            MainSurface.IsEnabled = true;
+            _navigation.SetScope(ActiveSurface, key: _screen ?? "gallery");
+            if (focus is not null) _navigation.Focus(focus);
+            _detailsReturnFocus = null;
+            Shell.LibraryView.ResumeFocusMemory();
+            Shell.SearchView.ResumeFocusMemory();
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_viewModel?.IsDesignGalleryVisible is true && !IsDetailsVisible)
+                    GalleryView.RestoreHomeFocus();
+            }, DispatcherPriority.Loaded);
+            return;
+        }
+        _navigation.SetScope(SeriesOverview, SeriesOverview.BackAction, "series-overview");
+        if (focus is not null) _navigation.Focus(focus);
     }
 
     private void ShowMovieCredits(MovieCreditViewModel? selected = null)
@@ -134,6 +180,7 @@ public partial class MainWindow
     private void CloseMovieDetails(bool force = false)
     {
         if (!IsDetailsVisible || !force && _activeMovieDetails?.CanClose is false) return;
+        CloseSeasonBrowser(force: true);
         var details = _activeMovieDetails;
         _activeMovieDetails = null;
         if (details is not null)

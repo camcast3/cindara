@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Cindara.Desktop.ViewModels"
+             xmlns:loc="using:Cindara.Desktop.Localization"
+             x:Class="Cindara.Desktop.Views.SeasonBrowserView"
+             x:DataType="vm:SeasonBrowserViewModel"
+             Background="{DynamicResource Cindara.Brush.Background}">
+    <Grid Margin="{DynamicResource Cindara.Adaptive.SafeMargin}"
+          RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="16">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+            <Button x:Name="BrowserBack" Content="{loc:Tr Action.Back}" Click="OnBack"
+                    AutomationProperties.AutomationId="SeasonBrowserBack" />
+            <TextBlock Grid.Column="1" Text="{Binding SeriesTitle}" Classes="heading"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Button x:Name="ReadAbove" Grid.Column="2" Content="{loc:Tr Details.ReadAbove}" Click="OnReadAbove" />
+            <Button x:Name="ReadBelow" Grid.Column="3" Content="{loc:Tr Details.ReadBelow}" Click="OnReadBelow" />
+        </Grid>
+        <ScrollViewer x:Name="SeasonScroll" Grid.Row="1"
+                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Seasons}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="12" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Classes="card" Content="{Binding Name}" Tag="{Binding Id}"
+                                Click="OnSeason" GotFocus="OnSeasonFocus"
+                                AutomationProperties.Name="{Binding Name}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" IsVisible="{Binding HasMessage}">
+            <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
+                       AutomationProperties.LiveSetting="Polite" />
+            <Button Grid.Column="1" Content="{loc:Tr Details.Retry}"
+                    IsVisible="{Binding NeedsRetry}" Command="{Binding RetryCommand}" />
+        </Grid>
+        <ScrollViewer x:Name="EpisodeScroll" Grid.Row="3" Height="150"
+                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Episodes}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="12" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:EpisodeCardViewModel">
+                        <Button Classes="card" Width="205" Height="135" Click="OnEpisode"
+                                GotFocus="OnEpisodeFocus"
+                                AutomationProperties.Name="{Binding Name}"
+                                AutomationProperties.ItemStatus="{Binding Progress}"
+                                AutomationProperties.HelpText="{loc:Tr Season.SelectHelp}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{Binding Number}" Classes="heading" />
+                                <TextBlock Text="{Binding Name}" MaxLines="2"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Progress}" Classes="caption" />
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+        <ScrollViewer x:Name="EpisodeDetailsScroll" Grid.Row="4" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="12">
+                <TextBlock Text="{Binding EpisodeTitle}" Classes="title" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="SelectedEpisodeTitle"
+                           AutomationProperties.LiveSetting="Polite" />
+                <TextBlock Text="{Binding EpisodeNumber}" Classes="heading" />
+                <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Ratings}" />
+                <TextBlock Text="{Binding Synopsis}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Director}" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Tr Details.Credits}" Classes="heading" />
+                <TextBlock Text="{Binding Credits}" TextWrapping="Wrap" />
+                <Image Source="{Binding Artwork}" Height="130" Stretch="UniformToFill"
+                       IsVisible="{Binding HasArtwork}" />
+                <TextBlock Text="{Binding ArtworkMessage}" IsVisible="{Binding HasArtworkMessage}"
+                           Classes="caption" />
+                <TextBlock Text="{loc:Tr Details.PlaybackUnavailable}" Classes="caption" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

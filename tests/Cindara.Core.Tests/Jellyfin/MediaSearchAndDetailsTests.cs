@@ -274,6 +274,37 @@ public sealed class MediaSearchAndDetailsTests
         Assert.False(Assert.Single(await client.GetSeasonsAsync(Session, "series")).HasUserState);
     }
 
+    [Fact]
+    public async Task EpisodesRequestSpecificSeasonAndRetainRatingsAndUnknownState()
+    {
+        using var handler = new Handler((_, _) => Json("""
+            {"Items":[{"Id":"e","Name":"Pilot","Type":"Episode","SeriesId":"series",
+             "SeasonId":"specials","IndexNumber":0,"CommunityRating":8.5,
+             "People":[{"Id":"director","Name":"Director","Type":"Director"}]}]}
+            """));
+        using var client = Client(handler);
+        var episode = Assert.Single(await client.GetEpisodesAsync(Session, "series", "specials"));
+        Assert.Equal(0, episode.EpisodeNumber);
+        Assert.False(episode.HasUserState);
+        Assert.Equal(8.5, Assert.Single(episode.Ratings!).Value);
+        Assert.Equal("Director", Assert.Single(episode.Credits).Name);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Get, request.Method);
+        Assert.Contains("SeasonId=specials", request.Uri.Query, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""{"Items":[{"Id":"e","Name":"Wrong","Type":"Movie","SeriesId":"series","SeasonId":"season"}]}""")]
+    [InlineData("""{"Items":[{"Id":"e","Name":"Wrong","Type":"Episode","SeriesId":"other","SeasonId":"season"}]}""")]
+    [InlineData("""{"Items":[{"Id":"e","Name":"Wrong","Type":"Episode","SeriesId":"series","SeasonId":"other"}]}""")]
+    public async Task EpisodesRejectMismatchedChildren(string json)
+    {
+        using var handler = new Handler((_, _) => Json(json));
+        using var client = Client(handler);
+        Assert.Equal(MediaPreviewError.InvalidResponse, (await Assert.ThrowsAsync<MediaPreviewException>(
+            () => client.GetEpisodesAsync(Session, "series", "season"))).Error);
+    }
+
     private static HttpResponseMessage Json(string json) =>
         new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
 

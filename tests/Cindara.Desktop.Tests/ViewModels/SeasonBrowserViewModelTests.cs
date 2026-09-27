@@ -1,0 +1,144 @@
+using Cindara.Core.Authentication;
+using Cindara.Core.Jellyfin;
+using Cindara.Core.Models;
+using Cindara.Desktop.Localization;
+using Cindara.Desktop.Tests.Localization;
+using Cindara.Desktop.ViewModels;
+
+namespace Cindara.Desktop.Tests.ViewModels;
+
+[Collection(LocalizationTestGroup.Name)]
+public sealed class SeasonBrowserViewModelTests
+{
+    private static readonly AuthenticatedSession Session = new(
+        new ServerIdentity("server", new Uri("https://media.example/"), "Media", "10.11", "Windows"),
+        "user", "Viewer", "token");
+
+    [Fact]
+    public async Task BrowsesSpecialsWithSelectionMetadataAndNoWrites()
+    {
+        var client = new Client();
+        using var model = Model(client);
+        await model.OpenAsync("series", "specials", "Show", "episode-2");
+        Assert.Equal(2, model.Seasons.Count);
+        Assert.Equal("specials", model.SelectedSeason!.Id);
+        Assert.Equal("episode-2", model.SelectedEpisode!.Episode.Id);
+        Assert.Contains("Pilot 2", model.EpisodeTitle, StringComparison.Ordinal);
+        Assert.Contains("PG", model.Metadata, StringComparison.Ordinal);
+        Assert.Contains("Director", model.Director, StringComparison.Ordinal);
+        Assert.Contains("8.5", model.Ratings, StringComparison.Ordinal);
+        Assert.Equal("Synopsis 2", model.Synopsis);
+        Assert.Equal(Loc.Get("Season.ProgressUnknown"), model.Episodes[0].Progress);
+        Assert.Equal(Loc.Format("Season.Progress", 45), model.Episodes[1].Progress);
+        await model.SelectEpisodeAsync(model.Episodes[0]);
+        Assert.Equal("episode-1", model.SelectedEpisode!.Episode.Id);
+        Assert.Equal(0, client.Writes);
+        model.Close();
+        Assert.Empty(model.Episodes);
+    }
+
+    [Fact]
+    public async Task EmptySeasonAndUnavailableSeasonAreExplicit()
+    {
+        var client = new Client { Empty = true };
+        using var model = Model(client);
+        await model.OpenAsync("series", "specials", "Show");
+        Assert.Empty(model.Episodes);
+        Assert.Equal(Loc.Get("Season.NoEpisodes"), model.Message);
+        await model.OpenAsync("series", "missing", "Show");
+        Assert.True(model.NeedsRetry);
+        Assert.Equal(Loc.Get("Season.Unavailable"), model.Message);
+        Assert.Equal(0, client.Writes);
+    }
+
+    [Fact]
+    public async Task OldSeasonResponseCannotReplaceActiveSeason()
+    {
+        var client = new Client { Gate = new() };
+        using var model = Model(client);
+        var old = model.OpenAsync("series", "specials", "Show");
+        client.Gate = null;
+        await model.OpenAsync("series", "season-1", "Show");
+        client.OldGate!.SetResult([Episode("old", "specials", 1)]);
+        await old;
+        Assert.Equal("season-1", model.SelectedSeason!.Id);
+        Assert.Equal("season-1", model.SelectedEpisode!.Episode.SeasonId);
+        Assert.Equal(0, client.Writes);
+    }
+
+    [Theory]
+    [InlineData(MediaPreviewError.Forbidden)]
+    [InlineData(MediaPreviewError.NotFound)]
+    [InlineData(MediaPreviewError.AccessDenied)]
+    public async Task UnavailableEpisodesAllowRetryWithoutWrites(MediaPreviewError error)
+    {
+        var client = new Client { Error = error };
+        var rejected = 0;
+        using var model = new SeasonBrowserViewModel(client, Session, _ => { rejected++; return Task.CompletedTask; });
+        await model.OpenAsync("series", "specials", "Show");
+        Assert.True(model.NeedsRetry);
+        Assert.Empty(model.Episodes);
+        Assert.Equal(error == MediaPreviewError.AccessDenied ? 1 : 0, rejected);
+        client.Error = null;
+        await model.RetryCommand.ExecuteAsync(null);
+        Assert.Equal(2, model.Episodes.Count);
+        Assert.Equal(0, client.Writes);
+    }
+
+    private static SeasonBrowserViewModel Model(Client client) =>
+        new(client, Session, _ => Task.CompletedTask);
+
+    private static MediaEpisode Episode(string id, string season, int number) =>
+        new(id, $"Pilot {number}", "series", season, season == "specials" ? 0 : 1,
+            number, new DateOnly(2026, 1, 2), TimeSpan.FromMinutes(22).Ticks, "PG",
+            $"Synopsis {number}", [new("director", "Director", null, "Director", null)],
+            new(false, false, number == 2 ? 45 : null, null), false,
+            [new("Community", 8.5)], number == 2);
+
+    private sealed class Client : IJellyfinMediaPreviewClient
+    {
+        public bool Empty { get; set; }
+        public int Writes { get; private set; }
+        public MediaPreviewError? Error { get; set; }
+        public TaskCompletionSource<IReadOnlyList<MediaEpisode>>? Gate
+        {
+            get => _gate;
+            set { if (value is not null) OldGate = value; _gate = value; }
+        }
+        private TaskCompletionSource<IReadOnlyList<MediaEpisode>>? _gate;
+        public TaskCompletionSource<IReadOnlyList<MediaEpisode>>? OldGate { get; private set; }
+        public Task<IReadOnlyList<MediaSeason>> GetSeasonsAsync(AuthenticatedSession session,
+            string seriesId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<MediaSeason>>(
+            [
+                new("specials", "Specials", 0, new(false, false, null, null), false),
+                new("season-1", "Season 1", 1, new(false, false, null, null), false),
+            ]);
+        public Task<IReadOnlyList<MediaEpisode>> GetEpisodesAsync(AuthenticatedSession session,
+            string seriesId, string seasonId, CancellationToken cancellationToken = default) =>
+            Gate?.Task ?? (Error is { } error
+                ? Task.FromException<IReadOnlyList<MediaEpisode>>(new MediaPreviewException(error, "error"))
+                : Task.FromResult<IReadOnlyList<MediaEpisode>>(Empty ? [] : seasonId == "specials"
+                    ? [Episode("episode-1", seasonId, 1), Episode("episode-2", seasonId, 2)]
+                    : [Episode("episode-3", seasonId, 3)]));
+        public Task<MediaUserState> SetFavoriteAsync(AuthenticatedSession session, string itemId,
+            bool isFavorite, CancellationToken cancellationToken = default)
+        {
+            Writes++;
+            throw new InvalidOperationException("Browsing cannot write.");
+        }
+        public Task<MediaUserState> SetPlayedAsync(AuthenticatedSession session, string itemId,
+            bool isPlayed, CancellationToken cancellationToken = default)
+        {
+            Writes++;
+            throw new InvalidOperationException("Browsing cannot write.");
+        }
+        public void ClearImageCache() { }
+        public Task<byte[]?> GetLibraryArtworkAsync(AuthenticatedSession session, string itemId,
+            CancellationToken cancellationToken = default) => Task.FromResult<byte[]?>(null);
+        public Task<MediaPreviewHome> GetHomeAsync(AuthenticatedSession session,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<MediaLibraryPage> GetLibraryPageAsync(AuthenticatedSession session, MediaLibrary library,
+            int startIndex, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+}
