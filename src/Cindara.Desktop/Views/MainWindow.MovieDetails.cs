@@ -112,8 +112,8 @@ public partial class MainWindow
     {
         if (!SeasonBrowser.IsVisible) return;
         var seasonId = _viewModel?.SeasonBrowser?.SelectedSeason?.Id;
-        _viewModel?.SeasonBrowser?.Close();
         SeasonBrowser.IsVisible = false;
+        _viewModel?.SeasonBrowser?.Close();
         SeriesOverview.IsEnabled = true;
         var focus = _browserReturnFocus;
         _browserReturnFocus = null;

@@ -11,10 +11,13 @@ namespace Cindara.Desktop.Views;
 
 public partial class SeasonBrowserView : UserControl
 {
+    private Control? _focusedRow;
+
     public SeasonBrowserView()
     {
         InitializeComponent();
         SizeChanged += (_, args) => ApplyLayout(args.NewSize);
+        BrowserScroll.LayoutUpdated += (_, _) => PinFocusedRow();
     }
 
     public Button BackAction => BrowserBack;
@@ -23,6 +26,7 @@ public partial class SeasonBrowserView : UserControl
 
     public void ResetPosition()
     {
+        _focusedRow = null;
         BrowserScroll.Offset = default;
         EpisodeScroll.Offset = default;
         CreditsScroll.Offset = default;
@@ -65,7 +69,12 @@ public partial class SeasonBrowserView : UserControl
         }
         if (direction == NavigationDirection.Up)
         {
-            if (episodes.Contains(focus)) BrowserBack.Focus(NavigationMethod.Directional);
+            if (episodes.Contains(focus))
+            {
+                _focusedRow = null;
+                BrowserBack.Focus(NavigationMethod.Directional);
+                BrowserScroll.Offset = default;
+            }
             else
             {
                 EpisodeScroll.Offset = default;
@@ -97,7 +106,9 @@ public partial class SeasonBrowserView : UserControl
     {
         if (sender is Button { DataContext: EpisodeCardViewModel episode } card)
         {
+            _focusedRow = EpisodeSection;
             card.BringIntoView();
+            PinFocusedRow();
             EpisodeRequested?.Invoke(this, episode);
         }
     }
@@ -106,8 +117,29 @@ public partial class SeasonBrowserView : UserControl
     {
         if (sender is StackPanel card)
         {
+            _focusedRow = CastSection;
             card.BringIntoView();
+            PinFocusedRow();
         }
+    }
+
+    private void OnRowBringIntoViewRequested(object? sender, RequestBringIntoViewEventArgs args)
+    {
+        if (args.Source is Visual visual
+            && (ReferenceEquals(visual, EpisodeSection) || visual.GetVisualAncestors().Contains(EpisodeSection)
+                || ReferenceEquals(visual, CastSection) || visual.GetVisualAncestors().Contains(CastSection)))
+            args.Handled = true;
+    }
+
+    private void PinFocusedRow()
+    {
+        if (_focusedRow is null || !_focusedRow.IsEffectivelyVisible) return;
+        var position = _focusedRow.TranslatePoint(default, BrowserContent);
+        if (position is null) return;
+        var offset = Math.Clamp(position.Value.Y, 0,
+            Math.Max(0, BrowserScroll.Extent.Height - BrowserScroll.Viewport.Height));
+        if (Math.Abs(BrowserScroll.Offset.Y - offset) > 0.5)
+            BrowserScroll.Offset = new Vector(BrowserScroll.Offset.X, offset);
     }
 
     private void OnBack(object? sender, RoutedEventArgs args) => BackRequested?.Invoke(this, EventArgs.Empty);

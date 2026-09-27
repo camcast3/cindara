@@ -163,7 +163,10 @@ Accept never starts playback in this batch; episode activation is reserved for
 the eventual player integration. Playback is clearly unavailable; the browser has
 no Favorite, watched, Play, Resume, or trailer action. Up/down moves between
 Back, episode cards, and cast portraits like Home, entering each row at its
-first card; left/right scrolls the current rail.
+first card; left/right scrolls only the current rail without jumping the
+page. Up from the episode rail returns to Back and scrolls to the top. Episode
+metadata loads keep the active row pinned; the season content stays hidden
+until the initial season read completes.
 Back from a directly opened season or episode first shows its parent series
 overview with the matching season selected, then returns to the exact originating
 Home/library card on the next Back. Missing artwork, unknown watch state,

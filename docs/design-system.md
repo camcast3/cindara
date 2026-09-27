@@ -478,7 +478,9 @@ hero and larger season poster sit above a single Home-sized horizontal strip
 of episode cards and a portrait cast/crew rail with generous row spacing.
 The credits follow the focused episode and show an explicit empty state where
 none are available. Up/down enters the first card of the adjacent row and
-resets its horizontal offset; left/right scrolls within it. Episode focus reads
+resets its horizontal offset; left/right scrolls within it without moving the
+vertical page. Up from episodes returns to Back at the top, and asynchronously
+arriving technical details do not shift the focused row. Episode focus reads
 technical track details without mutating user state. Back restores exact season focus and horizontal offset; direct
 season/episode entries first return to their parent series overview, then to
 their original media source and query/offset.

@@ -40,7 +40,6 @@ public partial class SeriesOverviewView : UserControl
                 && season.Season.Id == seasonId);
         if (card is null) return false;
         card.Focus(NavigationMethod.Directional);
-        card.BringIntoView();
         return true;
     }
 

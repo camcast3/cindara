@@ -32,7 +32,9 @@
         </Grid>
         <ScrollViewer x:Name="BrowserScroll" Grid.Row="2"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Spacing="32">
+          <StackPanel x:Name="BrowserContent" Spacing="32"
+                      IsVisible="{Binding !IsLoading}"
+                      RequestBringIntoView="OnRowBringIntoViewRequested">
             <Grid x:Name="SeasonHero" ColumnDefinitions="Auto,*" ColumnSpacing="32">
                 <Border x:Name="SeasonPoster" Width="180" Height="270"
                         VerticalAlignment="Center"
