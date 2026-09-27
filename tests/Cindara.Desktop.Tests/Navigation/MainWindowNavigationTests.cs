@@ -1521,14 +1521,15 @@ public sealed class MainWindowNavigationTests
     });
 
     [Theory]
-    [InlineData(720, 480, "en", 1.5)]
-    [InlineData(1280, 720, "en", 1)]
-    [InlineData(1920, 1080, "en", 1)]
-    [InlineData(3840, 2160, "en", 1)]
-    [InlineData(1280, 720, "qps-ploc", 1.5)]
-    [InlineData(1280, 720, "qps-plocm", 1.5)]
+    [InlineData(720, 480, "en", 1.5, 163.2)]
+    [InlineData(1280, 720, "en", 1, 244.8)]
+    [InlineData(1920, 1080, "en", 1, 367.2)]
+    [InlineData(3440, 1440, "en", 1, 489.6)]
+    [InlineData(3840, 2160, "en", 1, 734.4)]
+    [InlineData(1280, 720, "qps-ploc", 1.5, 244.8)]
+    [InlineData(1280, 720, "qps-plocm", 1.5, 244.8)]
     public Task SeriesOverviewRestoresSearchAndTraversesMissingSeasonPosters(
-        int width, int height, string cultureName, double scale) => TestAppBuilder.Run(async () =>
+        int width, int height, string cultureName, double scale, double seasonHeight) => TestAppBuilder.Run(async () =>
     {
         using var culture = new CultureScope(cultureName);
         using var fixture = new ShellFixture(preferences: new PresentationPreferences(scale));
@@ -1557,6 +1558,7 @@ public sealed class MainWindowNavigationTests
             .Where(button => button.Classes.Contains("season-card")).ToArray();
         Assert.Equal(12, seasons.Length);
         Assert.All(seasons, card => Assert.InRange(card.Bounds.Width / card.Bounds.Height, 0.66, 0.68));
+        Assert.All(seasons, card => Assert.InRange(card.Bounds.Height, seasonHeight - 1, seasonHeight + 1));
         Assert.Equal(Loc.Get("Details.StateUnknown"), AutomationProperties.GetItemStatus(seasons[2]));
         Assert.DoesNotContain(overview.GetVisualDescendants().OfType<TextBlock>(),
             text => text.Text == Loc.Get("Details.Watched") || text.Text == Loc.Get("Details.Unwatched")

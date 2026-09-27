@@ -70,7 +70,7 @@ public partial class SeriesOverviewView : UserControl
     {
         if (size.Width <= 0 || size.Height <= 0) return;
         var density = ResponsiveDensityProfile.Create(size.Width, size.Height);
-        var height = Math.Clamp(size.Height * 0.26, 100, 405 * density.CardScale);
+        var height = Math.Clamp(size.Height * 0.34, 130, 525 * density.CardScale);
         Resources["Cindara.Series.SeasonHeight"] = height;
         Resources["Cindara.Series.SeasonWidth"] = height * 2 / 3;
         var posterWidth = Math.Min(280 * density.CardScale, size.Height * 0.28);
