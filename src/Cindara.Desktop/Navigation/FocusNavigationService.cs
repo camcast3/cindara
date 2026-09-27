@@ -158,7 +158,7 @@ public sealed class FocusNavigationService(TopLevel topLevel)
     private Control[] Candidates() => _scope is null ? [] : _scope.GetVisualDescendants()
         .Prepend(_scope)
         .OfType<Control>()
-        .Where(control => control is Button or TextBox
+        .Where(control => (control is Button or TextBox || control.Classes.Contains("season-credit-card"))
             && control.Focusable && control.IsEffectivelyVisible && control.IsEffectivelyEnabled
             && control.Bounds.Width > 0 && control.Bounds.Height > 0
             && !control.GetVisualAncestors().TakeWhile(ancestor => ancestor != _scope)

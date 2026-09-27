@@ -18,6 +18,7 @@
   <data name="Series.SeasonHelp" xml:space="preserve"><value>Browse episodes in this season</value></data>
   <data name="Series.ReviewBoundary" xml:space="preserve"><value>Episode browsing is read-only. Playback is not available yet.</value></data>
   <data name="Season.Loading" xml:space="preserve"><value>Loading season episodes...</value></data>
+  <data name="Season.LoadingEpisodeDetails" xml:space="preserve"><value>Loading episode media details...</value></data>
   <data name="Season.NoEpisodes" xml:space="preserve"><value>No episodes are available in this season.</value></data>
   <data name="Season.Unavailable" xml:space="preserve"><value>This season is no longer available. Go back or retry.</value></data>
   <data name="Season.EpisodeUnavailable" xml:space="preserve"><value>This episode is no longer available in the season. Showing the first available episode.</value></data>

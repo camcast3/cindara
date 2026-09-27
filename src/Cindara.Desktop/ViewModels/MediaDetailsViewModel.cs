@@ -83,9 +83,9 @@ public sealed partial class MediaDetailsViewModel : ObservableObject, IDisposabl
             Loc.Format(rating.Name == "Critic" ? "Details.CriticRating" : "Details.CommunityRating",
                 LocaleFormat.Number(rating.Value, rating.Name == "Critic" ? 0 : 1))))
         : Loc.Get("Details.NoRatings");
-    public string Video => TrackDescription("Video");
-    public string Audio => TrackDescription("Audio");
-    public string Subtitles => TrackDescription("Subtitle");
+    public string Video => MediaTrackDescription.Format(Details, "Video");
+    public string Audio => MediaTrackDescription.Format(Details, "Audio");
+    public string Subtitles => MediaTrackDescription.Format(Details, "Subtitle");
     public string Trailers => Details is { } item
         ? Loc.Get(item.LocalTrailerCount > 0 || item.HasRemoteTrailers
             ? "Details.TrailersAvailable" : "Details.NoTrailers")
@@ -105,34 +105,6 @@ public sealed partial class MediaDetailsViewModel : ObservableObject, IDisposabl
         string.Join(Loc.Get("Format.DetailSeparator"),
             (Details?.Credits ?? []).Where(credit => credit.CreditType == type).Select(credit => credit.Name)) is { Length: > 0 } names
             ? names : Loc.Get("Details.NotProvided");
-
-    private string TrackDescription(string type)
-    {
-        var tracks = (Details?.Tracks ?? []).Where(track => track.TrackType == type).ToArray();
-        if (tracks.Length == 0) return Loc.Get("Details.NotProvided");
-        var track = tracks.FirstOrDefault(track => track.IsDefault) ?? tracks[0];
-        if (type == "Subtitle" && !tracks.Any(track => track.IsDefault))
-            return Loc.Format("Details.TrackCount", tracks.Length);
-
-        string description;
-        if (!string.IsNullOrWhiteSpace(track.DisplayTitle))
-        {
-            description = track.DisplayTitle;
-        }
-        else
-        {
-            var parts = new List<string>();
-            if (!string.IsNullOrWhiteSpace(track.Codec)) parts.Add(track.Codec.ToUpperInvariant());
-            if (!string.IsNullOrWhiteSpace(track.Language)) parts.Add(track.Language);
-            if (track.Width is > 0 && track.Height is > 0)
-                parts.Add(Loc.Format("Details.Resolution", track.Width, track.Height));
-            if (track.Channels is > 0) parts.Add(Loc.Format("Details.Channels", track.Channels));
-            description = parts.Count > 0 ? string.Join(Loc.Get("Format.DetailSeparator"), parts)
-                : Loc.Get("Details.NotProvided");
-        }
-        return tracks.Length > 1
-            ? Loc.Format("Details.MoreTracks", description, tracks.Length - 1) : description;
-    }
 
     public async Task OpenAsync(string itemId, string title)
     {

@@ -17,8 +17,12 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
     private readonly Func<byte[], PreviewImage> _decode;
     private readonly LocalDiagnostics? _diagnostics;
     private CancellationTokenSource? _load;
+    private CancellationTokenSource? _episodeDetailLoad;
+    private Task _episodeDetailTask = Task.CompletedTask;
+    private readonly Dictionary<string, MediaItemDetails> _episodeDetailsById = new(StringComparer.Ordinal);
     private PreviewImage? _seasonPoster;
     private long _generation;
+    private long _episodeDetailGeneration;
     private string _seriesId = string.Empty;
     private string? _requestedSeason;
     private string? _requestedEpisode;
@@ -51,6 +55,14 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
     public MediaItemDetails? SeasonDetails { get; private set; }
     public MediaSeason? SelectedSeason { get; private set; }
     public EpisodeCardViewModel? SelectedEpisode { get; private set; }
+    public MediaItemDetails? SelectedEpisodeDetails { get; private set; }
+    public bool HasEpisodeDetails => SelectedEpisodeDetails is not null;
+    public bool IsEpisodeDetailsLoading { get; private set; }
+    public string EpisodeDetailsMessage { get; private set; } = string.Empty;
+    public bool HasEpisodeDetailsMessage => EpisodeDetailsMessage.Length > 0;
+    public string Video => MediaTrackDescription.Format(SelectedEpisodeDetails, "Video");
+    public string Audio => MediaTrackDescription.Format(SelectedEpisodeDetails, "Audio");
+    public string Subtitles => MediaTrackDescription.Format(SelectedEpisodeDetails, "Subtitle");
     public string EpisodeTitle => SelectedEpisode?.Episode.Name ?? Loc.Get("Season.NoEpisodes");
     public string SeasonTitle => SelectedSeason?.Name ?? string.Empty;
     public string SeasonOverview => string.IsNullOrWhiteSpace(SeasonDetails?.Overview)
@@ -84,8 +96,9 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
             .Where(credit => credit.CreditType == "Director").Select(credit => credit.Name) ?? [])
             is { Length: > 0 } names ? names : Loc.Get("Details.NotProvided"));
     public string Credits => string.Join(Loc.Get("Format.DetailSeparator"),
-        SelectedEpisode?.Episode.Credits.Select(credit => string.IsNullOrWhiteSpace(credit.Role)
-            ? credit.Name : Loc.Format("Details.CreditRole", credit.Name, credit.Role)) ?? [])
+        (SelectedEpisodeDetails?.Credits is { Count: > 0 } credits ? credits : SelectedEpisode?.Episode.Credits ?? [])
+            .Select(credit => string.IsNullOrWhiteSpace(credit.Role)
+            ? credit.Name : Loc.Format("Details.CreditRole", credit.Name, credit.Role)))
         is { Length: > 0 } names ? names : Loc.Get("Details.NoCredits");
     public string CreditsPreview => SelectedEpisode?.Episode.Credits is { Count: > 0 } credits
         ? string.Join(Loc.Get("Format.DetailSeparator"), credits.Take(4).Select(credit => credit.Name))
@@ -204,7 +217,10 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
             Finish(episodeId is not null && SelectedEpisode?.Episode.Id != episodeId
                 ? Loc.Get("Season.EpisodeUnavailable")
                 : Episodes.Count == 0 ? Loc.Get("Season.NoEpisodes") : string.Empty);
+            var episodeDetailsTask = SelectedEpisode is { } selectedEpisode
+                ? SelectEpisodeAsync(selectedEpisode) : Task.CompletedTask;
             await LoadArtworkAsync(details, generation, token);
+            await episodeDetailsTask;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -226,12 +242,80 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
 
     public Task SelectEpisodeAsync(EpisodeCardViewModel episode)
     {
-        if (!IsOpen || !Episodes.Contains(episode) || ReferenceEquals(SelectedEpisode, episode))
+        if (!IsOpen || !Episodes.Contains(episode))
             return Task.CompletedTask;
+        if (ReferenceEquals(SelectedEpisode, episode) && IsEpisodeDetailsLoading)
+            return _episodeDetailTask;
+        if (ReferenceEquals(SelectedEpisode, episode) && SelectedEpisodeDetails?.Id == episode.Episode.Id)
+            return Task.CompletedTask;
+
+        CancelEpisodeDetails();
         SelectedEpisode = episode;
         _requestedEpisode = episode.Episode.Id;
+        SelectedEpisodeDetails = null;
+        EpisodeDetailsMessage = string.Empty;
+        if (_episodeDetailsById.TryGetValue(episode.Episode.Id, out var cached))
+        {
+            SelectedEpisodeDetails = cached;
+            Notify();
+            return Task.CompletedTask;
+        }
+
+        _episodeDetailLoad = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var token = _episodeDetailLoad.Token;
+        var generation = _episodeDetailGeneration;
+        IsEpisodeDetailsLoading = true;
+        EpisodeDetailsMessage = Loc.Get("Season.LoadingEpisodeDetails");
         Notify();
-        return Task.CompletedTask;
+        _episodeDetailTask = LoadEpisodeDetailsAsync(episode, generation, token);
+        return _episodeDetailTask;
+    }
+
+    private async Task LoadEpisodeDetailsAsync(EpisodeCardViewModel episode, long generation, CancellationToken token)
+    {
+        try
+        {
+            var details = await _client.GetItemDetailsAsync(_session, episode.Episode.Id, token);
+            if (!CurrentEpisodeDetails(episode, generation, token)) return;
+            if (details.Id != episode.Episode.Id || details.MediaType != "Episode"
+                || details.SeriesId != _seriesId || details.SeasonId != SelectedSeason?.Id)
+                throw new MediaPreviewException(MediaPreviewError.InvalidResponse, "Unexpected episode details.");
+            _episodeDetailsById[episode.Episode.Id] = details;
+            SelectedEpisodeDetails = details;
+            EpisodeDetailsMessage = string.Empty;
+            IsEpisodeDetailsLoading = false;
+            Notify();
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            if (!CurrentEpisodeGeneration(episode, generation)) return;
+            IsEpisodeDetailsLoading = false;
+            EpisodeDetailsMessage = Loc.Get("Error.Preview.TimedOut");
+            Notify();
+        }
+        catch (MediaPreviewException exception)
+        {
+            if (!CurrentEpisodeGeneration(episode, generation)) return;
+            _diagnostics?.Record(DiagnosticArea.Network, DiagnosticAction.LoadDetails,
+                DiagnosticOutcome.Failed, DiagnosticLevel.Warning, exception);
+            IsEpisodeDetailsLoading = false;
+            EpisodeDetailsMessage = LocalizedErrors.Get(exception);
+            Notify();
+            if (exception.Error == MediaPreviewError.AccessDenied) await _onAccessDenied(exception);
+        }
+    }
+
+    private bool CurrentEpisodeGeneration(EpisodeCardViewModel episode, long generation) =>
+        IsOpen && !_disposed && generation == _episodeDetailGeneration && ReferenceEquals(SelectedEpisode, episode);
+    private bool CurrentEpisodeDetails(EpisodeCardViewModel episode, long generation, CancellationToken token) =>
+        CurrentEpisodeGeneration(episode, generation) && !token.IsCancellationRequested;
+    private void CancelEpisodeDetails()
+    {
+        ++_episodeDetailGeneration;
+        _episodeDetailLoad?.Cancel();
+        _episodeDetailLoad?.Dispose();
+        _episodeDetailLoad = null;
+        IsEpisodeDetailsLoading = false;
     }
 
     private async Task LoadArtworkAsync(MediaItemDetails details, long generation, CancellationToken token)
@@ -288,6 +372,10 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
     private (long Generation, CancellationToken Token) BeginLoad()
     {
         var result = BeginArtworkLoad();
+        CancelEpisodeDetails();
+        _episodeDetailsById.Clear();
+        SelectedEpisodeDetails = null;
+        EpisodeDetailsMessage = string.Empty;
         IsLoading = true;
         NeedsRetry = false;
         Message = Loc.Get("Season.Loading");
@@ -337,6 +425,10 @@ public sealed partial class SeasonBrowserViewModel : ObservableObject, IDisposab
     public void Close()
     {
         ++_generation;
+        CancelEpisodeDetails();
+        _episodeDetailsById.Clear();
+        SelectedEpisodeDetails = null;
+        EpisodeDetailsMessage = string.Empty;
         _load?.Cancel();
         _load?.Dispose();
         _load = null;
@@ -372,6 +464,7 @@ public sealed class EpisodeCardViewModel(MediaEpisode episode) : ObservableObjec
         && Episode.UserState.PlayedPercentage is > 0 and < 100;
     public string? ProgressArc => IsInProgress ? WatchStateRing.FromPercentage(Episode.UserState.PlayedPercentage) : null;
     public bool IsUnwatched => Episode.HasUserState && !IsWatched && !IsInProgress;
+    public double PlaybackProgress => IsInProgress ? Episode.UserState.PlayedPercentage!.Value : 0;
     public IImage? Image => _image?.Source;
     public bool HasImage => Image is not null;
     public string Status => Progress;

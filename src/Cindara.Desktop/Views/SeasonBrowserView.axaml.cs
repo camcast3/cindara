@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
-using Cindara.Core.Jellyfin;
 using Cindara.Desktop.DesignSystem;
 using Cindara.Desktop.Navigation;
 using Cindara.Desktop.ViewModels;
@@ -13,8 +12,7 @@ namespace Cindara.Desktop.Views;
 public partial class SeasonBrowserView : UserControl
 {
     private Button? _lastEpisode;
-    private Button? _lastSeason;
-    private int _columns = 4;
+    private StackPanel? _lastCredit;
 
     public SeasonBrowserView()
     {
@@ -24,26 +22,20 @@ public partial class SeasonBrowserView : UserControl
 
     public Button BackAction => BrowserBack;
     public event EventHandler? BackRequested;
-    public event EventHandler<MediaSeason>? SeasonRequested;
     public event EventHandler<EpisodeCardViewModel>? EpisodeRequested;
 
     public void ResetPosition()
     {
-        _lastSeason = null;
         _lastEpisode = null;
-        SeasonScroll.Offset = default;
-        EpisodeDetailsScroll.Offset = default;
-    }
-
-    public void ResetEpisodePosition()
-    {
-        _lastEpisode = null;
-        EpisodeDetailsScroll.Offset = default;
+        _lastCredit = null;
+        HeroScroll.Offset = default;
+        EpisodeScroll.Offset = default;
+        CreditsScroll.Offset = default;
     }
 
     public void FocusSelectedEpisode(string? episodeId = null)
     {
-        var cards = EpisodeGrid.GetVisualDescendants().OfType<Button>().ToArray();
+        var cards = EpisodeCards();
         var target = cards.FirstOrDefault(card => card.DataContext is EpisodeCardViewModel episode
             && episode.Episode.Id == episodeId) ?? cards.FirstOrDefault();
         target?.Focus(NavigationMethod.Directional);
@@ -52,26 +44,14 @@ public partial class SeasonBrowserView : UserControl
     public bool TryMove(NavigationDirection direction)
     {
         var focus = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
-        var seasons = SeasonScroll.GetVisualDescendants().OfType<Button>().ToArray();
-        var episodes = EpisodeGrid.GetVisualDescendants().OfType<Button>().ToArray();
-        var row = seasons.Contains(focus) ? seasons : episodes.Contains(focus) ? episodes : null;
+        var episodes = EpisodeCards();
+        var credits = CastRail.GetVisualDescendants().OfType<StackPanel>()
+            .Where(panel => panel.DataContext is MovieCreditViewModel && panel.Focusable).ToArray();
+        var row = episodes.Contains(focus) ? episodes.Cast<Control>().ToArray()
+            : credits.Contains(focus) ? credits.Cast<Control>().ToArray() : null;
         if (row is null)
         {
-            if (direction == NavigationDirection.Up && focus == ReadBelow)
-            {
-                (_lastEpisode is not null && episodes.Contains(_lastEpisode) ? _lastEpisode : episodes.FirstOrDefault())
-                    ?.Focus(NavigationMethod.Directional);
-                return true;
-            }
             if (direction == NavigationDirection.Down && focus == BrowserBack)
-            {
-                (seasons.FirstOrDefault(card => card.DataContext is MediaSeason season
-                    && season.Id == (DataContext as SeasonBrowserViewModel)?.SelectedSeason?.Id)
-                    ?? seasons.FirstOrDefault())?.Focus(NavigationMethod.Directional);
-                return true;
-            }
-            if (direction == NavigationDirection.Down && focus is Button
-                && (focus == ReadBelow || focus == CreditsLeft || focus == CreditsRight))
             {
                 (episodes.FirstOrDefault(card => card.DataContext is EpisodeCardViewModel episode
                     && ReferenceEquals(episode, (DataContext as SeasonBrowserViewModel)?.SelectedEpisode))
@@ -80,56 +60,40 @@ public partial class SeasonBrowserView : UserControl
             }
             return false;
         }
+
         if (direction is NavigationDirection.Left or NavigationDirection.Right)
         {
             var forward = direction == NavigationDirection.Right;
             if (FlowDirection == Avalonia.Media.FlowDirection.RightToLeft) forward = !forward;
             var index = Array.IndexOf(row, focus) + (forward ? 1 : -1);
-            if (ReferenceEquals(row, episodes) && index >= 0 && index < row.Length
-                && index / _columns != Array.IndexOf(row, focus) / _columns) return true;
             if (index >= 0 && index < row.Length) row[index].Focus(NavigationMethod.Directional);
             return true;
         }
         if (direction == NavigationDirection.Up)
         {
-            if (ReferenceEquals(row, episodes) && Array.IndexOf(episodes, focus) >= _columns)
-                episodes[Array.IndexOf(episodes, focus) - _columns].Focus(NavigationMethod.Directional);
-            else (ReferenceEquals(row, episodes) ? _lastSeason ?? seasons.FirstOrDefault() : BrowserBack)
-                    ?.Focus(NavigationMethod.Directional);
+            if (episodes.Contains(focus)) BrowserBack.Focus(NavigationMethod.Directional);
+            else (_lastEpisode is not null && episodes.Contains(_lastEpisode)
+                ? _lastEpisode : episodes.FirstOrDefault())?.Focus(NavigationMethod.Directional);
             return true;
         }
         if (direction == NavigationDirection.Down)
         {
-            if (ReferenceEquals(row, seasons))
-                (_lastEpisode is not null && episodes.Contains(_lastEpisode) ? _lastEpisode : episodes.FirstOrDefault())
-                    ?.Focus(NavigationMethod.Directional);
-            else
-            {
-                var next = Array.IndexOf(episodes, focus) + _columns;
-                if (next < episodes.Length) episodes[next].Focus(NavigationMethod.Directional);
-                else ReadBelow.Focus(NavigationMethod.Directional);
-            }
+            if (episodes.Contains(focus))
+                (_lastCredit is not null && credits.Contains(_lastCredit)
+                    ? _lastCredit : credits.FirstOrDefault())?.Focus(NavigationMethod.Directional);
             return true;
         }
         return false;
     }
 
-    private void OnSeason(object? sender, RoutedEventArgs args)
-    {
-        if (sender is Button { DataContext: MediaSeason season }) SeasonRequested?.Invoke(this, season);
-    }
+    private Button[] EpisodeCards() => EpisodeRail.GetVisualDescendants().OfType<Button>()
+        .Where(button => button.Classes.Contains("episode-card")).ToArray();
+
     private void OnEpisode(object? sender, RoutedEventArgs args)
     {
         if (sender is Button { DataContext: EpisodeCardViewModel episode }) EpisodeRequested?.Invoke(this, episode);
     }
-    private void OnSeasonFocus(object? sender, RoutedEventArgs args)
-    {
-        if (sender is Button card)
-        {
-            _lastSeason = card;
-            card.BringIntoView();
-        }
-    }
+
     private void OnEpisodeFocus(object? sender, RoutedEventArgs args)
     {
         if (sender is Button { DataContext: EpisodeCardViewModel episode } card)
@@ -139,35 +103,51 @@ public partial class SeasonBrowserView : UserControl
             EpisodeRequested?.Invoke(this, episode);
         }
     }
+
+    private void OnCreditFocus(object? sender, RoutedEventArgs args)
+    {
+        if (sender is StackPanel card)
+        {
+            _lastCredit = card;
+            card.BringIntoView();
+        }
+    }
+
     private void OnBack(object? sender, RoutedEventArgs args) => BackRequested?.Invoke(this, EventArgs.Empty);
-    private void OnReadAbove(object? sender, RoutedEventArgs args) => ScrollDetails(-1);
-    private void OnReadBelow(object? sender, RoutedEventArgs args) => ScrollDetails(1);
-    private void OnCreditsLeft(object? sender, RoutedEventArgs args) => ScrollCredits(-1);
-    private void OnCreditsRight(object? sender, RoutedEventArgs args) => ScrollCredits(1);
-    private void ScrollCredits(int direction) =>
-        CreditsScroll.Offset = new Vector(Math.Clamp(
-            CreditsScroll.Offset.X + direction * CreditsScroll.Viewport.Width * 0.8,
-            0, Math.Max(0, CreditsScroll.Extent.Width - CreditsScroll.Viewport.Width)), 0);
-    private void ScrollDetails(int direction) =>
-        EpisodeDetailsScroll.Offset = new Vector(0, Math.Clamp(
-            EpisodeDetailsScroll.Offset.Y + direction * EpisodeDetailsScroll.Viewport.Height * 0.8,
-            0, Math.Max(0, EpisodeDetailsScroll.Extent.Height - EpisodeDetailsScroll.Viewport.Height)));
 
     private void ApplyLayout(Size size)
     {
         if (size.Width <= 0 || size.Height <= 0) return;
+        var density = ResponsiveDensityProfile.Create(size.Width, size.Height);
         var margin = AdaptiveLayoutProfile.Create(size.Width, size.Height).SafeMargin;
         var width = size.Width - 2 * margin;
-        _columns = width >= 1800 ? 7 : width >= 1250 ? 5 : width >= 900 ? 4 : width >= 600 ? 3 : 2;
-        var cardWidth = Math.Max(120, (width - 24) / _columns - 16);
+        var columns = width >= 1800 ? 7 : width >= 1250 ? 5 : width >= 900 ? 4 : width >= 600 ? 3 : 2;
+        var cardWidth = Math.Clamp(Math.Min((width - 16) / columns - 16, size.Height * 0.4), 135, 360);
         Resources["Cindara.Season.EpisodeWidth"] = cardWidth;
         Resources["Cindara.Season.ImageHeight"] = cardWidth * 9 / 16;
-        var compact = width < 900;
-        SeasonPoster.Width = compact ? 120 : 180;
-        SeasonPoster.Height = compact ? 180 : 270;
+        Resources["Cindara.Season.EpisodeSectionHeight"] = cardWidth * 9 / 16 + 76;
+        var castHeight = Math.Clamp(size.Height * (size.Height < 600 ? 0.22 : 0.28), 100, 440);
+        Resources["Cindara.Season.CastHeight"] = castHeight;
+        Resources["Cindara.Season.CreditWidth"] = Math.Clamp(castHeight * 0.6, 90, 260);
+        Resources["Cindara.Season.CreditImageHeight"] = Math.Max(55, castHeight - 64);
+        Resources["Cindara.Season.ReadingWidth"] = 1120 * density.TypeScale;
+
+        var compact = width < 900 || size.Height < 600;
+        SeasonPoster.IsVisible = !compact;
+        if (!compact)
+        {
+            var posterWidth = Math.Min(280 * density.CardScale,
+                Math.Max(120, size.Height - castHeight - cardWidth * 9 / 16 - 170) * 2 / 3);
+            SeasonPoster.Width = posterWidth;
+            SeasonPoster.Height = posterWidth * 1.5;
+        }
         SeasonHero.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "Auto,*");
-        SeasonHero.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto");
-        Grid.SetColumn(SeasonSummary, compact ? 0 : 1);
-        Grid.SetRow(SeasonSummary, compact ? 1 : 0);
+        Grid.SetColumn(EpisodeInformation, compact ? 0 : 1);
+        MediaSummary.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "*,2*,2*");
+        MediaSummary.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto,Auto" : "Auto");
+        Grid.SetColumn(AudioSummaryPanel, compact ? 0 : 1);
+        Grid.SetRow(AudioSummaryPanel, compact ? 1 : 0);
+        Grid.SetColumn(SubtitleSummaryPanel, compact ? 0 : 2);
+        Grid.SetRow(SubtitleSummaryPanel, compact ? 2 : 0);
     }
 }

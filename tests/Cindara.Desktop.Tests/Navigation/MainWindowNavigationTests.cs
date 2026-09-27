@@ -1540,7 +1540,6 @@ public sealed class MainWindowNavigationTests
         {
             Assert.Same(browser.BackAction, Focused(fixture.Window));
             fixture.Input.Press(ControllerAction.NavigateDown);
-            fixture.Input.Press(ControllerAction.NavigateDown);
             Assert.Equal("episode-1",
                 (Focused(fixture.Window) as Button)?.DataContext is EpisodeCardViewModel episode
                     ? episode.Episode.Id : null);
@@ -1549,9 +1548,10 @@ public sealed class MainWindowNavigationTests
         Assert.Equal(type == "Episode" ? "episode-1" : "episode-2",
             fixture.Model.SeasonBrowser.SelectedEpisode!.Episode.Id);
         Assert.Equal(fixture.Model.SeasonBrowser.EpisodeTitle,
-            browser.FindControl<StackPanel>("SelectedDetails")!
-                .GetVisualDescendants().OfType<TextBlock>()
+            browser.GetVisualDescendants().OfType<TextBlock>()
                 .Single(text => AutomationProperties.GetAutomationId(text) == "SelectedEpisodeTitle").Text);
+        Assert.Equal("4K AV1 SDR", browser.GetVisualDescendants().OfType<TextBlock>()
+            .Single(text => AutomationProperties.GetAutomationId(text) == "EpisodeVideoSummary").Text);
         fixture.Input.Press(ControllerAction.Accept);
         Assert.True(browser.IsVisible);
         Assert.False(fixture.IsModalVisible);
@@ -1561,6 +1561,12 @@ public sealed class MainWindowNavigationTests
             text => text.Text == Loc.Get("Details.Watched") || text.Text == Loc.Get("Details.Unwatched")
                 || text.Text == Loc.Format("Season.Progress", 45));
         Assert.Equal(0, fixture.Preview.StateWrites);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.True(overview.IsVisible);
+        Assert.False(browser.IsVisible);
+        Assert.Equal(type == "Season" ? "season-12" : "season-1",
+            (Focused(fixture.Window) as Button)?.DataContext is SeasonCardViewModel season
+                ? season.Season.Id : null);
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(source, Focused(fixture.Window));
         Assert.Equal(offset, scroll.Offset);
@@ -1658,7 +1664,8 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.Accept);
         var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
         Assert.True(browser.IsEffectivelyVisible);
-        Assert.True(browser.FindControl<Border>("SeasonPoster")!.IsVisible);
+        Assert.Equal(width >= 900 && height >= 600,
+            browser.FindControl<Border>("SeasonPoster")!.IsVisible);
         Assert.False(fixture.IsModalVisible);
         Assert.Equal("season-12", fixture.Model.SeasonBrowser!.SelectedSeason!.Id);
         Assert.Equal("Season 12", fixture.Model.SeasonBrowser.SeasonTitle);
@@ -1666,15 +1673,23 @@ public sealed class MainWindowNavigationTests
             .Where(button => button.Classes.Contains("episode-card")).ToArray();
         Assert.Equal(16, episodeCards.Length);
         Assert.All(episodeCards, card => Assert.True(card.Bounds.Width > 100));
-        var firstY = episodeCards[0].GetVisualAncestors().OfType<ContentPresenter>().First().Bounds.Y;
-        var firstRowCount = episodeCards.TakeWhile(card =>
-            Math.Abs(card.GetVisualAncestors().OfType<ContentPresenter>().First().Bounds.Y - firstY) < 1).Count();
-        Assert.InRange(firstRowCount, 2, 7);
+        var rowY = episodeCards[0].TranslatePoint(default, browser)!.Value.Y;
+        Assert.All(episodeCards, card =>
+            Assert.InRange(Math.Abs(card.TranslatePoint(default, browser)!.Value.Y - rowY), 0, 1));
         browser.FocusSelectedEpisode("episode-1");
+        fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Same(episodeCards[1], Focused(fixture.Window));
+        fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateRight : ControllerAction.NavigateLeft);
+        Assert.Same(episodeCards[0], Focused(fixture.Window));
         fixture.Input.Press(ControllerAction.NavigateDown);
-        Assert.Same(episodeCards[firstRowCount], Focused(fixture.Window));
+        Assert.IsType<StackPanel>(Focused(fixture.Window));
         fixture.Input.Press(ControllerAction.NavigateUp);
         Assert.Same(episodeCards[0], Focused(fixture.Window));
+        for (var index = 1; index < episodeCards.Length; index++)
+            fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Same(episodeCards[^1], Focused(fixture.Window));
+        Assert.True(browser.FindControl<ScrollViewer>("EpisodeScroll")!.Offset.X > 0);
+        browser.FocusSelectedEpisode("episode-1");
         Assert.Contains(browser.GetVisualDescendants().OfType<TextBlock>(),
             text => text.Text == Loc.Format("Season.EpisodeCount", 16));
         Assert.Contains(browser.GetVisualDescendants().OfType<TextBlock>(),
@@ -2813,6 +2828,8 @@ public sealed class MainWindowNavigationTests
         public bool PopulatedMovie { get; set; }
         public string? HomeSeriesEntryType { get; set; }
         public int StateWrites { get; private set; }
+        private string? _episodeSeriesId;
+        private string? _episodeSeasonId;
         private MediaUserState _userState = new(false, false, 0, 0);
         public Task<MediaItemDetails> GetItemDetailsAsync(AuthenticatedSession session, string itemId,
             CancellationToken cancellationToken = default) => DetailError is { } error
@@ -2820,9 +2837,12 @@ public sealed class MainWindowNavigationTests
             : Task.FromResult(new MediaItemDetails(
                 itemId, PopulatedMovie ? "A movie with a rather long title for a compact viewport" : "Movie details",
                 itemId.StartsWith("season-", StringComparison.Ordinal) ? "Season"
+                : itemId.StartsWith("episode-", StringComparison.Ordinal) ? "Episode"
                 : itemId == "series-parent" || itemId.StartsWith("search-", StringComparison.Ordinal)
                     && int.Parse(itemId.AsSpan(7), System.Globalization.CultureInfo.InvariantCulture) % 4 == 1
-                    ? "Series" : "Movie", null, null, null, null, null, 2026, null,
+                    ? "Series" : "Movie", itemId.StartsWith("episode-", StringComparison.Ordinal)
+                        ? _episodeSeriesId : null, null, itemId.StartsWith("episode-", StringComparison.Ordinal)
+                        ? _episodeSeasonId : null, null, null, 2026, null,
                 TimeSpan.FromMinutes(65).Ticks, "PG", ["Drama", "Science Fiction"], [new("Community", 8.2)],
                 PopulatedMovie ? string.Concat(Enumerable.Repeat("A full movie synopsis that stays readable. ", 100)) : "A synopsis.",
                 itemId.StartsWith("season-", StringComparison.Ordinal)
@@ -2838,12 +2858,16 @@ public sealed class MainWindowNavigationTests
                 Enumerable.Range(1, 12).Select(number => new MediaSeason($"season-{number}", $"Season {number}",
                     number, new(false, number == 1, 0, 0), false, number != 3)).ToArray());
         public Task<IReadOnlyList<MediaEpisode>> GetEpisodesAsync(AuthenticatedSession session, string seriesId,
-            string seasonId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<MediaEpisode>>(
+            string seasonId, CancellationToken cancellationToken = default)
+        {
+            _episodeSeriesId = seriesId;
+            _episodeSeasonId = seasonId;
+            return Task.FromResult<IReadOnlyList<MediaEpisode>>(
                 Enumerable.Range(1, 16).Select(number =>
                     new MediaEpisode($"episode-{number}", $"Episode {number}", seriesId, seasonId, 1, number,
                         null, TimeSpan.FromMinutes(30).Ticks, "PG", "Episode synopsis", [],
                         new(false, number == 2, number == 2 ? 100 : 25, 0), false)).ToArray());
+        }
         public Task<MediaItemDetails?> GetSeriesContinuationAsync(AuthenticatedSession session, string seriesId,
             CancellationToken cancellationToken = default) => Task.FromResult<MediaItemDetails?>(null);
         public Task<MediaUserState> SetFavoriteAsync(AuthenticatedSession session, string itemId, bool isFavorite,

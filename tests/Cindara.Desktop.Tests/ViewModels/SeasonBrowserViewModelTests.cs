@@ -28,6 +28,10 @@ public sealed class SeasonBrowserViewModelTests
         Assert.Contains("Director", model.Director, StringComparison.Ordinal);
         Assert.Contains("8.5", model.Ratings, StringComparison.Ordinal);
         Assert.Equal("Synopsis 2", model.Synopsis);
+        Assert.Equal("1080p H.264", model.Video);
+        Assert.Equal(Loc.Get("Details.NotProvided"), model.Audio);
+        Assert.True(model.HasEpisodeDetails);
+        Assert.Equal(1, client.EpisodeDetailReads);
         Assert.Equal("Specials", model.SeasonTitle);
         Assert.Equal("Season synopsis", model.SeasonOverview);
         Assert.Equal(2, model.SeasonCredits.Count);
@@ -41,6 +45,9 @@ public sealed class SeasonBrowserViewModelTests
         Assert.NotNull(model.Episodes[1].ProgressArc);
         await model.SelectEpisodeAsync(model.Episodes[0]);
         Assert.Equal("episode-1", model.SelectedEpisode!.Episode.Id);
+        Assert.Equal(2, client.EpisodeDetailReads);
+        await model.SelectEpisodeAsync(model.Episodes[1]);
+        Assert.Equal(2, client.EpisodeDetailReads);
         Assert.Equal(0, client.Writes);
         model.Close();
         Assert.Empty(model.Episodes);
@@ -143,6 +150,67 @@ public sealed class SeasonBrowserViewModelTests
         Assert.True(model.HasSelectedEpisode);
     }
 
+    [Fact]
+    public async Task LateEpisodeDetailsCannotReplaceNewSelectionOrClosedSeason()
+    {
+        var client = new Client { EpisodeGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        using var model = Model(client);
+        await model.OpenAsync("series", "specials", "Show");
+        var pending = model.SelectEpisodeAsync(model.Episodes[1]);
+        Assert.True(model.IsEpisodeDetailsLoading);
+        Assert.Null(model.SelectedEpisodeDetails);
+        await model.SelectEpisodeAsync(model.Episodes[0]);
+        client.EpisodeGate.SetResult(client.Details("episode-2"));
+        await pending;
+        Assert.Equal("episode-1", model.SelectedEpisodeDetails!.Id);
+        Assert.Equal(string.Empty, model.EpisodeDetailsMessage);
+
+        client.EpisodeGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var closing = model.SelectEpisodeAsync(model.Episodes[1]);
+        model.Close();
+        client.EpisodeGate.SetResult(client.Details("episode-2"));
+        await closing;
+        Assert.Null(model.SelectedEpisodeDetails);
+        Assert.False(model.IsOpen);
+        Assert.Equal(0, client.Writes);
+    }
+
+    [Fact]
+    public async Task EpisodeDetailErrorsRemainVisibleAndAllowFocusRetry()
+    {
+        var client = new Client { EpisodeDetailsError = MediaPreviewError.Forbidden };
+        using var model = Model(client);
+        await model.OpenAsync("series", "specials", "Show");
+        await model.SelectEpisodeAsync(model.Episodes[1]);
+        Assert.False(model.HasEpisodeDetails);
+        Assert.True(model.HasEpisodeDetailsMessage);
+        Assert.False(model.IsEpisodeDetailsLoading);
+        client.EpisodeDetailsError = null;
+        await model.SelectEpisodeAsync(model.Episodes[1]);
+        Assert.Equal("episode-2", model.SelectedEpisodeDetails!.Id);
+        Assert.False(model.HasEpisodeDetailsMessage);
+        Assert.Equal(0, client.Writes);
+    }
+
+    [Fact]
+    public async Task InvalidEpisodeParentIsRejectedWithoutCachingAndMissingTracksAreExplicit()
+    {
+        var client = new Client { InvalidEpisodeParent = true };
+        using var model = Model(client);
+        await model.OpenAsync("series", "specials", "Show");
+        await model.SelectEpisodeAsync(model.Episodes[1]);
+        Assert.False(model.HasEpisodeDetails);
+        Assert.True(model.HasEpisodeDetailsMessage);
+        client.InvalidEpisodeParent = false;
+        client.NoEpisodeTracks = true;
+        await model.SelectEpisodeAsync(model.Episodes[1]);
+        Assert.True(model.HasEpisodeDetails);
+        Assert.Equal(Loc.Get("Details.NotProvided"), model.Video);
+        Assert.Equal(Loc.Get("Details.NotProvided"), model.Audio);
+        Assert.Equal(Loc.Get("Details.NotProvided"), model.Subtitles);
+        Assert.Equal(0, client.Writes);
+    }
+
     [Theory]
     [InlineData(MediaPreviewError.Forbidden)]
     [InlineData(MediaPreviewError.NotFound)]
@@ -181,6 +249,11 @@ public sealed class SeasonBrowserViewModelTests
         public bool NoSeasonCredits { get; set; }
         public bool ManyEpisodeCredits { get; set; }
         public int ThumbnailReads { get; private set; }
+        public int EpisodeDetailReads { get; private set; }
+        public TaskCompletionSource<MediaItemDetails>? EpisodeGate { get; set; }
+        public MediaPreviewError? EpisodeDetailsError { get; set; }
+        public bool InvalidEpisodeParent { get; set; }
+        public bool NoEpisodeTracks { get; set; }
         public TaskCompletionSource<IReadOnlyList<MediaEpisode>>? Gate
         {
             get => _gate;
@@ -196,14 +269,35 @@ public sealed class SeasonBrowserViewModelTests
                 new("season-1", "Season 1", 1, new(false, false, null, null), false),
             ]);
         public Task<MediaItemDetails> GetItemDetailsAsync(AuthenticatedSession session, string itemId,
-            CancellationToken cancellationToken = default) => Task.FromResult(new MediaItemDetails(
-                itemId, itemId, itemId == "series" ? "Series" : "Season", "series", "Show", itemId, null, null, 2026, null,
+            CancellationToken cancellationToken = default)
+        {
+            var episode = itemId.StartsWith("episode-", StringComparison.Ordinal);
+            if (episode) EpisodeDetailReads++;
+            if (itemId == "episode-2" && EpisodeGate is { } gate) return gate.Task;
+            if (itemId == "episode-2" && EpisodeDetailsError is { } error)
+                return Task.FromException<MediaItemDetails>(new MediaPreviewException(error, "episode details unavailable"));
+            return Task.FromResult(Details(itemId));
+        }
+        public MediaItemDetails Details(string itemId)
+        {
+            var episode = itemId.StartsWith("episode-", StringComparison.Ordinal);
+            return new MediaItemDetails(
+                itemId, itemId, episode ? "Episode" : itemId == "series" ? "Series" : "Season",
+                episode && itemId == "episode-2" && InvalidEpisodeParent ? "wrong-series" : "series",
+                "Show", episode ? itemId == "episode-3" ? "season-1" : "specials" : itemId,
+                null, null, 2026, null,
                 null, "PG", [], [], "Season synopsis",
-                NoSeasonCredits ? itemId == "series"
+                episode && ManyEpisodeCredits
+                    ? Enumerable.Range(1, 8)
+                        .Select(index => new MediaCredit($"credit-{index}", $"Credit {index}", null, "Actor", null))
+                        .ToArray()
+                    : NoSeasonCredits ? itemId == "series"
                     ? [new("actor", "Actor", "Role", "Actor", null)] : []
                     : [new("actor", "Actor", "Role", "Actor", WithImages ? "image" : null),
                        new("director", "Director", null, "Director", null)],
-                [], new(false, false, null, null), WithImages, false));
+                episode && !NoEpisodeTracks ? [new MediaTrackInfo("Video", "h264", "1080p H.264", null, 1920, 1080,
+                    null, true, false)] : [], new(false, false, null, null), WithImages, false);
+        }
         public Task<IReadOnlyList<MediaEpisode>> GetEpisodesAsync(AuthenticatedSession session,
             string seriesId, string seasonId, CancellationToken cancellationToken = default) =>
             Gate?.Task ?? (Error is { } error

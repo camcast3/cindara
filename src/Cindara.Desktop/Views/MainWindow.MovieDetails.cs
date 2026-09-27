@@ -11,6 +11,7 @@ public partial class MainWindow
     private Control? _detailsReturnFocus;
     private Control? _browserReturnFocus;
     private bool _browserFromSeries;
+    private bool _browserParentPreloaded;
     private MovieCreditsView? _creditsView;
     private bool IsDetailsVisible => MovieDetails.IsVisible || SeriesOverview.IsVisible || SeasonBrowser.IsVisible;
     private Control DetailsSurface => SeasonBrowser.IsVisible ? SeasonBrowser
@@ -75,6 +76,15 @@ public partial class MainWindow
         _browserFromSeries = SeriesOverview.IsVisible;
         if (!_browserFromSeries) RememberDetailsSource();
         _browserReturnFocus = FocusManager?.GetFocusedElement() as Control;
+        Task? preload = null;
+        _browserParentPreloaded = !_browserFromSeries && _viewModel?.SeriesOverview is { };
+        if (_browserParentPreloaded && _viewModel?.SeriesOverview is { } parent)
+        {
+            SeriesOverview.ResetPosition();
+            SeriesOverview.IsVisible = true;
+            _activeMovieDetails = parent.Summary;
+            preload = parent.OpenAsync(seriesId, title);
+        }
         SeasonBrowser.ResetPosition();
         SeasonBrowser.IsVisible = true;
         SeriesOverview.IsEnabled = false;
@@ -84,18 +94,33 @@ public partial class MainWindow
         await browser.OpenAsync(seriesId, seasonId, title, episodeId);
         if (SeasonBrowser.IsVisible && browser.IsOpen && episodeId is not null)
             Dispatcher.UIThread.Post(() => SeasonBrowser.FocusSelectedEpisode(episodeId), DispatcherPriority.Loaded);
+        if (preload is not null)
+        {
+            await preload;
+            if (!SeasonBrowser.IsVisible && SeriesOverview.IsVisible
+                && _viewModel?.SeriesOverview?.Summary.Details?.Id == seriesId)
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (SeriesOverview.IsVisible && !SeasonBrowser.IsVisible
+                        && FocusManager?.GetFocusedElement() == SeriesOverview.BackAction)
+                        SeriesOverview.FocusSeason(seasonId);
+                }, DispatcherPriority.Loaded);
+        }
     }
 
     private void CloseSeasonBrowser(bool force = false)
     {
         if (!SeasonBrowser.IsVisible) return;
+        var seasonId = _viewModel?.SeasonBrowser?.SelectedSeason?.Id;
         _viewModel?.SeasonBrowser?.Close();
         SeasonBrowser.IsVisible = false;
         SeriesOverview.IsEnabled = true;
         var focus = _browserReturnFocus;
         _browserReturnFocus = null;
-        var fromSeries = _browserFromSeries && SeriesOverview.IsVisible;
+        var fromSeries = (_browserFromSeries || _browserParentPreloaded) && SeriesOverview.IsVisible;
+        var preloaded = _browserParentPreloaded;
         _browserFromSeries = false;
+        _browserParentPreloaded = false;
         if (force) return;
         if (!fromSeries)
         {
@@ -113,7 +138,12 @@ public partial class MainWindow
             return;
         }
         _navigation.SetScope(SeriesOverview, SeriesOverview.BackAction, "series-overview");
-        if (focus is not null) _navigation.Focus(focus);
+        if (preloaded)
+        {
+            if (seasonId is null || !SeriesOverview.FocusSeason(seasonId))
+                _navigation.Focus(SeriesOverview.BackAction);
+        }
+        else if (focus is not null) _navigation.Focus(focus);
     }
 
     private void ShowMovieCredits(MovieCreditViewModel? selected = null)

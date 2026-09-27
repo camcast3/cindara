@@ -33,6 +33,17 @@ public partial class SeriesOverviewView : UserControl
         _seasonReturn = null;
     }
 
+    public bool FocusSeason(string seasonId)
+    {
+        var card = SeasonScroll.GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(button => button.DataContext is SeasonCardViewModel season
+                && season.Season.Id == seasonId);
+        if (card is null) return false;
+        card.Focus(NavigationMethod.Directional);
+        card.BringIntoView();
+        return true;
+    }
+
     public bool TryMove(NavigationDirection direction)
     {
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;

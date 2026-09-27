@@ -140,19 +140,6 @@ public partial class MainWindow : Window
             _viewModel?.SeriesOverview?.Summary.Details?.Id, season.Season.Id,
             _viewModel?.SeriesOverview?.Summary.Title ?? season.Name);
         SeasonBrowser.BackRequested += (_, _) => CloseSeasonBrowser();
-        SeasonBrowser.SeasonRequested += async (_, season) =>
-        {
-            if (_viewModel?.SeasonBrowser is { } browser)
-            {
-                SeasonBrowser.ResetEpisodePosition();
-                await browser.SelectSeasonAsync(season.Id);
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (SeasonBrowser.IsVisible && browser.IsOpen && browser.SelectedSeason?.Id == season.Id)
-                        SeasonBrowser.FocusSelectedEpisode(browser.SelectedEpisode?.Episode.Id);
-                }, DispatcherPriority.Loaded);
-            }
-        };
         SeasonBrowser.EpisodeRequested += async (_, episode) =>
         {
             if (_viewModel?.SeasonBrowser is { } browser) await browser.SelectEpisodeAsync(episode);

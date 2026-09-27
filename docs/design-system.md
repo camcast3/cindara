@@ -456,11 +456,10 @@ The first series increment uses a separate full-screen scope with Back, series
 artwork and metadata, an informational resumable/next-episode summary, Full
 details, Credits, and a horizontal season-poster row. It shares the movie detail
 reader and credits popup rather than duplicating mutation or artwork logic.
-Series mutation controls and episode browsing are not exposed in this increment.
-Recently Added Home entries returned as seasons/episodes still represent series
-posters and open their parent series overview. Continue Watching retains its
-separate routing; direct season/episode Search entries remain unchanged until
-the episode-browser increment.
+Series mutation controls remain unavailable. Recently Added Home entries
+returned as seasons/episodes still use series poster artwork, but open the
+corresponding read-only season browser (selecting the episode where available).
+Continue Watching retains its separate pre-playback routing.
 
 Season posters preserve their 2:3 geometry and rounded clipping with or without
 artwork. Their height uses 34% of the logical viewport (previously 26%), with a
@@ -474,16 +473,19 @@ permanent preview disclaimer; the season information action explains availabilit
 Only focused posters draw a selection
 outline. Left/right traverses all seasons and scrolls them into view; Up restores
 the originating overview action and Down restores the last season. Accept opens
-read-only season information, never playback or a pretend episode browser.
-Back from that information restores exact season focus and horizontal offset;
-Back from the overview restores the original media source and its query/offset.
+the separate read-only episode browser, never playback. Its selected episode
+hero sits above a single horizontal strip of episode cards and a portrait
+cast/crew rail. Episode focus reads technical track details without mutating
+user state. Back restores exact season focus and horizontal offset; direct
+season/episode entries first return to their parent series overview, then to
+their original media source and query/offset.
 
 The overview uses shared logical-viewport density. Compact windows omit the main
 poster and allow the copy to scroll; Full details preserves untruncated metadata.
 Loading failures offer error-only Retry. Unknown progress never becomes a fake
 remaining-time estimate. Account changes and Back cancel obsolete work and
 dispose decoded artwork. This batch requires live TV/Anime traversal and manual
-owner acceptance before season tabs and episode selection advance.
+owner acceptance before playback or user-state changes advance.
 
 ### Search
 

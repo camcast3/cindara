@@ -149,22 +149,21 @@ error-only Retry reads again, and superseded responses cannot replace the screen
 
 ### Read-only season and episode browser (#5)
 
-Selecting a season opens its episode browser with season tabs (including specials
-and empty seasons), a season poster/synopsis, an informational cast-and-crew
-rail, and a responsive grid of episode thumbnails with numbers and icon-only
-watch/progress indicators (accessible watch-state text remains available).
-The selected episode's name and number stay above the grid while its full
-details appear below the grid rather than sharing the season hero. Focus or
-Accept updates its title, number, air date,
-runtime, rating, synopsis, director, and credits when available.
+Selecting a season opens a separate episode browser, including specials and
+empty seasons. The focused episode's title, number, air date, runtime, rating,
+synopsis, director, credits, and available video/audio/subtitle information
+appear in the hero beside season artwork. A single horizontal strip of episode
+stills shows numbers and watch/progress indicators; the cast-and-crew portrait
+rail sits below it. Focus or Accept selects an episode and loads its technical
+details read-only, canceling obsolete requests.
 Accept never starts playback in this batch; episode activation is reserved for
 the eventual player integration. Playback is clearly unavailable; the browser has
-no Favorite, watched, Play, Resume, or trailer action. Read above/below actions
-scroll long season/episode information, and cast/crew paging controls move
-through available credits with a controller. Changing seasons cancels
-outstanding requests; Back restores the overview's selected season and scroll
-or the exact originating Home/library card. Missing artwork, unknown watch
-state, unavailable episodes, and empty seasons are explicit states. This batch
+no Favorite, watched, Play, Resume, or trailer action. Up/down moves between
+Back, episode cards, and cast portraits; left/right scrolls their rails.
+Back from a directly opened season or episode first shows its parent series
+overview with the matching season selected, then returns to the exact originating
+Home/library card on the next Back. Missing artwork, unknown watch state,
+unavailable episodes, and empty seasons are explicit states. This batch
 requires owner manual acceptance before any separate state-mutation increment.
 Playback and functional selectors remain out of scope.
 Issue #5 remains open; this layer does not unblock dependent playback work.
