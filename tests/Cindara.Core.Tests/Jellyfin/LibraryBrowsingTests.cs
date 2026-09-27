@@ -206,7 +206,7 @@ public sealed class LibraryBrowsingTests
 
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized, MediaPreviewError.AccessDenied)]
-    [InlineData(HttpStatusCode.Forbidden, MediaPreviewError.AccessDenied)]
+    [InlineData(HttpStatusCode.Forbidden, MediaPreviewError.Forbidden)]
     [InlineData(HttpStatusCode.ServiceUnavailable, MediaPreviewError.UnexpectedStatus)]
     public async Task PageFailuresStayExplicit(HttpStatusCode status, MediaPreviewError error)
     {
@@ -305,7 +305,7 @@ public sealed class LibraryBrowsingTests
 
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized, MediaPreviewError.AccessDenied)]
-    [InlineData(HttpStatusCode.Forbidden, MediaPreviewError.AccessDenied)]
+    [InlineData(HttpStatusCode.Forbidden, MediaPreviewError.Forbidden)]
     [InlineData(HttpStatusCode.InternalServerError, MediaPreviewError.UnexpectedStatus)]
     public async Task ArtworkErrorsRemainTypedAndDoNotHideRejectedSessions(HttpStatusCode status, MediaPreviewError expected)
     {

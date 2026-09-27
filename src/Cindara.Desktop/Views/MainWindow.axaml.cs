@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     private readonly LocalDiagnostics? _diagnostics;
 
     public PresentationPreferences Preferences { get; }
+    private Control ActiveSurface => _viewModel?.IsDesignGalleryVisible is true ? GalleryView : ShellViewport;
 
     public MainWindow() : this(new SdlGamepadInputSource())
     {
@@ -122,11 +123,16 @@ public partial class MainWindow : Window
             _viewModel?.HideDesignGalleryCommand.Execute(null);
         };
         GalleryView.LibraryRequested += OnLibraryRequested;
-        GalleryView.ItemRequested += (_, item) => ShowMediaSummary(item);
-        Shell.LibraryView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        GalleryView.ItemRequested += (_, item) => ShowMediaItem(item,
+            _viewModel?.DesignGallery?.ContinueWatching.Contains(item) is true);
+        Shell.LibraryView.ItemRequested += (_, item) => ShowMediaItem(item);
         Shell.LibraryView.FilterRequested += (_, _) => ShowLibraryFilter();
         Shell.LibraryView.SortRequested += (_, _) => ShowLibrarySort();
-        Shell.SearchView.ItemRequested += (_, item) => ShowMediaSummary(item);
+        Shell.SearchView.ItemRequested += (_, item) => ShowMediaItem(item);
+        MovieDetails.BackRequested += (_, _) => CloseMovieDetails();
+        MovieDetails.InformationRequested += (_, _) => ShowMovieInformation();
+        MovieDetails.CreditsRequested += (_, _) => ShowMovieCredits();
+        MovieDetails.CastRequested += (_, credit) => ShowMovieCredits(credit);
         Shell.SearchView.KeyboardRequested += (_, target) => ShowKeyboard(target, fullScreen: true);
         GalleryView.NavigationWidthChanged += (_, _) => UpdateGalleryFooter();
         UpdateGalleryFooter();
@@ -304,6 +310,7 @@ public partial class MainWindow : Window
         _controllerInput.ActiveControllerChanged -= OnActiveControllerChanged;
         _controllerInput.Dispose();
         ClearModal();
+        CloseMovieDetails(force: true);
         if (_viewModel is not null)
         {
             _viewModel.ShowDesignGalleryCommand.Cancel();
@@ -376,6 +383,16 @@ public partial class MainWindow : Window
         Shell.IsVisible = _viewModel.IsAuthenticatedVisible;
         AuthenticationSurface.IsVisible = !Shell.IsVisible;
         ShellFooter.IsVisible = !Shell.IsVisible || Shell.Destination == "Home";
+        if (MovieDetails.IsVisible)
+        {
+            if (_viewModel.IsAuthenticatedVisible && _viewModel.MovieDetails?.IsOpen is true)
+            {
+                _navigation.EnsureFocus();
+                return;
+            }
+            ClearModal();
+            CloseMovieDetails(force: true);
+        }
         var screen = _viewModel.IsDesignGalleryVisible ? "gallery"
             : _viewModel.IsAuthenticatedVisible && Shell.Destination == "Home"
                 && _viewModel.ShowDesignGalleryCommand.IsRunning ? "shell:Home:loading"
@@ -431,7 +448,7 @@ public partial class MainWindow : Window
             "loading" => LanguageButton,
             _ => Shell.InitialFocus,
         };
-        _navigation.SetScope(MainSurface, initial, screen);
+        _navigation.SetScope(ActiveSurface, initial, screen);
         if (screen == "gallery")
         {
             GalleryView.RestoreHomeFocus();
@@ -509,7 +526,11 @@ public partial class MainWindow : Window
 
     private void OnShellKeyDown(object? sender, KeyEventArgs args)
     {
-        if (args.Key is Key.PageUp or Key.PageDown && !ModalOverlay.IsVisible
+        if (ModalOverlay.IsVisible && _creditsView?.HandleKey(args.Key) is true)
+        {
+            args.Handled = true;
+        }
+        else if (args.Key is Key.PageUp or Key.PageDown && !ModalOverlay.IsVisible && !MovieDetails.IsVisible
             && _viewModel?.IsDesignGalleryVisible is true)
         {
             GalleryView.ScrollDescription(args.Key == Key.PageDown);
@@ -552,7 +573,11 @@ public partial class MainWindow : Window
     private void MoveFocus(NavigationDirection direction)
     {
         _navigation.EnsureFocus();
-        if (!ModalOverlay.IsVisible)
+        if (!ModalOverlay.IsVisible && MovieDetails.IsVisible && MovieDetails.TryMove(direction))
+        {
+            return;
+        }
+        if (!ModalOverlay.IsVisible && !MovieDetails.IsVisible)
         {
             if (Shell.LibraryView.IsEffectivelyVisible && Shell.LibraryView.IsKeyboardFocusWithin
                 && Shell.LibraryView.TryMove(direction))
@@ -611,6 +636,10 @@ public partial class MainWindow : Window
         if (ModalOverlay.IsVisible)
         {
             DismissModal();
+        }
+        else if (MovieDetails.IsVisible)
+        {
+            CloseMovieDetails();
         }
         else if (_viewModel?.ShowDesignGalleryCommand.IsRunning is true)
         {
@@ -721,6 +750,7 @@ public partial class MainWindow : Window
         FooterActions.HorizontalAlignment = compact
             ? Avalonia.Layout.HorizontalAlignment.Stretch
             : Avalonia.Layout.HorizontalAlignment.Right;
+        ResizeCredits();
     }
 
     private void UpdateGalleryFooter()
@@ -798,6 +828,7 @@ public partial class MainWindow : Window
         ModalActions.Children.Clear();
         ModalOverlay.IsVisible = true;
         MainSurface.IsEnabled = false;
+        MovieDetails.IsEnabled = false;
     }
 
     private void BeginFullScreenModal(string title)
@@ -832,6 +863,7 @@ public partial class MainWindow : Window
 
     private void ClearModal()
     {
+        _creditsView = null;
         _diagnosticsOpen = false;
         ModalDialog.MaxWidth = 1200;
         ModalDialog.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
@@ -845,6 +877,9 @@ public partial class MainWindow : Window
         ModalOverlay.IsVisible = false;
         ModalActions.Children.Clear();
         MainSurface.IsEnabled = true;
+        MovieDetails.IsEnabled = true;
+        if (MovieDetails.IsVisible) MainSurface.IsEnabled = false;
+        ModalActions.IsEnabled = true;
         _navigation.Forget("modal");
     }
 
@@ -853,7 +888,9 @@ public partial class MainWindow : Window
         var returnFocus = _modalReturnFocus;
         _modalReturnFocus = null;
         ClearModal();
-        _navigation.SetScope(MainSurface, key: _screen ?? "server");
+        _navigation.SetScope(MovieDetails.IsVisible ? MovieDetails : ActiveSurface,
+            MovieDetails.IsVisible ? MovieDetails.BackAction : null,
+            MovieDetails.IsVisible ? "movie-details" : _screen ?? "server");
         if (returnFocus is not null)
         {
             _navigation.Focus(returnFocus);

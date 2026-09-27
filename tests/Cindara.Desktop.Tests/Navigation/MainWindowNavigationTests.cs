@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -28,6 +29,408 @@ namespace Cindara.Desktop.Tests.Navigation;
 public sealed class MainWindowNavigationTests
 {
     private static readonly string[] Destinations = ["Libraries", "Search", "Downloads"];
+    private static readonly string[] MovieSummaryIds = ["MovieVideoSummary", "MovieAudioSummary", "MovieSubtitleSummary"];
+
+    [Theory]
+    [InlineData(1280, 720)]
+    [InlineData(1920, 1080)]
+    [InlineData(3440, 1440)]
+    public Task FreshHomeRowsStartAtTheirFirstPoster(int width, int height) => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.Preview.HomeItemsPerRail = 20;
+        fixture.Preview.LayoutLibraries = true;
+        var focusTrace = new List<string>();
+        fixture.Window.AddHandler(InputElement.GotFocusEvent, (_, args) =>
+        {
+            if (args.Source is Button button)
+                focusTrace.Add(button.DataContext is MediaPreviewCardViewModel item ? item.Id : button.Name ?? "button");
+        });
+        fixture.Preview.HomeGate = new TaskCompletionSource();
+        fixture.SignIn(waitForHome: false);
+        Assert.Equal("CancelLoadingButton", Focused(fixture.Window).Name);
+        fixture.Preview.HomeGate.SetResult();
+        fixture.Flush();
+        Assert.True(fixture.Model.IsDesignGalleryVisible);
+        Assert.DoesNotContain(focusTrace, id => id.StartsWith("tv", StringComparison.Ordinal));
+        var rows = fixture.Gallery.GetVisualDescendants().OfType<ItemsControl>()
+            .Where(control => control.Classes.Contains("media-row")).ToArray();
+        Assert.True(rows.Length > 1);
+        foreach (var row in rows)
+        {
+            var scroll = row.GetVisualAncestors().OfType<ScrollViewer>().First();
+            Assert.True(scroll.Offset.X == 0, $"Offset {scroll.Offset.X}; focus: {string.Join(" -> ", focusTrace)}");
+            var first = row.GetVisualDescendants().OfType<Button>().First();
+            Assert.InRange(first.TranslatePoint(default, scroll)!.Value.X, 0, 1);
+        }
+        fixture.Flush();
+        foreach (var row in rows)
+            Assert.Equal(0, row.GetVisualAncestors().OfType<ScrollViewer>().First().Offset.X);
+    });
+
+    [Fact]
+    public Task CastOutlineFollowsControllerInsteadOfStationaryPointerAndArtworkIsRounded() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = 1280;
+        fixture.Window.Height = 720;
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.PopulatedMovie = true;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
+        await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        var view = fixture.Window.FindControl<MovieDetailsView>("MovieDetails")!;
+        var cards = view.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("cast-card")).ToArray();
+        using var solid = new RenderTargetBitmap(new PixelSize(64, 64));
+        using (var drawing = solid.CreateDrawingContext())
+            drawing.FillRectangle(Avalonia.Media.Brushes.Magenta, new Rect(0, 0, 64, 64));
+        using var stream = new MemoryStream();
+        solid.Save(stream, PngBitmapEncoderOptions.Default);
+        fixture.Model.MovieDetails!.Cast[0].SetImage(PreviewImage.Decode(stream.ToArray()));
+        fixture.Model.MovieDetails.Cast[3].SetImage(PreviewImage.Decode(stream.ToArray()));
+        var pointer = cards[0].TranslatePoint(new Point(cards[0].Bounds.Width / 2, cards[0].Bounds.Height / 2),
+            fixture.Window)!.Value;
+        fixture.Window.MouseMove(pointer);
+        view.FindControl<Button>("SynopsisButton")!.Focus();
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        fixture.Flush();
+        Assert.True(cards[0].IsPointerOver);
+        Assert.Same(cards[1], Focused(fixture.Window));
+        Assert.Equal(default, cards[0].GetVisualDescendants().OfType<ContentPresenter>().First().BorderThickness);
+        Assert.Equal(new Thickness(4), cards[1].GetVisualDescendants().OfType<ContentPresenter>().First().BorderThickness);
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        fixture.Flush();
+        Assert.Same(cards[2], Focused(fixture.Window));
+        Assert.Single(cards, card => card.GetVisualDescendants().OfType<ContentPresenter>().First().BorderThickness.Left > 0);
+        Assert.All(cards, card => Assert.Null(card.FocusAdorner));
+        Assert.Equal(cards[0].Bounds.Size, cards[1].Bounds.Size);
+        var emptyFrame = cards[1].GetVisualDescendants().OfType<Border>()
+            .Single(border => border.Name == "CastArtworkFrame");
+        var placeholder = emptyFrame.GetVisualDescendants().OfType<TextBlock>().Single();
+        var placeholderCenter = placeholder.TranslatePoint(
+            new Point(placeholder.Bounds.Width / 2, placeholder.Bounds.Height / 2), emptyFrame)!.Value;
+        Assert.Equal(Avalonia.Media.TextAlignment.Center, placeholder.TextAlignment);
+        Assert.InRange(Math.Abs(placeholderCenter.X - emptyFrame.Bounds.Width / 2), 0, 1);
+        Assert.InRange(Math.Abs(placeholderCenter.Y - emptyFrame.Bounds.Height / 2), 0, 1);
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        fixture.Flush();
+        Assert.Same(cards[3], Focused(fixture.Window));
+
+        var artworkFrame = cards[0].GetVisualDescendants().OfType<Border>()
+            .Single(border => border.Name == "CastArtworkFrame");
+        Assert.True(artworkFrame.ClipToBounds);
+        Assert.True(artworkFrame.CornerRadius.TopLeft > 0);
+        using var rendered = new RenderTargetBitmap(new PixelSize(1280, 720));
+        rendered.Render(fixture.Window);
+        var origin = artworkFrame.TranslatePoint(default, fixture.Window)!.Value;
+        var corners = new[]
+        {
+            new Point(1, 1), new Point(artworkFrame.Bounds.Width - 2, 1),
+            new Point(1, artworkFrame.Bounds.Height - 2),
+            new Point(artworkFrame.Bounds.Width - 2, artworkFrame.Bounds.Height - 2),
+        };
+        foreach (var corner in corners)
+            Assert.NotEqual(Avalonia.Media.Colors.Magenta, ReadPixel(rendered,
+                new Point(origin.X + corner.X, origin.Y + corner.Y)));
+        Assert.Equal(Avalonia.Media.Colors.Magenta, ReadPixel(rendered,
+            new Point(origin.X + artworkFrame.Bounds.Width / 2, origin.Y + artworkFrame.Bounds.Height / 2)));
+        Capture(fixture.Window, "cast-rounded-single-focus");
+    });
+
+    private static Avalonia.Media.Color ReadPixel(Bitmap bitmap, Point point)
+    {
+        var memory = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
+        try
+        {
+            bitmap.CopyPixels(new PixelRect((int)point.X, (int)point.Y, 1, 1), memory, 4, 4);
+            var pixel = new byte[4];
+            System.Runtime.InteropServices.Marshal.Copy(memory, pixel, 0, 4);
+            return Avalonia.Media.Color.FromArgb(pixel[3], pixel[2], pixel[1], pixel[0]);
+        }
+        finally
+        {
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(memory);
+        }
+    }
+
+    [Theory]
+    [InlineData("en", 720, 480, 1)]
+    [InlineData("en", 1280, 720, 1)]
+    [InlineData("en", 2000, 838, 1)]
+    [InlineData("en", 3840, 2160, 1)]
+    [InlineData("en", 720, 480, 1.5)]
+    [InlineData("en", 1280, 720, 1.5)]
+    [InlineData("qps-plocm", 720, 480, 1)]
+    [InlineData("qps-ploc", 1920, 1080, 1)]
+    public Task MovieOverviewFitsWithoutVerticalScrollingAndExpandsWithoutLosingPosition(
+        string culture, int width, int height, double textScale) => TestAppBuilder.Run(async () =>
+    {
+        using var cultureScope = new CultureScope(culture);
+        using var fixture = new ShellFixture(preferences: new PresentationPreferences(TextScale: textScale));
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = width;
+        fixture.Window.Height = height;
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.PopulatedMovie = true;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
+        await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        var view = fixture.Window.FindControl<MovieDetailsView>("MovieDetails")!;
+        fixture.Flush();
+        Capture(fixture.Window, $"movie-fit-{culture}-{width}-{textScale}");
+        var heading = view.FindControl<Grid>("MovieHeading")!;
+        var cast = view.FindControl<Grid>("CastSection")!;
+        var headingBottom = heading.TranslatePoint(new(0, heading.Bounds.Height), view)!.Value.Y;
+        Assert.True(headingBottom <= cast.TranslatePoint(default, view)!.Value.Y);
+        var poster = view.FindControl<Border>("MoviePoster")!;
+        if (poster.IsEffectivelyVisible)
+            Assert.Equal(1.5, poster.Bounds.Height / poster.Bounds.Width, precision: 2);
+        var summary = view.FindControl<Grid>("MediaSummary")!;
+        var playbackNotice = view.FindControl<TextBlock>("PlaybackNotice")!;
+        if (playbackNotice.IsEffectivelyVisible)
+            Assert.True(summary.TranslatePoint(new(0, summary.Bounds.Height), view)!.Value.Y
+                <= playbackNotice.TranslatePoint(default, view)!.Value.Y);
+        var copy = view.FindControl<Grid>("MovieInformation")!;
+        var actions = view.FindControl<Grid>("MovieActions")!;
+        if (Grid.GetRow(actions) > 0)
+            Assert.True(copy.TranslatePoint(new(0, copy.Bounds.Height), view)!.Value.Y
+                <= actions.TranslatePoint(default, view)!.Value.Y);
+        var buttons = view.FindControl<WrapPanel>("MovieButtons")!;
+        Assert.True(actions.TranslatePoint(new(0, actions.Bounds.Height), view)!.Value.Y
+            <= buttons.TranslatePoint(default, view)!.Value.Y);
+        foreach (var control in heading.GetVisualDescendants().OfType<Control>()
+            .Where(control => control.IsEffectivelyVisible && (control is TextBlock or Button)
+                && !control.GetVisualAncestors().Any(parent => parent is Button)))
+        {
+            AssertInsideWindow(fixture.Window, control);
+            var bottom = control.TranslatePoint(new(0, control.Bounds.Height), view)!.Value.Y;
+            Assert.True(bottom <= headingBottom + 1, $"Overview overlap: {control.Name} ({bottom} > {headingBottom}).");
+            if (control.GetVisualAncestors().Contains(copy))
+                Assert.True(bottom <= copy.TranslatePoint(new(0, copy.Bounds.Height), view)!.Value.Y + 1,
+                    $"Movie information overlaps actions: {control.Name}.");
+        }
+        var scroll = Assert.Single(view.GetVisualDescendants().OfType<ScrollViewer>());
+        Assert.Equal(ScrollBarVisibility.Disabled, scroll.VerticalScrollBarVisibility);
+        Assert.InRange(scroll.Extent.Height, 0, scroll.Viewport.Height + 1);
+        Assert.Equal(0, scroll.Offset.Y);
+        Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(),
+            button => button.IsEffectivelyVisible && AutomationProperties.GetAutomationId(button) is "MovieRefresh" or "MovieRetry");
+        var synopsis = view.FindControl<Button>("SynopsisButton")!;
+        synopsis.Focus();
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal("Actor 0", Assert.IsType<MovieCreditViewModel>(Focused(fixture.Window).DataContext).Name);
+        var forward = culture == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight;
+        for (var index = 0; index < 20; index++) fixture.Input.Press(forward);
+        fixture.Flush();
+        var castCard = Assert.IsType<Button>(Focused(fixture.Window));
+        Assert.Equal("Actor 20", Assert.IsType<MovieCreditViewModel>(castCard.DataContext).Name);
+        AssertInsideWindow(fixture.Window, castCard);
+        Assert.True(scroll.Offset.X > 0);
+        var castOffset = scroll.Offset;
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(synopsis, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Same(castCard, Focused(fixture.Window));
+        Assert.Equal(castOffset, scroll.Offset);
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        var selectedCredits = Assert.Single(fixture.Modal.GetVisualDescendants().OfType<MovieCreditsView>());
+        Assert.Contains(selectedCredits.GetVisualDescendants().OfType<Border>(),
+            border => border.DataContext is MovieCreditEntry { IsSelected: true, Credit.Name: "Actor 20" });
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(castCard, Focused(fixture.Window));
+        Assert.Equal(castOffset, scroll.Offset);
+        fixture.Click(synopsis);
+        Assert.True(fixture.IsModalVisible);
+        Assert.Equal(Loc.Get("Action.Back"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
+        Assert.Contains(fixture.Modal.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == fixture.Model.MovieDetails!.Overview);
+        fixture.ClickContent(Loc.Get("Details.ReadBelow"));
+        var synopsisScroll = fixture.Modal.GetVisualDescendants().OfType<ScrollViewer>().Single();
+        if (synopsisScroll.Extent.Height > synopsisScroll.Viewport.Height + 1)
+            Assert.True(synopsisScroll.Offset.Y > 0);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Same(synopsis, Focused(fixture.Window));
+        Assert.Equal(castOffset, scroll.Offset);
+        fixture.Click(view.FindControl<Button>("CreditsButton")!);
+        var credits = Assert.Single(fixture.Modal.GetVisualDescendants().OfType<MovieCreditsView>());
+        Assert.InRange(credits.Columns, width >= 1280 ? 2 : 1, 20);
+        AssertInsideWindow(fixture.Window, credits.BackAction);
+        AssertInsideWindow(fixture.Window, credits.FindControl<Button>("NextCredits")!);
+        Capture(fixture.Window, $"movie-credits-{culture}-{width}-{textScale}");
+        Assert.Contains(fixture.Modal.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text!.Contains("Actor 39", StringComparison.Ordinal));
+        fixture.Key(Key.PageDown);
+        var creditScroll = credits.FindControl<ScrollViewer>("CreditsScroll")!;
+        if (creditScroll.Extent.Height > creditScroll.Viewport.Height + 1)
+            Assert.True(creditScroll.Offset.Y > 0);
+        else
+            Assert.False(credits.FindControl<Button>("NextCredits")!.IsEnabled);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.Equal(castOffset, scroll.Offset);
+        Assert.Equal(0, fixture.Preview.StateWrites);
+    });
+
+    [Theory]
+    [InlineData("en", 720, 480)]
+    [InlineData("en", 1280, 720)]
+    [InlineData("qps-plocm", 1920, 1080)]
+    public Task MovieActionsUpdateIndicatorsWithoutConfirmationOrSuccessBanners(string culture, int width, int height) =>
+        TestAppBuilder.Run(async () =>
+        {
+            using var cultureScope = new CultureScope(culture);
+            using var fixture = new ShellFixture();
+            fixture.Window.WindowState = WindowState.Normal;
+            fixture.Window.Width = width;
+            fixture.Window.Height = height;
+            fixture.Preview.WithLibraries = true;
+            fixture.SignIn();
+            fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+                .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
+            await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+            fixture.Flush();
+            var card = Focused(fixture.Window);
+            var page = fixture.Model.LibraryBrowser.Items;
+            fixture.Input.Press(ControllerAction.Accept);
+            fixture.Flush();
+            var view = fixture.Window.FindControl<MovieDetailsView>("MovieDetails")!;
+            Assert.True(view.IsVisible);
+            Assert.False(fixture.Window.FindControl<Grid>("MainSurface")!.IsEffectivelyEnabled);
+            Assert.Equal("DetailsBack", Focused(fixture.Window).Name);
+            var model = fixture.Model.MovieDetails!;
+            Assert.Equal(0, fixture.Preview.StateWrites);
+            var favorite = view.FindControl<Button>("FavoriteButton")!;
+            var heading = view.FindControl<Grid>("MovieActions")!;
+            foreach (var id in MovieSummaryIds)
+            {
+                var summary = view.GetVisualDescendants().OfType<TextBlock>()
+                    .Single(text => AutomationProperties.GetAutomationId(text) == id);
+                Assert.Contains(heading, summary.GetVisualAncestors());
+                Assert.InRange(summary.MaxLines, 1, 2);
+                Assert.True(summary.TranslatePoint(default, heading)!.Value.Y
+                    < favorite.TranslatePoint(default, heading)!.Value.Y);
+            }
+            favorite.BringIntoView();
+            fixture.Flush();
+            AssertInsideWindow(fixture.Window, favorite);
+            fixture.Click(favorite);
+            await model.ToggleFavoriteCommand.ExecutionTask!;
+            fixture.Flush();
+            Assert.Equal(Loc.Get("Details.RemoveFavorite"), favorite.Content);
+            var watched = view.FindControl<Button>("WatchedButton")!;
+            var unwatchedIndicator = view.FindControl<Avalonia.Controls.Shapes.Ellipse>("UnwatchedActionIndicator")!;
+            var watchedIndicator = view.FindControl<Avalonia.Controls.Shapes.Path>("WatchedActionIndicator")!;
+            Assert.True(unwatchedIndicator.IsEffectivelyVisible);
+            Assert.False(watchedIndicator.IsEffectivelyVisible);
+            fixture.Click(watched);
+            await model.ToggleWatchedCommand.ExecutionTask!;
+            fixture.Flush();
+            Assert.False(fixture.IsModalVisible);
+            Assert.True(view.IsEffectivelyEnabled);
+            Assert.True(model.Details!.UserState.IsPlayed);
+            Assert.Equal(2, fixture.Preview.StateWrites);
+            Assert.True(watchedIndicator.IsEffectivelyVisible);
+            Assert.False(unwatchedIndicator.IsEffectivelyVisible);
+            Assert.Equal(Loc.Get("Details.Watched"), AutomationProperties.GetItemStatus(watched));
+            Assert.Equal(Loc.Get("Details.MarkUnwatched"), AutomationProperties.GetName(watched));
+            Assert.False(model.HasMessage);
+            Assert.Same(watched, Focused(fixture.Window));
+            fixture.Click(watched);
+            await model.ToggleWatchedCommand.ExecutionTask!;
+            fixture.Flush();
+            Assert.False(fixture.IsModalVisible);
+            Assert.True(unwatchedIndicator.IsEffectivelyVisible);
+            Assert.False(watchedIndicator.IsEffectivelyVisible);
+            Assert.False(model.HasMessage);
+            Assert.Equal(3, fixture.Preview.StateWrites);
+            Assert.Null(view.FindControl<ScrollViewer>("DetailsScroll"));
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "MovieRefresh");
+            fixture.Input.Press(ControllerAction.Back);
+            Assert.False(view.IsVisible);
+            Assert.Same(card, Focused(fixture.Window));
+            Assert.Same(page, fixture.Model.LibraryBrowser.Items);
+            Assert.Equal(1, fixture.Preview.LibraryCalls);
+        });
+
+    [Fact]
+    public Task MovieSearchBackRestoresTheExactQueryCardAndScroll() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == Loc.Get("Nav.Search")));
+        var search = fixture.Model.SearchBrowser!;
+        search.Query = "movie";
+        await search.LoadPageCommand.ExecuteAsync(0);
+        fixture.Flush();
+        var searchView = fixture.Shell.SearchView;
+        var card = searchView.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaPreviewCardViewModel { Id: "search-20" });
+        card.Focus();
+        card.BringIntoView();
+        fixture.Flush();
+        var scroll = searchView.FindControl<ScrollViewer>("SearchScroll")!;
+        var offset = scroll.Offset;
+        var items = search.Items;
+        fixture.Click(card);
+        Assert.True(fixture.Model.MovieDetails!.HasDetails);
+        fixture.Input.Press(ControllerAction.Back);
+        fixture.Flush();
+        Assert.Same(card, Focused(fixture.Window));
+        Assert.Equal(offset, scroll.Offset);
+        Assert.Same(items, search.Items);
+        Assert.Equal("movie", search.Query);
+        Assert.Equal(0, fixture.Preview.StateWrites);
+    });
+
+    [Fact]
+    public Task MoviePermissionFailureKeepsSessionAndOffersVisibleRefresh() => TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Preview.WithLibraries = true;
+        fixture.Preview.DetailError = MediaPreviewError.Forbidden;
+        fixture.SignIn();
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.DataContext is MediaLibrary { Id: "movies" }));
+        await fixture.Model.LibraryBrowser!.OpenLibraryCommand.ExecutionTask!;
+        fixture.Flush();
+        fixture.Input.Press(ControllerAction.Accept);
+        fixture.Flush();
+        Assert.True(fixture.Model.IsAuthenticatedVisible);
+        Assert.False(fixture.Model.MovieDetails!.HasDetails);
+        var view = fixture.Window.FindControl<MovieDetailsView>("MovieDetails")!;
+        Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.IsEffectivelyVisible && text.Text == Loc.Get("Error.Preview.Forbidden"));
+        var retry = view.GetVisualDescendants().OfType<Button>()
+            .Single(button => AutomationProperties.GetAutomationId(button) == "MovieRetry");
+        Assert.True(retry.IsEffectivelyVisible);
+        fixture.Preview.DetailError = null;
+        fixture.Click(retry);
+        await fixture.Model.MovieDetails.RefreshCommand.ExecutionTask!;
+        fixture.Flush();
+        Assert.True(fixture.Model.MovieDetails.HasDetails);
+        Assert.False(retry.IsEffectivelyVisible);
+        fixture.Model.BackToSessionsCommand.Execute(null);
+        fixture.Flush();
+        Assert.False(view.IsVisible);
+        Assert.Null(fixture.Model.MovieDetails);
+        Assert.True(fixture.Window.FindControl<Grid>("MainSurface")!.IsEffectivelyEnabled);
+    });
 
     [Fact]
     public Task NullNextUpResponseKeepsSignInAndRecoversThroughHomeRetry() => TestAppBuilder.Run(async () =>
@@ -438,7 +841,7 @@ public sealed class MainWindowNavigationTests
             Assert.Equal(offset, scroll.Offset);
             fixture.OpenSettings();
             fixture.Click(fixture.Shell.FindControl<Button>("BackHomeButton")!);
-            Assert.Same(cards[^1], Focused(fixture.Window));
+            Assert.Same(fixture.Gallery.FindControl<Button>("GallerySettingsButton"), Focused(fixture.Window));
             Assert.Equal(offset, scroll.Offset);
             fixture.Input.Press(ControllerAction.Back);
             Assert.Equal("SidebarHomeButton", Focused(fixture.Window).Name);
@@ -523,7 +926,7 @@ public sealed class MainWindowNavigationTests
     [InlineData("en", 1920)]
     [InlineData("en", 3840)]
     [InlineData("qps-plocm", 1920)]
-    public Task LibrariesIncrementallyLoadAndRestoreFocusAndScrollFromSummaryAndHome(string cultureName, int width) =>
+    public Task LibrariesIncrementallyLoadAndRestoreFocusAndScrollFromDetailsAndHome(string cultureName, int width) =>
         TestAppBuilder.Run(async () =>
         {
             using var culture = new CultureScope(cultureName);
@@ -562,7 +965,8 @@ public sealed class MainWindowNavigationTests
             Assert.True(offset.Y > 0);
             fixture.Input.Press(ControllerAction.Accept);
             fixture.Flush();
-            Assert.True(fixture.IsModalVisible);
+            Assert.True(fixture.Window.FindControl<MovieDetailsView>("MovieDetails")!.IsVisible);
+            Assert.False(fixture.IsModalVisible);
             Assert.Equal(Loc.Get("Action.Back"), Assert.IsType<Button>(Focused(fixture.Window)).Content);
             fixture.Input.Press(ControllerAction.Back);
             fixture.Flush();
@@ -2047,6 +2451,39 @@ public sealed class MainWindowNavigationTests
 
     private sealed class PreviewClient : IJellyfinMediaPreviewClient
     {
+        public MediaPreviewError? DetailError { get; set; }
+        public bool PopulatedMovie { get; set; }
+        public int StateWrites { get; private set; }
+        private MediaUserState _userState = new(false, false, 0, 0);
+        public Task<MediaItemDetails> GetItemDetailsAsync(AuthenticatedSession session, string itemId,
+            CancellationToken cancellationToken = default) => DetailError is { } error
+            ? Task.FromException<MediaItemDetails>(new MediaPreviewException(error, "details"))
+            : Task.FromResult(new MediaItemDetails(
+                itemId, PopulatedMovie ? "A movie with a rather long title for a compact viewport" : "Movie details",
+                "Movie", null, null, null, null, null, 2026, null,
+                TimeSpan.FromMinutes(65).Ticks, "PG", ["Drama", "Science Fiction"], [new("Community", 8.2)],
+                PopulatedMovie ? string.Concat(Enumerable.Repeat("A full movie synopsis that stays readable. ", 100)) : "A synopsis.",
+                PopulatedMovie ? Enumerable.Range(0, 40)
+                    .Select(index => new MediaCredit($"actor-{index}", $"Actor {index}", $"Role {index}", "Actor", null)).ToArray() : [],
+                [new("Video", "av1", "4K AV1 SDR", null, 3840, 2160, null, true, false),
+                 new("Audio", "eac3", "English - Dolby Digital Plus + Dolby Atmos - 5.1 - Default", "eng", null, null, 6, true, false),
+                 new("Subtitle", "srt", "English - Default - SUBRIP", "eng", null, null, null, true, false)],
+                _userState, false, false));
+        public Task<MediaUserState> SetFavoriteAsync(AuthenticatedSession session, string itemId, bool isFavorite,
+            CancellationToken cancellationToken = default)
+        {
+            StateWrites++;
+            _userState = _userState with { IsFavorite = isFavorite };
+            return Task.FromResult(_userState);
+        }
+        public Task<MediaUserState> SetPlayedAsync(AuthenticatedSession session, string itemId, bool isPlayed,
+            CancellationToken cancellationToken = default)
+        {
+            StateWrites++;
+            _userState = _userState with { IsPlayed = isPlayed, PlaybackPositionTicks = 0 };
+            return Task.FromResult(_userState);
+        }
+
         public Task<byte[]?> GetLibraryArtworkAsync(AuthenticatedSession session, string itemId,
             CancellationToken cancellationToken = default) => ArtworkGate.Task.WaitAsync(cancellationToken);
         public TaskCompletionSource<byte[]?> ArtworkGate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2055,6 +2492,7 @@ public sealed class MainWindowNavigationTests
         public int LibraryCalls { get; private set; }
         public bool WithLibraries { get; set; }
         public bool LayoutLibraries { get; set; }
+        public int HomeItemsPerRail { get; set; } = 1;
         public bool PauseLibrary { get; set; }
         public int LibraryTotal { get; set; } = 47;
         public bool LongLibraryTitles { get; set; }
@@ -2104,11 +2542,14 @@ public sealed class MainWindowNavigationTests
         public bool Pause { get; set; }
         public bool Empty { get; set; }
         public bool LongDescription { get; set; }
+        public TaskCompletionSource? HomeGate { get; set; }
         public MediaPreviewError? Error { get; set; }
 
         public async Task<MediaPreviewHome> GetHomeAsync(AuthenticatedSession session, CancellationToken cancellationToken = default)
         {
             Calls++;
+            if (HomeGate is { } gate)
+                await gate.Task.WaitAsync(cancellationToken);
             if (Pause)
             {
                 var pending = new TaskCompletionSource<MediaPreviewHome>();
@@ -2139,7 +2580,8 @@ public sealed class MainWindowNavigationTests
                 ];
                 return new MediaPreviewHome(item, [item],
                     libraries.Select(library => new MediaPreviewRail(library.Id, library.Name,
-                        [item with { Id = library.Id, Name = library.Name }], library.Name)).ToArray())
+                        Enumerable.Range(0, HomeItemsPerRail).Select(index =>
+                            item with { Id = index == 0 ? library.Id : $"{library.Id}-{index}", Name = library.Name }).ToArray(), library.Name)).ToArray())
                 {
                     Libraries = libraries,
                 };

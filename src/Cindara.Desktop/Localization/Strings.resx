@@ -88,4 +88,54 @@ Controller backend: {8} ({6}, {7} connected)</value></data>
   <data name="Format.RecentlyAdded" xml:space="preserve"><value>Recently Added in {0}</value></data>
   <data name="Format.Rating" xml:space="preserve"><value>{0:0.0} / {1:0}</value></data>
   <data name="Format.MediaSource" xml:space="preserve"><value>Jellyfin</value></data>
+  <data name="Error.Preview.Forbidden" xml:space="preserve"><value>This account does not have permission for this media or action. Your sign-in has been kept.</value></data>
+  <data name="Error.Preview.NotFound" xml:space="preserve"><value>This media is no longer available on Jellyfin. Go back or refresh to try again.</value></data>
+  <data name="Details.Movie" xml:space="preserve"><value>Movie details</value></data>
+  <data name="Details.Loading" xml:space="preserve"><value>Loading movie details...</value></data>
+  <data name="Details.NoSynopsis" xml:space="preserve"><value>No synopsis provided.</value></data>
+  <data name="Details.NotProvided" xml:space="preserve"><value>Not provided by Jellyfin.</value></data>
+  <data name="Details.NoRatings" xml:space="preserve"><value>No ratings provided.</value></data>
+  <data name="Details.CommunityRating" xml:space="preserve"><value>Community: {0}/10</value></data>
+  <data name="Details.CriticRating" xml:space="preserve"><value>Critics: {0}%</value></data>
+  <data name="Details.CreditRole" xml:space="preserve"><value>{0} ({1})</value></data>
+  <data name="Details.Resolution" xml:space="preserve"><value>{0} x {1}</value></data>
+  <data name="Details.Channels" xml:space="preserve"><value>{0} channels</value></data>
+  <data name="Details.AvailableMedia" xml:space="preserve"><value>Available media</value></data>
+  <data name="Details.SelectionUnavailable" xml:space="preserve"><value>Track settings not available yet.</value></data>
+  <data name="Details.TrackCount" xml:space="preserve"><value>{0} tracks available</value></data>
+  <data name="Details.MoreTracks" xml:space="preserve"><value>{0} (+{1} more)</value></data>
+  <data name="Details.TrailersAvailable" xml:space="preserve"><value>Trailer metadata available. Trailer playback is not available in Cindara yet.</value></data>
+  <data name="Details.NoTrailers" xml:space="preserve"><value>No trailer availability reported by Jellyfin.</value></data>
+  <data name="Details.AddFavorite" xml:space="preserve"><value>Add favorite</value></data>
+  <data name="Details.RemoveFavorite" xml:space="preserve"><value>Remove favorite</value></data>
+  <data name="Details.MarkUnwatched" xml:space="preserve"><value>Mark unwatched</value></data>
+  <data name="Details.MarkWatched" xml:space="preserve"><value>Mark watched</value></data>
+  <data name="Details.Watched" xml:space="preserve"><value>Watched</value></data>
+  <data name="Details.Unwatched" xml:space="preserve"><value>Unwatched</value></data>
+  <data name="Details.StateUnknown" xml:space="preserve"><value>Favorite, watched, and resume state could not be verified. Retry loading details before making changes.</value></data>
+  <data name="Details.ResumeState" xml:space="preserve"><value>Resume position: {0}</value></data>
+  <data name="Details.PlayState" xml:space="preserve"><value>No saved resume position.</value></data>
+  <data name="Details.PlaybackUnavailable" xml:space="preserve"><value>Playback is not available in Cindara yet.</value></data>
+  <data name="Details.PlaybackSettingsUnavailable" xml:space="preserve"><value>Playback and track settings are not available yet.</value></data>
+  <data name="Details.SaveUncertain" xml:space="preserve"><value>{0} The change could not be confirmed and may have reached Jellyfin. Retry loading details before trying another change.</value></data>
+  <data name="Details.ArtworkUnavailable" xml:space="preserve"><value>Some artwork could not be loaded. Details remain available. Reopen this movie to try loading artwork again.</value></data>
+  <data name="Details.Director" xml:space="preserve"><value>Director</value></data>
+  <data name="Details.Synopsis" xml:space="preserve"><value>Synopsis</value></data>
+  <data name="Details.Cast" xml:space="preserve"><value>Cast</value></data>
+  <data name="Details.NoCast" xml:space="preserve"><value>No cast information provided.</value></data>
+  <data name="Details.NoPhoto" xml:space="preserve"><value>No photo</value></data>
+  <data name="Details.Credits" xml:space="preserve"><value>Credits</value></data>
+  <data name="Details.Video" xml:space="preserve"><value>Video quality</value></data>
+  <data name="Details.Audio" xml:space="preserve"><value>Audio</value></data>
+  <data name="Details.Subtitles" xml:space="preserve"><value>Subtitles</value></data>
+  <data name="Details.Trailers" xml:space="preserve"><value>Trailers</value></data>
+  <data name="Details.Retry" xml:space="preserve"><value>Retry</value></data>
+  <data name="Details.MoreInformation" xml:space="preserve"><value>Full details</value></data>
+  <data name="Details.DirectorSummary" xml:space="preserve"><value>Director: {0}</value></data>
+  <data name="Details.NoCredits" xml:space="preserve"><value>No credits provided.</value></data>
+  <data name="Details.CreditCount" xml:space="preserve"><value>{0} credits</value></data>
+  <data name="Details.PreviousCredits" xml:space="preserve"><value>Previous credits</value></data>
+  <data name="Details.NextCredits" xml:space="preserve"><value>More credits</value></data>
+  <data name="Details.ReadAbove" xml:space="preserve"><value>Read above</value></data>
+  <data name="Details.ReadBelow" xml:space="preserve"><value>Read below</value></data>
 </root>

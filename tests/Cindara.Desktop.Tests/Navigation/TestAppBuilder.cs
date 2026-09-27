@@ -16,5 +16,5 @@ public static class TestAppBuilder
         .Dispatch(test, CancellationToken.None);
 
     public static Task Run(Func<Task> test) => HeadlessUnitTestSession.GetOrStartForAssembly(typeof(TestAppBuilder).Assembly)
-        .Dispatch(test, CancellationToken.None);
+        .Dispatch(test, CancellationToken.None).Unwrap();
 }

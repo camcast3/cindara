@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:Cindara.Desktop.Views"
+             xmlns:vm="using:Cindara.Desktop.ViewModels"
+             xmlns:loc="using:Cindara.Desktop.Localization"
+             x:Class="Cindara.Desktop.Views.MovieCreditsView"
+             x:DataType="vm:MovieDetailsViewModel">
+    <UserControl.Styles>
+        <Style Selector="Border.credit-entry">
+            <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Surface}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Small}" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="8" />
+        </Style>
+        <Style Selector="Border.credit-entry.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cindara.Brush.Accent}" />
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="20">
+            <Button x:Name="CreditsBack" Content="{loc:Tr Action.Back}" Click="OnBack"
+                    AutomationProperties.AutomationId="CreditsBack" />
+            <TextBlock Grid.Column="1" Text="{Binding Title}" Classes="heading"
+                       VerticalAlignment="Center" MaxLines="2" TextTrimming="CharacterEllipsis" />
+        </Grid>
+        <ScrollViewer x:Name="CreditsScroll" Grid.Row="1"
+                      HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <Grid>
+                <TextBlock x:Name="EmptyCredits" Text="{loc:Tr Details.NoCredits}" IsVisible="False" />
+                <ItemsControl x:Name="CreditEntries">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><UniformGrid x:Name="CreditGrid" Columns="3" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="views:MovieCreditEntry">
+                            <Border Classes="credit-entry" Classes.selected="{Binding IsSelected}">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                    <Border IsVisible="{Binding Credit.HasImage}" ClipToBounds="True"
+                                            Width="{DynamicResource Cindara.Credits.ImageWidth}"
+                                            Height="{DynamicResource Cindara.Credits.ImageHeight}"
+                                            VerticalAlignment="Top"
+                                            CornerRadius="{DynamicResource Cindara.Radius.Small}">
+                                        <Image Source="{Binding Credit.Image}" Stretch="UniformToFill" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Credit.Kind}" Classes="caption" />
+                                        <TextBlock Text="{Binding Credit.Name}" Classes="label" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Credit.Role}" Classes="secondary" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </ScrollViewer>
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+            <TextBlock x:Name="CreditsCount" Classes="caption" VerticalAlignment="Center" />
+            <Button x:Name="PreviousCredits" Grid.Column="1" Content="{loc:Tr Details.PreviousCredits}"
+                    Click="OnPrevious" AutomationProperties.AutomationId="CreditsPrevious" />
+            <Button x:Name="NextCredits" Grid.Column="2" Content="{loc:Tr Details.NextCredits}"
+                    Click="OnNext" AutomationProperties.AutomationId="CreditsNext" />
+        </Grid>
+    </Grid>
+</UserControl>

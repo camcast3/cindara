@@ -8,4 +8,6 @@ public enum MediaPreviewError
     InvalidResponse,
     UnexpectedStatus,
     InsecureConnection,
+    Forbidden,
+    NotFound,
 }

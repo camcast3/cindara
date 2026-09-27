@@ -350,6 +350,18 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         return await GetArtworkAsync(load, itemId, landscape: false).ConfigureAwait(false);
     }
 
+    public async Task<byte[]?> GetDetailBackdropAsync(
+        AuthenticatedSession session,
+        string itemId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSession(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var load = new PreviewLoad(session, cancellation, GetImageCache(session));
+        return await GetBackdropAsync(load, itemId).ConfigureAwait(false);
+    }
+
     private static void ValidateSession(AuthenticatedSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -639,9 +651,9 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         {
             var item = await GetAsync<JellyfinItem>(
                 load,
-                $"Users/{Uri.EscapeDataString(session.UserId)}/Items/{Uri.EscapeDataString(itemId)}?Fields={ItemFields}",
+                $"Users/{Uri.EscapeDataString(session.UserId)}/Items/{Uri.EscapeDataString(itemId)}?Fields={ItemFields},RemoteTrailers",
                 "item details").ConfigureAwait(false);
-            if (!IsValidDetailItem(item))
+            if (!IsValidDetailItem(item) || !string.Equals(item!.Id, itemId, StringComparison.Ordinal))
             {
                 throw InvalidResponse(new JsonException("Invalid item details."));
             }
@@ -722,7 +734,7 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                     throw InvalidResponse(exception);
                 }
             }).ConfigureAwait(false);
-            if (state is null)
+            if (state?.IsFavorite is null || state.Played is null)
             {
                 throw InvalidResponse(new JsonException($"Missing {operation}."));
             }
@@ -875,8 +887,14 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
             throw new MediaPreviewException(
-                MediaPreviewError.AccessDenied,
+                MediaPreviewError.Forbidden,
                 $"This Jellyfin account cannot access {operation} (HTTP 403).");
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw new MediaPreviewException(MediaPreviewError.NotFound,
+                $"Jellyfin could not find {operation} (HTTP 404).");
         }
 
         if (!response.IsSuccessStatusCode)
@@ -946,9 +964,8 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             ratings.Add(new("Critic", critic));
         }
 
-        var streams = item.MediaSources?.SelectMany(source => source.MediaStreams ?? [])
+        var streams = (item.MediaSources ?? []).SelectMany(source => source.MediaStreams ?? [])
             .Concat(item.MediaStreams ?? [])
-            .DistinctBy(stream => (stream.Type, stream.Index))
             .Select(stream => new MediaTrackInfo(
                 stream.Type ?? "Unknown",
                 stream.Codec,
@@ -959,7 +976,8 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
                 stream.Channels,
                 stream.IsDefault ?? false,
                 stream.IsExternal ?? false))
-            .ToArray() ?? [];
+            .Distinct()
+            .ToArray();
         return new MediaItemDetails(
             item.Id!,
             item.Name!,
@@ -980,7 +998,10 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
             streams,
             CreateUserState(item.UserData),
             item.ImageTags?.ContainsKey("Primary") is true,
-            item.BackdropImageTags is { Length: > 0 });
+            item.BackdropImageTags is { Length: > 0 },
+            item.LocalTrailerCount,
+            item.RemoteTrailers is { Length: > 0 },
+            item.UserData?.IsFavorite is not null && item.UserData.Played is not null);
     }
 
     private static MediaCredit[] CreateCredits(IReadOnlyList<JellyfinPerson>? people) =>
@@ -1071,7 +1092,11 @@ public sealed class JellyfinMediaPreviewClient : IJellyfinMediaPreviewClient, ID
         JellyfinMediaStream[]? MediaStreams,
         string[]? BackdropImageTags,
         Dictionary<string, string>? ImageTags,
-        JellyfinUserData? UserData);
+        JellyfinUserData? UserData,
+        int? LocalTrailerCount,
+        JellyfinRemoteTrailer[]? RemoteTrailers);
+
+    private sealed record JellyfinRemoteTrailer(string? Url);
 
     private sealed record JellyfinUserData(
         double? PlayedPercentage,
