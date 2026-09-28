@@ -15,14 +15,22 @@
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
         </Style>
+        <Style Selector="Border.sidecar-preview">
+            <Setter Property="Background" Value="{DynamicResource Cindara.Brush.Surface}" />
+            <Setter Property="Padding" Value="24" />
+            <Setter Property="CornerRadius" Value="{DynamicResource Cindara.Radius.Large}" />
+        </Style>
     </UserControl.Styles>
     <Grid Margin="{DynamicResource Cindara.Adaptive.SafeMargin}"
           RowDefinitions="Auto,Auto,*" RowSpacing="10">
-        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
             <Button x:Name="BrowserBack" Content="{loc:Tr Action.Back}" Click="OnBack"
                     AutomationProperties.AutomationId="SeasonBrowserBack" />
             <TextBlock Grid.Column="1" Text="{Binding SeriesTitle}" Classes="heading"
                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Button x:Name="LayoutPreviewButton" Grid.Column="2" Click="OnToggleLayout"
+                    AutomationProperties.AutomationId="SeasonLayoutPreview"
+                    AutomationProperties.HelpText="{loc:Tr Season.PreviewHelp}" />
         </Grid>
         <Grid Grid.Row="1" ColumnDefinitions="*,Auto" IsVisible="{Binding HasMessage}">
             <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
@@ -32,9 +40,10 @@
         </Grid>
         <ScrollViewer x:Name="BrowserScroll" Grid.Row="2"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <StackPanel x:Name="BrowserContent" Spacing="32"
-                      IsVisible="{Binding !IsLoading}"
-                      RequestBringIntoView="OnRowBringIntoViewRequested">
+          <Grid x:Name="BrowserContent" RowDefinitions="Auto,Auto,Auto" RowSpacing="32"
+                IsVisible="{Binding !IsLoading}"
+                RequestBringIntoView="OnRowBringIntoViewRequested">
+            <Border x:Name="SeasonHeroFrame" Grid.Row="0">
             <Grid x:Name="SeasonHero" ColumnDefinitions="Auto,*" ColumnSpacing="32">
                 <Border x:Name="SeasonPoster" Width="180" Height="270"
                         VerticalAlignment="Center"
@@ -93,7 +102,8 @@
                     <TextBlock Text="{loc:Tr Details.PlaybackUnavailable}" Classes="caption" />
                 </StackPanel>
             </Grid>
-        <Grid x:Name="EpisodeSection" RowDefinitions="Auto,*" RowSpacing="8"
+            </Border>
+        <Grid x:Name="EpisodeSection" Grid.Row="1" RowDefinitions="Auto,*" RowSpacing="8"
               Height="{DynamicResource Cindara.Season.EpisodeSectionHeight}">
             <TextBlock Text="{Binding EpisodeCount}" Classes="heading" />
             <ScrollViewer x:Name="EpisodeScroll" Grid.Row="1"
@@ -150,7 +160,7 @@
                 </ItemsControl>
             </ScrollViewer>
         </Grid>
-        <Grid x:Name="CastSection" RowDefinitions="Auto,*" RowSpacing="8"
+        <Grid x:Name="CastSection" Grid.Row="2" RowDefinitions="Auto,*" RowSpacing="8"
               Height="{DynamicResource Cindara.Season.CastHeight}">
             <TextBlock Text="{loc:Tr Season.CastCrew}" Classes="heading" />
             <TextBlock Grid.Row="1" Text="{Binding EpisodeCreditsStatus}"
@@ -187,7 +197,7 @@
                 </ItemsControl>
             </ScrollViewer>
         </Grid>
-          </StackPanel>
+          </Grid>
         </ScrollViewer>
     </Grid>
 </UserControl>

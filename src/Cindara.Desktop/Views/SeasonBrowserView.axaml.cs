@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Cindara.Desktop.DesignSystem;
+using Cindara.Desktop.Localization;
 using Cindara.Desktop.Navigation;
 using Cindara.Desktop.ViewModels;
 
@@ -12,15 +13,18 @@ namespace Cindara.Desktop.Views;
 public partial class SeasonBrowserView : UserControl
 {
     private Control? _focusedRow;
+    private bool _sidecarPreview;
 
     public SeasonBrowserView()
     {
         InitializeComponent();
+        UpdatePreviewLabel();
         SizeChanged += (_, args) => ApplyLayout(args.NewSize);
         BrowserScroll.LayoutUpdated += (_, _) => PinFocusedRow();
     }
 
     public Button BackAction => BrowserBack;
+    public bool IsSidecarPreview => _sidecarPreview;
     public event EventHandler? BackRequested;
     public event EventHandler<EpisodeCardViewModel>? EpisodeRequested;
 
@@ -50,6 +54,22 @@ public partial class SeasonBrowserView : UserControl
             : credits.Contains(focus) ? credits.Cast<Control>().ToArray() : null;
         if (row is null)
         {
+            var towardPreview = FlowDirection == Avalonia.Media.FlowDirection.RightToLeft
+                ? NavigationDirection.Left : NavigationDirection.Right;
+            if (focus == BrowserBack && direction == towardPreview)
+            {
+                LayoutPreviewButton.Focus(NavigationMethod.Directional);
+                return true;
+            }
+            if (focus == LayoutPreviewButton)
+            {
+                if (direction == (towardPreview == NavigationDirection.Right
+                    ? NavigationDirection.Left : NavigationDirection.Right))
+                    BrowserBack.Focus(NavigationMethod.Directional);
+                else if (direction == NavigationDirection.Down)
+                    FocusSelectedEpisode((DataContext as SeasonBrowserViewModel)?.SelectedEpisode?.Episode.Id);
+                return true;
+            }
             if (direction == NavigationDirection.Down && focus == BrowserBack)
             {
                 EpisodeScroll.Offset = default;
@@ -144,12 +164,34 @@ public partial class SeasonBrowserView : UserControl
 
     private void OnBack(object? sender, RoutedEventArgs args) => BackRequested?.Invoke(this, EventArgs.Empty);
 
+    private void OnToggleLayout(object? sender, RoutedEventArgs args)
+    {
+        _sidecarPreview = !_sidecarPreview;
+        _focusedRow = null;
+        BrowserScroll.Offset = default;
+        ApplyLayout(Bounds.Size);
+    }
+
+    private void UpdatePreviewLabel(bool stacked = false) =>
+        LayoutPreviewButton.Content = Loc.Get(!_sidecarPreview ? "Season.PreviewCurrent"
+            : stacked ? "Season.PreviewStacked" : "Season.PreviewSidecar");
+
     private void ApplyLayout(Size size)
     {
         if (size.Width <= 0 || size.Height <= 0) return;
         var density = ResponsiveDensityProfile.Create(size.Width, size.Height);
         var margin = AdaptiveLayoutProfile.Create(size.Width, size.Height).SafeMargin;
         var width = size.Width - 2 * margin;
+        var sidecar = _sidecarPreview && width >= 1120 && size.Height >= 600;
+        UpdatePreviewLabel(_sidecarPreview && !sidecar);
+        BrowserContent.ColumnDefinitions = new ColumnDefinitions(sidecar ? "*,*" : "*");
+        BrowserContent.RowDefinitions = new RowDefinitions(sidecar ? "Auto,Auto" : "Auto,Auto,Auto");
+        Grid.SetColumn(SeasonHeroFrame, sidecar ? 1 : 0);
+        Grid.SetColumn(EpisodeSection, 0);
+        Grid.SetRow(EpisodeSection, sidecar ? 0 : 1);
+        Grid.SetRow(CastSection, sidecar ? 1 : 2);
+        Grid.SetColumnSpan(CastSection, sidecar ? 2 : 1);
+        SeasonHeroFrame.Classes.Set("sidecar-preview", sidecar);
         var cardWidth = Math.Min(348 * Math.Clamp(size.Width / 1600, 1, 1.55),
             Math.Max(160, width - 16));
         Resources["Cindara.Season.EpisodeWidth"] = cardWidth;
@@ -165,7 +207,9 @@ public partial class SeasonBrowserView : UserControl
         SeasonPoster.IsVisible = !compact;
         if (!compact)
         {
-            var posterWidth = Math.Clamp(320 * density.CardScale, 220, 440);
+            var posterWidth = sidecar
+                ? Math.Clamp(width * 0.12, 120, 205)
+                : Math.Clamp(320 * density.CardScale, 220, 440);
             SeasonPoster.Width = posterWidth;
             SeasonPoster.Height = posterWidth * 1.5;
         }

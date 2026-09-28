@@ -26,6 +26,10 @@
   <data name="Season.ProgressUnknown" xml:space="preserve"><value>Watch state not provided</value></data>
   <data name="Season.Progress" xml:space="preserve"><value>{0:N0}% watched</value></data>
   <data name="Season.SelectHelp" xml:space="preserve"><value>Select episode details. Playback is not available.</value></data>
+  <data name="Season.PreviewCurrent" xml:space="preserve"><value>Preview: current layout</value></data>
+  <data name="Season.PreviewSidecar" xml:space="preserve"><value>Preview: sidecar layout</value></data>
+  <data name="Season.PreviewStacked" xml:space="preserve"><value>Preview: sidecar (stacked)</value></data>
+  <data name="Season.PreviewHelp" xml:space="preserve"><value>Temporary layout comparison. Media and playback do not change.</value></data>
   <data name="Season.CastCrew" xml:space="preserve"><value>Cast &amp; crew</value></data>
   <data name="Season.EpisodeCount" xml:space="preserve"><value>{0:N0} episodes</value></data>
   <data name="Season.MoreCredits" xml:space="preserve"><value> (+{0:N0} more below)</value></data>

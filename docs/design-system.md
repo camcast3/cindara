@@ -478,6 +478,11 @@ hero and larger season poster sit above a single Home-sized horizontal strip
 of episode cards and a cast/crew rail with circular portraits and generous row
 spacing. The selected episode's season label, title, metadata, synopsis and
 credits retain a clear reading order without introducing a separate episode page.
+For owner review only, a temporary header switch compares this existing
+top-first layout with a sidecar arrangement in the actual season browser.
+Both arrangements use the same live view model, episode row, focus rules,
+read-only selection and Back route. The switch and unused arrangement must
+be removed after choosing a direction, before this draft PR is accepted.
 The credits follow the focused episode and show an explicit empty state where
 none are available. Up/down enters the first card of the adjacent row and
 resets its horizontal offset; left/right scrolls within it without moving the

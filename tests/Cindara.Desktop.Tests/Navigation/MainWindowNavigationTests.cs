@@ -1614,7 +1614,7 @@ public sealed class MainWindowNavigationTests
             .Single(button => ReferenceEquals(button.DataContext, season));
         fixture.Click(source);
         var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
-        var content = browser.FindControl<StackPanel>("BrowserContent")!;
+        var content = browser.FindControl<Grid>("BrowserContent")!;
         Assert.True(browser.IsVisible);
         Assert.False(content.IsVisible);
         Assert.Equal(Loc.Get("Season.Loading"), fixture.Model.SeasonBrowser!.Message);
@@ -1634,6 +1634,63 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.NavigateUp);
         Assert.Same(browser.BackAction, Focused(fixture.Window));
         Assert.Equal(0, browser.FindControl<ScrollViewer>("BrowserScroll")!.Offset.Y);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.False(browser.IsVisible);
+        Assert.True(fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!.IsVisible);
+    });
+
+    [Fact]
+    public Task SeasonLayoutPreviewUsesSameEpisodeAndControllerNavigation() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = 1280;
+        fixture.Window.Height = 720;
+        fixture.Preview.HomeSeriesEntryType = "Season";
+        fixture.SignIn();
+        var season = fixture.Model.DesignGallery!.RecentlyAddedLibraries.Single().Items[^1];
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => ReferenceEquals(button.DataContext, season)));
+        var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
+        var model = fixture.Model.SeasonBrowser!;
+        var content = browser.FindControl<Grid>("BrowserContent")!;
+        var hero = browser.FindControl<Border>("SeasonHeroFrame")!;
+        var episodes = browser.FindControl<Grid>("EpisodeSection")!;
+        var toggle = browser.FindControl<Button>("LayoutPreviewButton")!;
+        browser.FocusSelectedEpisode("episode-2");
+        fixture.Flush();
+        var selected = model.SelectedEpisode!.Episode.Id;
+        Assert.Equal(1, Grid.GetRow(episodes));
+
+        fixture.Click(toggle);
+        Assert.True(browser.IsSidecarPreview);
+        Assert.Same(model, fixture.Model.SeasonBrowser);
+        Assert.Equal(selected, model.SelectedEpisode!.Episode.Id);
+        Assert.Equal(0, Grid.GetRow(episodes));
+        Assert.Equal(1, Grid.GetColumn(hero));
+        Assert.True(content.ColumnDefinitions.Count == 2);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal(selected, Assert.IsType<EpisodeCardViewModel>(Focused(fixture.Window).DataContext).Episode.Id);
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(browser.IsVisible);
+        Assert.Equal(selected, model.SelectedEpisode!.Episode.Id);
+        Assert.False(fixture.IsModalVisible);
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(browser.BackAction, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Same(toggle, Focused(fixture.Window));
+        fixture.Window.Width = 900;
+        fixture.Flush();
+        Assert.Single(content.ColumnDefinitions);
+        Assert.Equal(Loc.Get("Season.PreviewStacked"), toggle.Content);
+        fixture.Window.Width = 1280;
+        fixture.Flush();
+        Assert.Equal(2, content.ColumnDefinitions.Count);
+        fixture.Click(toggle);
+        Assert.False(browser.IsSidecarPreview);
+        Assert.Equal(1, Grid.GetRow(episodes));
+        Assert.Equal(0, Grid.GetColumn(hero));
+        Assert.Equal(selected, model.SelectedEpisode!.Episode.Id);
         fixture.Input.Press(ControllerAction.Back);
         Assert.False(browser.IsVisible);
         Assert.True(fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!.IsVisible);
