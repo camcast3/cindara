@@ -1737,6 +1737,10 @@ public sealed class MainWindowNavigationTests
         Assert.True(episodeViewport.Extent.Height <= episodeViewport.Viewport.Height + 1);
         var creditsViewport = browser.FindControl<ScrollViewer>("CreditsScroll")!;
         Assert.True(creditsViewport.Extent.Height <= creditsViewport.Viewport.Height + 1);
+        var creditPortrait = browser.GetVisualDescendants().OfType<Border>()
+            .First(border => border.Name == "CreditPortrait");
+        Assert.InRange(Math.Abs(creditPortrait.Bounds.Width - creditPortrait.Bounds.Height), 0, 1);
+        Assert.True(creditPortrait.CornerRadius.TopLeft >= creditPortrait.Bounds.Width / 2);
         var episodeSection = browser.FindControl<Grid>("EpisodeSection")!;
         var castSection = browser.FindControl<Grid>("CastSection")!;
         var rowGap = castSection.TranslatePoint(default, browser)!.Value.Y

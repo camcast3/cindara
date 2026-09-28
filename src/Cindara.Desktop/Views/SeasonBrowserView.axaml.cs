@@ -155,10 +155,10 @@ public partial class SeasonBrowserView : UserControl
         Resources["Cindara.Season.EpisodeWidth"] = cardWidth;
         Resources["Cindara.Season.ImageHeight"] = cardWidth * 9 / 16;
         Resources["Cindara.Season.EpisodeSectionHeight"] = cardWidth * 9 / 16 + 110;
-        var castHeight = Math.Clamp(size.Height * 0.35, 180, 440);
-        Resources["Cindara.Season.CastHeight"] = castHeight;
-        Resources["Cindara.Season.CreditWidth"] = Math.Clamp(castHeight * 0.6, 90, 260);
-        Resources["Cindara.Season.CreditImageHeight"] = Math.Max(55, castHeight - 100);
+        var creditWidth = Math.Clamp(size.Height * 0.2, 96, 260);
+        Resources["Cindara.Season.CastHeight"] = creditWidth + 100;
+        Resources["Cindara.Season.CreditWidth"] = creditWidth;
+        Resources["Cindara.Season.CreditImageHeight"] = creditWidth;
         Resources["Cindara.Season.ReadingWidth"] = 1120 * density.TypeScale;
 
         var compact = width < 900 || size.Height < 600;

@@ -48,16 +48,20 @@
                         <Image Source="{Binding SeasonPoster}" Stretch="UniformToFill" />
                     </Grid>
                 </Border>
-                <StackPanel x:Name="EpisodeInformation" Grid.Column="1" Spacing="8"
-                            VerticalAlignment="Center">
-                    <TextBlock Text="{Binding SeasonTitle}" Classes="secondary"
+                <StackPanel x:Name="EpisodeInformation" Grid.Column="1" Spacing="12"
+                            VerticalAlignment="Top" Margin="0,8,0,0">
+                    <TextBlock Text="{Binding SeasonTitle}" Classes="heading"
+                               Foreground="{DynamicResource Cindara.Brush.Accent}"
                                AutomationProperties.AutomationId="SeasonTitle" />
                     <TextBlock Text="{Binding EpisodeTitle}" Classes="title" TextWrapping="Wrap"
                                AutomationProperties.AutomationId="SelectedEpisodeTitle"
                                AutomationProperties.LiveSetting="Polite" />
                     <TextBlock Text="{Binding EpisodeNumber}" Classes="secondary" />
-                    <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding Ratings}" />
+                    <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap" Classes="secondary" />
+                    <TextBlock Text="{Binding Ratings}" Classes="secondary" />
+                    <Border Height="1" Background="{DynamicResource Cindara.Brush.Border}"
+                            MaxWidth="{DynamicResource Cindara.Season.ReadingWidth}"
+                            HorizontalAlignment="Stretch" Margin="0,8" />
                     <TextBlock Text="{Binding Synopsis}" TextWrapping="Wrap"
                                MaxWidth="{DynamicResource Cindara.Season.ReadingWidth}" />
                     <TextBlock Text="{Binding Director}" TextWrapping="Wrap" />
@@ -139,7 +143,7 @@
                                 </Button>
                                 <TextBlock Text="{Binding Name}" MaxLines="1"
                                            TextTrimming="CharacterEllipsis" FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding Number}" Classes="caption" />
+                                <TextBlock Text="{Binding Number}" Classes="secondary" />
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -164,8 +168,9 @@
                                         Classes="season-credit-card" Focusable="True" GotFocus="OnCreditFocus"
                                         AutomationProperties.Name="{Binding Name}"
                                         AutomationProperties.HelpText="{Binding Role}">
-                                <Border Height="{DynamicResource Cindara.Season.CreditImageHeight}"
-                                        CornerRadius="{DynamicResource Cindara.Radius.Medium}"
+                                <Border x:Name="CreditPortrait"
+                                        Height="{DynamicResource Cindara.Season.CreditImageHeight}"
+                                        CornerRadius="200"
                                         ClipToBounds="True" Background="{DynamicResource Cindara.Brush.SurfaceRaised}">
                                     <Grid>
                                         <TextBlock Text="{loc:Tr Details.NoPhoto}" TextAlignment="Center"

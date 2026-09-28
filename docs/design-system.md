@@ -475,7 +475,9 @@ outline. Left/right traverses all seasons and scrolls them into view; Up restore
 the originating overview action and Down restores the last season. Accept opens
 the separate read-only episode browser, never playback. Its selected episode
 hero and larger season poster sit above a single Home-sized horizontal strip
-of episode cards and a portrait cast/crew rail with generous row spacing.
+of episode cards and a cast/crew rail with circular portraits and generous row
+spacing. The selected episode's season label, title, metadata, synopsis and
+credits retain a clear reading order without introducing a separate episode page.
 The credits follow the focused episode and show an explicit empty state where
 none are available. Up/down enters the first card of the adjacent row and
 resets its horizontal offset; left/right scrolls within it without moving the
