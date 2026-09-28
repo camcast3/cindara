@@ -92,6 +92,31 @@ public sealed class SeriesOverviewViewModelTests
         Assert.Equal(Loc.Get("Details.StateUnknown"), card.WatchedState);
     }
 
+    [Fact]
+    public void SeasonCardsDistinguishProgressFromUnwatchedAndWatched()
+    {
+        var progress = new SeasonCardViewModel(new("partial", "Partial", 2,
+            new(false, false, 45, null), false));
+        var unwatched = new SeasonCardViewModel(new("new", "New", 3,
+            new(false, false, 0, null), false));
+        var watched = new SeasonCardViewModel(new("done", "Done", 1,
+            new(false, true, 100, null), false));
+        Assert.True(progress.IsInProgress);
+        Assert.False(progress.IsUnwatched);
+        Assert.Equal(Loc.Format("Season.Progress", 45), progress.WatchedState);
+        Assert.NotNull(progress.ProgressArc);
+        Assert.True(unwatched.IsUnwatched);
+        Assert.False(unwatched.IsInProgress);
+        Assert.Null(unwatched.ProgressArc);
+        Assert.True(watched.IsWatched);
+        Assert.False(watched.IsInProgress);
+        Assert.Null(watched.ProgressArc);
+        using var moreProgress = new SeasonCardViewModel(new("more", "More", 2,
+            new(false, false, 75, null), false));
+        Assert.Contains(" 0 0,1 ", progress.ProgressArc);
+        Assert.Contains(" 0 1,1 ", moreProgress.ProgressArc);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(-1L)]

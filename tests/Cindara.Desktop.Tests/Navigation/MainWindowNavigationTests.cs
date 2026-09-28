@@ -1496,9 +1496,11 @@ public sealed class MainWindowNavigationTests
     });
 
     [Theory]
-    [InlineData("Season")]
-    [InlineData("Episode")]
-    public Task HomeGroupedSeriesPostersOpenParentAndRestoreSourceWithoutChangingContinueWatching(string type) =>
+    [InlineData("Season", false)]
+    [InlineData("Episode", false)]
+    [InlineData("Episode", true)]
+    public Task HomeGroupedSeriesPostersOpenParentAndRestoreSourceWithoutChangingContinueWatching(
+        string type, bool emptyCredits) =>
         TestAppBuilder.Run(() =>
     {
         using var fixture = new ShellFixture();
@@ -1506,6 +1508,7 @@ public sealed class MainWindowNavigationTests
         fixture.Window.Width = 1280;
         fixture.Window.Height = 720;
         fixture.Preview.HomeSeriesEntryType = type;
+        fixture.Preview.EmptyEpisodeCredits = emptyCredits;
         fixture.SignIn();
         var gallery = fixture.Model.DesignGallery!;
         var recent = Assert.Single(gallery.RecentlyAddedLibraries);
@@ -1523,10 +1526,62 @@ public sealed class MainWindowNavigationTests
         fixture.Input.Press(ControllerAction.Accept);
         fixture.Flush();
         var overview = fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!;
-        Assert.True(overview.IsEffectivelyVisible);
+        var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
+        Assert.True(browser.IsEffectivelyVisible);
         Assert.False(fixture.IsModalVisible);
-        Assert.Equal("series-parent", fixture.Model.SeriesOverview!.Summary.Details!.Id);
-        Assert.Same(overview.BackAction, Focused(fixture.Window));
+        Assert.True(browser.FindControl<Border>("SeasonPoster")!.IsVisible);
+        Assert.True(fixture.Model.SeasonBrowser!.SelectedEpisode is not null,
+            $"Season browser: {fixture.Model.SeasonBrowser.Message}; selected season: {fixture.Model.SeasonBrowser.SelectedSeason?.Id}");
+        Assert.Equal("series-parent", fixture.Model.SeasonBrowser.SelectedEpisode.Episode.SeriesId);
+        Assert.Equal(type == "Season" ? "season-12" : "season-1",
+            fixture.Model.SeasonBrowser.SelectedSeason!.Id);
+        if (type == "Episode")
+            Assert.Equal("episode-2",
+                (Focused(fixture.Window) as Button)?.DataContext is EpisodeCardViewModel episode
+                    ? episode.Episode.Id : null);
+        else
+        {
+            Assert.Same(browser.BackAction, Focused(fixture.Window));
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            Assert.Equal("episode-1",
+                (Focused(fixture.Window) as Button)?.DataContext is EpisodeCardViewModel episode
+                    ? episode.Episode.Id : null);
+        }
+        fixture.Input.Press(type == "Episode" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Equal(type == "Episode" ? "episode-1" : "episode-2",
+            fixture.Model.SeasonBrowser.SelectedEpisode!.Episode.Id);
+        if (!emptyCredits)
+            Assert.Equal($"Actor {fixture.Model.SeasonBrowser.SelectedEpisode.Episode.Id}",
+                Assert.Single(fixture.Model.SeasonBrowser.EpisodeCredits).Name);
+        Assert.Equal(fixture.Model.SeasonBrowser.EpisodeTitle,
+            browser.GetVisualDescendants().OfType<TextBlock>()
+                .Single(text => AutomationProperties.GetAutomationId(text) == "SelectedEpisodeTitle").Text);
+        Assert.Equal("4K AV1 SDR", browser.GetVisualDescendants().OfType<TextBlock>()
+            .Single(text => AutomationProperties.GetAutomationId(text) == "EpisodeVideoSummary").Text);
+        if (emptyCredits)
+        {
+            Assert.Empty(fixture.Model.SeasonBrowser.EpisodeCredits);
+            Assert.Contains(browser.GetVisualDescendants().OfType<TextBlock>(),
+                text => text.IsEffectivelyVisible && text.Text == Loc.Get("Details.NoCredits"));
+            var focusedEpisode = Focused(fixture.Window);
+            fixture.Input.Press(ControllerAction.NavigateDown);
+            Assert.Same(focusedEpisode, Focused(fixture.Window));
+        }
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(browser.IsVisible);
+        Assert.False(fixture.IsModalVisible);
+        Assert.Equal(type == "Episode" ? "episode-1" : "episode-2",
+            fixture.Model.SeasonBrowser.SelectedEpisode!.Episode.Id);
+        Assert.DoesNotContain(browser.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == Loc.Get("Details.Watched") || text.Text == Loc.Get("Details.Unwatched")
+                || text.Text == Loc.Format("Season.Progress", 45));
+        Assert.Equal(0, fixture.Preview.StateWrites);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.True(overview.IsVisible);
+        Assert.False(browser.IsVisible);
+        Assert.Equal(type == "Season" ? "season-12" : "season-1",
+            (Focused(fixture.Window) as Button)?.DataContext is SeasonCardViewModel season
+                ? season.Season.Id : null);
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(source, Focused(fixture.Window));
         Assert.Equal(offset, scroll.Offset);
@@ -1540,6 +1595,105 @@ public sealed class MainWindowNavigationTests
         Assert.False(overview.IsVisible);
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(continuing, Focused(fixture.Window));
+    });
+
+    [Fact]
+    public Task SeasonBrowserKeepsLoadingContentHiddenAndPinsRowWhenEpisodeDetailsReflow() =>
+        TestAppBuilder.Run(async () =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = 1280;
+        fixture.Window.Height = 720;
+        fixture.Preview.HomeSeriesEntryType = "Season";
+        fixture.Preview.LongEpisodeTitle = true;
+        fixture.Preview.EpisodeGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.SignIn();
+        var season = fixture.Model.DesignGallery!.RecentlyAddedLibraries.Single().Items[^1];
+        var source = fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => ReferenceEquals(button.DataContext, season));
+        fixture.Click(source);
+        var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
+        var content = browser.FindControl<Grid>("BrowserContent")!;
+        Assert.True(browser.IsVisible);
+        Assert.False(content.IsVisible);
+        Assert.Equal(Loc.Get("Season.Loading"), fixture.Model.SeasonBrowser!.Message);
+        fixture.Preview.ReleaseEpisodeGate();
+        await Task.Yield();
+        fixture.Flush();
+        Assert.True(content.IsVisible);
+        var cards = browser.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("episode-card")).ToArray();
+        browser.FocusSelectedEpisode("episode-1");
+        fixture.Flush();
+        var before = cards[0].TranslatePoint(default, browser)!.Value.Y;
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Same(cards[1], Focused(fixture.Window));
+        Assert.InRange(Math.Abs(cards[1].TranslatePoint(default, browser)!.Value.Y - before), 0, 1);
+        Assert.True(fixture.Model.SeasonBrowser.EpisodeTitle.Length > 100);
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(browser.BackAction, Focused(fixture.Window));
+        Assert.Equal(0, browser.FindControl<ScrollViewer>("BrowserScroll")!.Offset.Y);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.False(browser.IsVisible);
+        Assert.True(fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!.IsVisible);
+    });
+
+    [Fact]
+    public Task SeasonLayoutPreviewUsesSameEpisodeAndControllerNavigation() => TestAppBuilder.Run(() =>
+    {
+        using var fixture = new ShellFixture();
+        fixture.Window.WindowState = WindowState.Normal;
+        fixture.Window.Width = 1280;
+        fixture.Window.Height = 720;
+        fixture.Preview.HomeSeriesEntryType = "Season";
+        fixture.SignIn();
+        var season = fixture.Model.DesignGallery!.RecentlyAddedLibraries.Single().Items[^1];
+        fixture.Click(fixture.Gallery.GetVisualDescendants().OfType<Button>()
+            .Single(button => ReferenceEquals(button.DataContext, season)));
+        var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
+        var model = fixture.Model.SeasonBrowser!;
+        var content = browser.FindControl<Grid>("BrowserContent")!;
+        var hero = browser.FindControl<Border>("SeasonHeroFrame")!;
+        var episodes = browser.FindControl<Grid>("EpisodeSection")!;
+        var toggle = browser.FindControl<Button>("LayoutPreviewButton")!;
+        browser.FocusSelectedEpisode("episode-2");
+        fixture.Flush();
+        var selected = model.SelectedEpisode!.Episode.Id;
+        Assert.Equal(1, Grid.GetRow(episodes));
+
+        fixture.Click(toggle);
+        Assert.True(browser.IsSidecarPreview);
+        Assert.Same(model, fixture.Model.SeasonBrowser);
+        Assert.Equal(selected, model.SelectedEpisode!.Episode.Id);
+        Assert.Equal(0, Grid.GetRow(episodes));
+        Assert.Equal(1, Grid.GetColumn(hero));
+        Assert.True(content.ColumnDefinitions.Count == 2);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Equal(selected, Assert.IsType<EpisodeCardViewModel>(Focused(fixture.Window).DataContext).Episode.Id);
+        fixture.Input.Press(ControllerAction.Accept);
+        Assert.True(browser.IsVisible);
+        Assert.Equal(selected, model.SelectedEpisode!.Episode.Id);
+        Assert.False(fixture.IsModalVisible);
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(browser.BackAction, Focused(fixture.Window));
+        fixture.Input.Press(ControllerAction.NavigateRight);
+        Assert.Same(toggle, Focused(fixture.Window));
+        fixture.Window.Width = 900;
+        fixture.Flush();
+        Assert.Single(content.ColumnDefinitions);
+        Assert.Equal(Loc.Get("Season.PreviewStacked"), toggle.Content);
+        fixture.Window.Width = 1280;
+        fixture.Flush();
+        Assert.Equal(2, content.ColumnDefinitions.Count);
+        fixture.Click(toggle);
+        Assert.False(browser.IsSidecarPreview);
+        Assert.Equal(1, Grid.GetRow(episodes));
+        Assert.Equal(0, Grid.GetColumn(hero));
+        Assert.Equal(selected, model.SelectedEpisode!.Episode.Id);
+        fixture.Input.Press(ControllerAction.Back);
+        Assert.False(browser.IsVisible);
+        Assert.True(fixture.Window.FindControl<SeriesOverviewView>("SeriesOverview")!.IsVisible);
     });
 
     [Fact]
@@ -1612,17 +1766,90 @@ public sealed class MainWindowNavigationTests
         info.Focus();
         fixture.Input.Press(ControllerAction.NavigateDown);
         Assert.Same(seasons[0], Focused(fixture.Window));
+        var scroll = overview.FindControl<ScrollViewer>("SeasonScroll")!;
         for (var index = 1; index < seasons.Length; index++)
         {
+            var previousOffset = scroll.Offset.X;
             fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
             Assert.Same(seasons[index], Focused(fixture.Window));
+            Assert.True(scroll.Offset.X >= previousOffset);
         }
         AssertInsideWindow(fixture.Window, seasons[^1]);
-        var scroll = overview.FindControl<ScrollViewer>("SeasonScroll")!;
         var offset = scroll.Offset;
         Assert.True(offset.X > 0);
         fixture.Input.Press(ControllerAction.Accept);
-        Assert.True(fixture.IsModalVisible);
+        var browser = fixture.Window.FindControl<SeasonBrowserView>("SeasonBrowser")!;
+        Assert.True(browser.IsEffectivelyVisible);
+        Assert.Equal(width >= 900 && height >= 600,
+            browser.FindControl<Border>("SeasonPoster")!.IsVisible);
+        Assert.False(fixture.IsModalVisible);
+        Assert.Equal("season-12", fixture.Model.SeasonBrowser!.SelectedSeason!.Id);
+        Assert.Equal("Season 12", fixture.Model.SeasonBrowser.SeasonTitle);
+        var episodeCards = browser.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("episode-card")).ToArray();
+        Assert.Equal(16, episodeCards.Length);
+        var expectedWidth = 348 * Math.Clamp(width / 1600d, 1, 1.55);
+        Assert.All(episodeCards, card => Assert.InRange(card.Bounds.Width, expectedWidth - 1, expectedWidth + 1));
+        var episodeViewport = browser.FindControl<ScrollViewer>("EpisodeScroll")!;
+        Assert.True(episodeViewport.Extent.Height <= episodeViewport.Viewport.Height + 1);
+        var creditsViewport = browser.FindControl<ScrollViewer>("CreditsScroll")!;
+        Assert.True(creditsViewport.Extent.Height <= creditsViewport.Viewport.Height + 1);
+        var creditPortrait = browser.GetVisualDescendants().OfType<Border>()
+            .First(border => border.Name == "CreditPortrait");
+        Assert.InRange(Math.Abs(creditPortrait.Bounds.Width - creditPortrait.Bounds.Height), 0, 1);
+        Assert.True(creditPortrait.CornerRadius.TopLeft >= creditPortrait.Bounds.Width / 2);
+        var episodeSection = browser.FindControl<Grid>("EpisodeSection")!;
+        var castSection = browser.FindControl<Grid>("CastSection")!;
+        var rowGap = castSection.TranslatePoint(default, browser)!.Value.Y
+            - episodeSection.TranslatePoint(default, browser)!.Value.Y - episodeSection.Bounds.Height;
+        Assert.InRange(rowGap, 31, 33);
+        var poster = browser.FindControl<Border>("SeasonPoster")!;
+        if (poster.IsVisible) Assert.True(poster.Bounds.Width >= 300);
+        var rowY = episodeCards[0].TranslatePoint(default, browser)!.Value.Y;
+        Assert.All(episodeCards, card =>
+            Assert.InRange(Math.Abs(card.TranslatePoint(default, browser)!.Value.Y - rowY), 0, 1));
+        browser.FocusSelectedEpisode("episode-1");
+        var browserScroll = browser.FindControl<ScrollViewer>("BrowserScroll")!;
+        var episodeRowOffset = browserScroll.Offset.Y;
+        if (browserScroll.Extent.Height > browserScroll.Viewport.Height + 1)
+            Assert.True(episodeRowOffset > 0);
+        fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Same(episodeCards[1], Focused(fixture.Window));
+        Assert.InRange(Math.Abs(browserScroll.Offset.Y - episodeRowOffset), 0, 1);
+        fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateRight : ControllerAction.NavigateLeft);
+        Assert.Same(episodeCards[0], Focused(fixture.Window));
+        Assert.InRange(Math.Abs(browserScroll.Offset.Y - episodeRowOffset), 0, 1);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.IsType<StackPanel>(Focused(fixture.Window));
+        Assert.Equal("Actor episode-1", Assert.IsType<MovieCreditViewModel>(
+            Focused(fixture.Window).DataContext).Name);
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(episodeCards[0], Focused(fixture.Window));
+        Assert.InRange(Math.Abs(browserScroll.Offset.Y - episodeRowOffset), 0, 1);
+        for (var index = 1; index < episodeCards.Length; index++)
+            fixture.Input.Press(cultureName == "qps-plocm" ? ControllerAction.NavigateLeft : ControllerAction.NavigateRight);
+        Assert.Same(episodeCards[^1], Focused(fixture.Window));
+        Assert.True(browser.FindControl<ScrollViewer>("EpisodeScroll")!.Offset.X > 0);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.IsType<StackPanel>(Focused(fixture.Window));
+        Assert.Equal(0, browser.FindControl<ScrollViewer>("CreditsScroll")!.Offset.X);
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(episodeCards[0], Focused(fixture.Window));
+        Assert.Equal(0, browser.FindControl<ScrollViewer>("EpisodeScroll")!.Offset.X);
+        fixture.Input.Press(ControllerAction.NavigateUp);
+        Assert.Same(browser.BackAction, Focused(fixture.Window));
+        Assert.Equal(0, browserScroll.Offset.Y);
+        fixture.Input.Press(ControllerAction.NavigateDown);
+        Assert.Same(episodeCards[0], Focused(fixture.Window));
+        Assert.InRange(Math.Abs(browserScroll.Offset.Y - episodeRowOffset), 0, 1);
+        browser.FocusSelectedEpisode("episode-1");
+        Assert.Contains(browser.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == Loc.Format("Season.EpisodeCount", 16));
+        Assert.Contains(browser.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == Loc.Get("Details.PlaybackUnavailable"));
+        Assert.DoesNotContain(browser.GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == Loc.Get("Details.Watched") || text.Text == Loc.Get("Details.Unwatched"));
+        Capture(fixture.Window, $"season-browser-{cultureName}-{width}-{scale}");
         fixture.Input.Press(ControllerAction.Back);
         Assert.Same(seasons[^1], Focused(fixture.Window));
         Assert.Equal(offset, scroll.Offset);
@@ -2753,20 +2980,33 @@ public sealed class MainWindowNavigationTests
         public MediaPreviewError? DetailError { get; set; }
         public bool PopulatedMovie { get; set; }
         public string? HomeSeriesEntryType { get; set; }
+        public bool EmptyEpisodeCredits { get; set; }
+        public bool LongEpisodeTitle { get; set; }
+        public TaskCompletionSource<IReadOnlyList<MediaEpisode>>? EpisodeGate { get; set; }
         public int StateWrites { get; private set; }
+        private string? _episodeSeriesId;
+        private string? _episodeSeasonId;
         private MediaUserState _userState = new(false, false, 0, 0);
         public Task<MediaItemDetails> GetItemDetailsAsync(AuthenticatedSession session, string itemId,
             CancellationToken cancellationToken = default) => DetailError is { } error
             ? Task.FromException<MediaItemDetails>(new MediaPreviewException(error, "details"))
             : Task.FromResult(new MediaItemDetails(
                 itemId, PopulatedMovie ? "A movie with a rather long title for a compact viewport" : "Movie details",
-                itemId == "series-parent" || itemId.StartsWith("search-", StringComparison.Ordinal)
+                itemId.StartsWith("season-", StringComparison.Ordinal) ? "Season"
+                : itemId.StartsWith("episode-", StringComparison.Ordinal) ? "Episode"
+                : itemId == "series-parent" || itemId.StartsWith("search-", StringComparison.Ordinal)
                     && int.Parse(itemId.AsSpan(7), System.Globalization.CultureInfo.InvariantCulture) % 4 == 1
-                    ? "Series" : "Movie", null, null, null, null, null, 2026, null,
+                    ? "Series" : "Movie", itemId.StartsWith("episode-", StringComparison.Ordinal)
+                        ? _episodeSeriesId : null, null, itemId.StartsWith("episode-", StringComparison.Ordinal)
+                        ? _episodeSeasonId : null, null, null, 2026, null,
                 TimeSpan.FromMinutes(65).Ticks, "PG", ["Drama", "Science Fiction"], [new("Community", 8.2)],
                 PopulatedMovie ? string.Concat(Enumerable.Repeat("A full movie synopsis that stays readable. ", 100)) : "A synopsis.",
-                PopulatedMovie ? Enumerable.Range(0, 40)
-                    .Select(index => new MediaCredit($"actor-{index}", $"Actor {index}", $"Role {index}", "Actor", null)).ToArray() : [],
+                itemId.StartsWith("episode-", StringComparison.Ordinal) && !EmptyEpisodeCredits
+                    ? [new MediaCredit($"actor-{itemId}", $"Actor {itemId}", "Character", "Actor", null)]
+                    : itemId.StartsWith("season-", StringComparison.Ordinal)
+                    ? [new MediaCredit("actor", "Actor", "Character", "Actor", null)]
+                    : PopulatedMovie ? Enumerable.Range(0, 40)
+                        .Select(index => new MediaCredit($"actor-{index}", $"Actor {index}", $"Role {index}", "Actor", null)).ToArray() : [],
                 [new("Video", "av1", "4K AV1 SDR", null, 3840, 2160, null, true, false),
                  new("Audio", "eac3", "English - Dolby Digital Plus + Dolby Atmos - 5.1 - Default", "eng", null, null, 6, true, false),
                  new("Subtitle", "srt", "English - Default - SUBRIP", "eng", null, null, null, true, false)],
@@ -2775,6 +3015,29 @@ public sealed class MainWindowNavigationTests
             CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<MediaSeason>>(
                 Enumerable.Range(1, 12).Select(number => new MediaSeason($"season-{number}", $"Season {number}",
                     number, new(false, number == 1, 0, 0), false, number != 3)).ToArray());
+        public Task<IReadOnlyList<MediaEpisode>> GetEpisodesAsync(AuthenticatedSession session, string seriesId,
+            string seasonId, CancellationToken cancellationToken = default)
+        {
+            _episodeSeriesId = seriesId;
+            _episodeSeasonId = seasonId;
+            return EpisodeGate?.Task ?? Task.FromResult<IReadOnlyList<MediaEpisode>>(Episodes(seriesId, seasonId));
+        }
+        public void ReleaseEpisodeGate()
+        {
+            EpisodeGate!.SetResult(Episodes(_episodeSeriesId!, _episodeSeasonId!));
+            EpisodeGate = null;
+        }
+        private MediaEpisode[] Episodes(string seriesId, string seasonId) =>
+            Enumerable.Range(1, 16).Select(number =>
+                    new MediaEpisode($"episode-{number}",
+                        number == 2 && LongEpisodeTitle
+                            ? string.Concat(Enumerable.Repeat("An unusually long episode title ", 8))
+                            : $"Episode {number}", seriesId, seasonId, 1, number,
+                        null, TimeSpan.FromMinutes(30).Ticks, "PG", "Episode synopsis",
+                        EmptyEpisodeCredits ? [] :
+                            [new MediaCredit($"actor-episode-{number}", $"Actor episode-{number}",
+                                "Character", "Actor", null)],
+                        new(false, number == 2, number == 2 ? 100 : 25, 0), false)).ToArray();
         public Task<MediaItemDetails?> GetSeriesContinuationAsync(AuthenticatedSession session, string seriesId,
             CancellationToken cancellationToken = default) => Task.FromResult<MediaItemDetails?>(null);
         public Task<MediaUserState> SetFavoriteAsync(AuthenticatedSession session, string itemId, bool isFavorite,
@@ -2880,10 +3143,20 @@ public sealed class MainWindowNavigationTests
             var item = new MediaPreviewItem("movie", "First movie", "2026", "Movie", null, null, overview, "1h 5m", 40);
             if (HomeSeriesEntryType is { } type)
             {
-                var child = item with { Id = "child", Name = "Series title", MediaType = type, SeriesId = "series-parent" };
+                var child = item with
+                {
+                    Id = type == "Season" ? "season-1" : "episode-1",
+                    Name = "Series title",
+                    MediaType = type,
+                    SeriesId = "series-parent",
+                    SeasonId = type == "Episode" ? "season-1" : null,
+                };
                 return new MediaPreviewHome(child, [child with { MediaType = "Episode" }],
                     [new MediaPreviewRail("tv", "TV", Enumerable.Range(0, 12)
-                        .Select(index => child with { Id = $"child-{index}" }).ToArray(), "TV")])
+                        .Select(index => child with
+                        {
+                            Id = type == "Season" ? $"season-{index + 1}" : "episode-2",
+                        }).ToArray(), "TV")])
                 {
                     Libraries = [new MediaLibrary("tv", "TV", "tvshows")],
                 };

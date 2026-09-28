@@ -38,13 +38,13 @@ remaining titles) is present before the next request; responses fill those slots
 in place and extend only the far end. Poster and metadata heights stay stable.
 There are no visible pages or replacements of earlier items. Selecting a
 movie card opens full movie details; a series opens its overview and season posters.
-Season and episode cards still open a read-only summary.
+Season and episode cards with parent IDs open the read-only episode browser;
+cards without the required parent IDs retain the summary.
 Back restores the exact card, query controls, loaded
 batches, and grid position. Search supports debounced physical-keyboard
 input, a temporary full-screen controller keyboard, one combined movie/series
 poster grid with incremental scrolling in batches of 40, cancellation, and exact query/focus/scroll
-restoration. The first series overview batch is awaiting owner acceptance;
-season/episode browsing and downloads remain deferred. Signing in opens media Home directly, without
+restoration. Downloads remain deferred. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
 Settings uses a controller-first category/detail layout while retaining only
@@ -130,26 +130,49 @@ poster/backdrop, metadata, available ratings, synopsis, Full details, and
 informational Credits. Shared `MediaDetailsViewModel` preserves the accepted
 movie loading, artwork lifetime, and mutation behavior without duplicating it.
 The series surface does not expose mutations in this increment.
-Home's Recently Added rows also present season/episode entries as series posters;
-those open the parent series using Jellyfin's series ID, not the old child-item
-summary. This does not reroute Continue Watching or direct season/episode results
-in Search.
+Home's Recently Added rows present season/episode entries as series posters;
+the read-only episode browser now opens at their actual season and, for episodes
+with parent IDs, selects the actual episode. Continue Watching retains its
+pre-playback summary; Search continues to include movies and series only.
 
 The overview reads only the selected series' resumable/next episode. It follows
 Home's 90% completion cutoff, shows remaining time only when runtime and position
 are known, and can show the first episode of an unstarted series. It does not
 load the global Home feed or update playback history.
-Season posters use watched/unwatched indicators, with an explicit unknown state
+Season posters use icon-only watched/unwatched/partial-progress indicators, with an explicit unknown state
 when Jellyfin omits user state. Every season remains traversable without artwork.
-Left/right scrolls the season row; Accept opens **season information only**.
+Left/right scrolls the season row; Accept opens the episode browser.
 Back restores the exact season, row offset, and originating Search/library/Home
 card without changing the query or reloading the source. Missing seasons,
 inaccessible media, expired sessions, and unsuccessful reads are explicit;
 error-only Retry reads again, and superseded responses cannot replace the screen.
 
-This is a partial, manually gated increment. Season tabs, horizontal episode
-browsing, season/episode entry routing, and their mutation controls follow only
-after owner acceptance. Playback and functional selectors are still out of scope.
+### Read-only season and episode browser (#5)
+
+Selecting a season opens a separate episode browser, including specials and
+empty seasons. The focused episode's title, number, air date, runtime, rating,
+synopsis, director, credits, and available video/audio/subtitle information
+appear in the hero beside season artwork. A single horizontal strip of episode
+stills uses Home-sized cards with numbers and watch/progress indicators. The
+cast-and-crew portrait rail below follows the selected episode, showing an
+explicit empty state when it has no credits. The larger season poster and
+generous row spacing sit within one vertical scrolling surface. Focus or
+Accept selects an episode and loads its technical details read-only, canceling
+obsolete requests.
+Accept never starts playback in this batch; episode activation is reserved for
+the eventual player integration. Playback is clearly unavailable; the browser has
+no Favorite, watched, Play, Resume, or trailer action. Up/down moves between
+Back, episode cards, and cast portraits like Home, entering each row at its
+first card; left/right scrolls only the current rail without jumping the
+page. Up from the episode rail returns to Back and scrolls to the top. Episode
+metadata loads keep the active row pinned; the season content stays hidden
+until the initial season read completes.
+Back from a directly opened season or episode first shows its parent series
+overview with the matching season selected, then returns to the exact originating
+Home/library card on the next Back. Missing artwork, unknown watch state,
+unavailable episodes, and empty seasons are explicit states. This batch
+requires owner manual acceptance before any separate state-mutation increment.
+Playback and functional selectors remain out of scope.
 Issue #5 remains open; this layer does not unblock dependent playback work.
 
 The login screen and **Settings** offer **Language: English**.

@@ -136,7 +136,14 @@ public partial class MainWindow : Window
         SeriesOverview.BackRequested += (_, _) => CloseMovieDetails();
         SeriesOverview.InformationRequested += (_, _) => ShowMovieInformation();
         SeriesOverview.CreditsRequested += (_, _) => ShowMovieCredits();
-        SeriesOverview.SeasonRequested += (_, season) => ShowSeasonInformation(season);
+        SeriesOverview.SeasonRequested += (_, season) => ShowSeasonBrowser(
+            _viewModel?.SeriesOverview?.Summary.Details?.Id, season.Season.Id,
+            _viewModel?.SeriesOverview?.Summary.Title ?? season.Name);
+        SeasonBrowser.BackRequested += (_, _) => CloseSeasonBrowser();
+        SeasonBrowser.EpisodeRequested += async (_, episode) =>
+        {
+            if (_viewModel?.SeasonBrowser is { } browser) await browser.SelectEpisodeAsync(episode);
+        };
         Shell.SearchView.KeyboardRequested += (_, target) => ShowKeyboard(target, fullScreen: true);
         GalleryView.NavigationWidthChanged += (_, _) => UpdateGalleryFooter();
         UpdateGalleryFooter();
@@ -389,7 +396,8 @@ public partial class MainWindow : Window
         ShellFooter.IsVisible = !Shell.IsVisible || Shell.Destination == "Home";
         if (IsDetailsVisible)
         {
-            if (_viewModel.IsAuthenticatedVisible && _activeMovieDetails?.IsOpen is true)
+            if (_viewModel.IsAuthenticatedVisible &&
+                (_activeMovieDetails?.IsOpen is true || _viewModel.SeasonBrowser?.IsOpen is true))
             {
                 _navigation.EnsureFocus();
                 return;
@@ -577,6 +585,10 @@ public partial class MainWindow : Window
     private void MoveFocus(NavigationDirection direction)
     {
         _navigation.EnsureFocus();
+        if (!ModalOverlay.IsVisible && SeasonBrowser.IsVisible && SeasonBrowser.TryMove(direction))
+        {
+            return;
+        }
         if (!ModalOverlay.IsVisible && SeriesOverview.IsVisible && SeriesOverview.TryMove(direction))
         {
             return;
@@ -647,7 +659,8 @@ public partial class MainWindow : Window
         }
         else if (IsDetailsVisible)
         {
-            CloseMovieDetails();
+            if (SeasonBrowser.IsVisible) CloseSeasonBrowser();
+            else CloseMovieDetails();
         }
         else if (_viewModel?.ShowDesignGalleryCommand.IsRunning is true)
         {
@@ -839,6 +852,7 @@ public partial class MainWindow : Window
         MainSurface.IsEnabled = false;
         MovieDetails.IsEnabled = false;
         SeriesOverview.IsEnabled = false;
+        SeasonBrowser.IsEnabled = false;
     }
 
     private void BeginFullScreenModal(string title)
@@ -892,6 +906,7 @@ public partial class MainWindow : Window
         MainSurface.IsEnabled = true;
         MovieDetails.IsEnabled = true;
         SeriesOverview.IsEnabled = true;
+        SeasonBrowser.IsEnabled = true;
         if (IsDetailsVisible) MainSurface.IsEnabled = false;
         ModalActions.IsEnabled = true;
         _navigation.Forget("modal");
@@ -904,7 +919,8 @@ public partial class MainWindow : Window
         ClearModal();
         _navigation.SetScope(IsDetailsVisible ? DetailsSurface : ActiveSurface,
             IsDetailsVisible ? DetailsBackAction : null,
-            SeriesOverview.IsVisible ? "series-overview" : MovieDetails.IsVisible ? "movie-details" : _screen ?? "server");
+            SeasonBrowser.IsVisible ? "season-browser" : SeriesOverview.IsVisible ? "series-overview"
+                : MovieDetails.IsVisible ? "movie-details" : _screen ?? "server");
         if (returnFocus is not null)
         {
             _navigation.Focus(returnFocus);

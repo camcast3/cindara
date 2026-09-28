@@ -456,33 +456,48 @@ The first series increment uses a separate full-screen scope with Back, series
 artwork and metadata, an informational resumable/next-episode summary, Full
 details, Credits, and a horizontal season-poster row. It shares the movie detail
 reader and credits popup rather than duplicating mutation or artwork logic.
-Series mutation controls and episode browsing are not exposed in this increment.
-Recently Added Home entries returned as seasons/episodes still represent series
-posters and open their parent series overview. Continue Watching retains its
-separate routing; direct season/episode Search entries remain unchanged until
-the episode-browser increment.
+Series mutation controls remain unavailable. Recently Added Home entries
+returned as seasons/episodes still use series poster artwork, but open the
+corresponding read-only season browser (selecting the episode where available).
+Continue Watching retains its separate pre-playback routing.
 
 Season posters preserve their 2:3 geometry and rounded clipping with or without
 artwork. Their height uses 34% of the logical viewport (previously 26%), with a
 130-pixel minimum and a maximum of 525 pixels times the shared card-density scale.
 The larger posters show fewer seasons at once while retaining horizontal traversal.
-Watched uses a teal check, unwatched an outlined circle, and missing
+Watched uses a teal check inside a circle, in-progress a partial ring,
+unwatched an outlined circle, and missing
 user state an explicit unknown badge. State is exposed through accessible item
 labels, not repeated in captions beneath every poster. The overview has no
 permanent preview disclaimer; the season information action explains availability.
 Only focused posters draw a selection
 outline. Left/right traverses all seasons and scrolls them into view; Up restores
 the originating overview action and Down restores the last season. Accept opens
-read-only season information, never playback or a pretend episode browser.
-Back from that information restores exact season focus and horizontal offset;
-Back from the overview restores the original media source and its query/offset.
+the separate read-only episode browser, never playback. Its selected episode
+hero and larger season poster sit above a single Home-sized horizontal strip
+of episode cards and a cast/crew rail with circular portraits and generous row
+spacing. The selected episode's season label, title, metadata, synopsis and
+credits retain a clear reading order without introducing a separate episode page.
+For owner review only, a temporary header switch compares this existing
+top-first layout with a sidecar arrangement in the actual season browser.
+Both arrangements use the same live view model, episode row, focus rules,
+read-only selection and Back route. The switch and unused arrangement must
+be removed after choosing a direction, before this draft PR is accepted.
+The credits follow the focused episode and show an explicit empty state where
+none are available. Up/down enters the first card of the adjacent row and
+resets its horizontal offset; left/right scrolls within it without moving the
+vertical page. Up from episodes returns to Back at the top, and asynchronously
+arriving technical details do not shift the focused row. Episode focus reads
+technical track details without mutating user state. Back restores exact season focus and horizontal offset; direct
+season/episode entries first return to their parent series overview, then to
+their original media source and query/offset.
 
 The overview uses shared logical-viewport density. Compact windows omit the main
 poster and allow the copy to scroll; Full details preserves untruncated metadata.
 Loading failures offer error-only Retry. Unknown progress never becomes a fake
 remaining-time estimate. Account changes and Back cancel obsolete work and
 dispose decoded artwork. This batch requires live TV/Anime traversal and manual
-owner acceptance before season tabs and episode selection advance.
+owner acceptance before playback or user-state changes advance.
 
 ### Search
 

@@ -15,8 +15,24 @@
   <data name="Series.ResumeEpisode" xml:space="preserve"><value>In progress: {0}</value></data>
   <data name="Series.Remaining" xml:space="preserve"><value>{0} remaining</value></data>
   <data name="Series.RemainingUnknown" xml:space="preserve"><value>Time remaining not provided</value></data>
-  <data name="Series.SeasonHelp" xml:space="preserve"><value>Show season information</value></data>
-  <data name="Series.ReviewBoundary" xml:space="preserve"><value>Read-only series preview. Episode browsing and playback are not available yet.</value></data>
+  <data name="Series.SeasonHelp" xml:space="preserve"><value>Browse episodes in this season</value></data>
+  <data name="Series.ReviewBoundary" xml:space="preserve"><value>Episode browsing is read-only. Playback is not available yet.</value></data>
+  <data name="Season.Loading" xml:space="preserve"><value>Loading season episodes...</value></data>
+  <data name="Season.LoadingEpisodeDetails" xml:space="preserve"><value>Loading episode media details...</value></data>
+  <data name="Season.NoEpisodes" xml:space="preserve"><value>No episodes are available in this season.</value></data>
+  <data name="Season.Unavailable" xml:space="preserve"><value>This season is no longer available. Go back or retry.</value></data>
+  <data name="Season.EpisodeUnavailable" xml:space="preserve"><value>This episode is no longer available in the season. Showing the first available episode.</value></data>
+  <data name="Season.ArtworkUnavailable" xml:space="preserve"><value>Episode artwork could not be loaded. Details remain available.</value></data>
+  <data name="Season.ProgressUnknown" xml:space="preserve"><value>Watch state not provided</value></data>
+  <data name="Season.Progress" xml:space="preserve"><value>{0:N0}% watched</value></data>
+  <data name="Season.SelectHelp" xml:space="preserve"><value>Select episode details. Playback is not available.</value></data>
+  <data name="Season.PreviewCurrent" xml:space="preserve"><value>Preview: current layout</value></data>
+  <data name="Season.PreviewSidecar" xml:space="preserve"><value>Preview: sidecar layout</value></data>
+  <data name="Season.PreviewStacked" xml:space="preserve"><value>Preview: sidecar (stacked)</value></data>
+  <data name="Season.PreviewHelp" xml:space="preserve"><value>Temporary layout comparison. Media and playback do not change.</value></data>
+  <data name="Season.CastCrew" xml:space="preserve"><value>Cast &amp; crew</value></data>
+  <data name="Season.EpisodeCount" xml:space="preserve"><value>{0:N0} episodes</value></data>
+  <data name="Season.MoreCredits" xml:space="preserve"><value> (+{0:N0} more below)</value></data>
   <data name="Brand.Monogram" xml:space="preserve"><value>C</value></data>
   <data name="Auth.Tagline" xml:space="preserve"><value>Your media. Native everywhere.</value></data>
   <data name="Auth.Server" xml:space="preserve"><value>Jellyfin server</value></data>
