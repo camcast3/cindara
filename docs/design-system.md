@@ -8,12 +8,19 @@ branding, exact layout, or proprietary interaction.
 
 ## Information architecture
 
-The production information architecture exposes **Home**, **Libraries**, **Search**,
-**Downloads**, and **Settings**. Home alone owns the persistent icon rail, hero,
-and media rows. Selecting a non-Home destination opens a dedicated full-screen
-surface with an explicit Back action; it does not repeat the Home rail. Downloads
-is a visible placeholder until offline media ships. Details are entered from
-content, and playback is a temporary full-screen layer.
+The target information architecture follows the independently documented
+[Fladder flow parity contract](fladder-flow-parity.md). Its stable primary roots
+are **Dashboard**, **Libraries**, **Favorites**, optional **Discover**, and
+**Sync**. Search, details, playback, settings, and administrative tools are
+secondary routes. Reselecting a primary destination returns to that destination's
+root, while Back dismisses the deepest modal or mode before popping nested routes
+and finally returning a non-Dashboard root to Dashboard.
+
+The implemented shell has Dashboard (labeled Home) and Libraries primary roots,
+with Search and Settings nested beneath the active root. Favorites is disabled
+with an explicit unavailable explanation; Sync and Discover are not exposed.
+New work must move toward the parity contract rather than add screen-specific
+navigation. Details are temporary content layers; playback is not integrated.
 
 The authenticated Home uses a compact icon rail with Search, Home,
 Libraries, and Settings. The product owner removed the speculative
@@ -27,30 +34,47 @@ and #4.
 
 ## Implemented shell navigation
 
-`ShellView` owns the full-screen non-Home destination frame, not browsing data.
+`DesktopNavigationState` owns independent primary-root stacks. Switching primary
+sections restores their nested route; reselecting the current primary returns to
+its root. Reopening an existing secondary route pops to it rather than duplicating
+it. `ShellView` owns the inset non-Home content frame, not browsing data.
 Sign-in opens media
 Home automatically, initially focusing a card (or the sidebar Home if empty).
 There is no intermediate preview launcher or redundant Home-screen back button.
-Each library opens incrementally loaded virtualized poster-grid browsing headed
+The primary Libraries action opens a landing page with an account-provided library
+selector and Browse titles, Favorites, and Unwatched actions. Selection is local;
+the chosen action makes one initial title request with its filter already applied.
+Recommendation and genre sections remain deferred. Configured library shortcuts
+open results directly. Each library opens incrementally loaded virtualized poster-grid browsing headed
 by its actual name, with a library switcher, compact filter/sort menus, and A–Z
 title controls. Search preserves one combined result grid, query, selected
-item, and offsets; Downloads retains an honest unavailable state. Settings exposes
-Language: English, Library layout, Exit, and Back to Home through a category/detail
-split without implying unimplemented settings features. Initial focus is
-Preferences. Up/down changes category, right enters its detail actions, and left
-returns through the category to the rail. Button labels are centered with
+item, and offsets. The account-scoped Search model is shared across primary
+sections; separate per-section queries are not implemented. Settings exposes
+Language: English, Library layout, Controls, Exit, and Back to Home, plus optional
+diagnostics, through a category/detail split. First-entry focus is Preferences;
+returning restores the category/action. Up/down changes category, right enters
+its detail actions, and left returns through the category and header to the rail.
+Button labels are centered with
 consistent padding.
+Home and Libraries have separate library-browser models and retained views so
+their filters, loaded items, focus, and offsets cannot overwrite each other.
+Explicit **Back to Home** clears Dashboard's nested stack rather than restoring
+its last secondary route.
 Minimal account/window controls are tracked separately in [#27](https://github.com/camcast3/cindara/issues/27);
 expanded settings remain deferred.
 
-The Home rail expands on focus or hover and collapses to original vector icons
-when content is focused. Accept opens the focused destination. Non-Home Back
-returns directly to the exact source action or library shortcut on Home without
-reloading it. Exit closes the app; Back to Home restores media and focus.
+One shared rail remains visible across authenticated content, including details.
+Accept opens the focused destination; right (left in RTL) enters that destination's
+remembered content. Secondary Back restores its invoking action and previous
+route, not always Home. Modal Back takes precedence over details, loading
+cancellation, and route Back. Back from a non-Dashboard primary root returns to
+Dashboard. Exit closes the app; Back to Home restores media and focus.
 The login screen offers only the English language selector alongside authentication.
 
 `FocusNavigationService` scopes navigation to the active screen or dialog.
-Home and the shell/authentication viewport are separate focus roots. During a
+Authenticated content shares a frame focus root; dialogs and authentication have
+separate focus roots. Details disable the browsing content but leave the rail
+available; modal dialogs disable both. During a
 loading-to-Home transition, recovery for a removed loading control must not
 choose a nearby card in the incoming screen and scroll an unopened row sideways.
 Scope changes establish Home's intended initial focus without resetting saved

@@ -152,22 +152,29 @@ public sealed partial class LibraryBrowserViewModel : ObservableObject, IDisposa
 
     [RelayCommand(CanExecute = nameof(CanOpenLibrary))]
     private async Task OpenLibraryAsync(MediaLibrary library)
+        => await OpenQueryAsync(library, SelectedLibrary == library
+            ? _activeQuery with { StartIndex = 0 } : new MediaLibraryQuery());
+
+    internal async Task OpenQueryAsync(MediaLibrary library, MediaLibraryQuery query)
     {
         ArgumentNullException.ThrowIfNull(library);
+        ArgumentNullException.ThrowIfNull(query);
+        query.Validate();
         if (!Libraries.Contains(library))
         {
             throw new ArgumentException("The library does not belong to this account.", nameof(library));
         }
 
-        if (SelectedLibrary == library && Items.Count > 0)
+        if (SelectedLibrary == library && Items.Count > 0
+            && _activeQuery with { StartIndex = 0 } == query with { StartIndex = 0 })
         {
             return;
         }
 
         ClearPage();
-        SetActiveQuery(new());
+        SetActiveQuery(query);
         SelectedLibrary = library;
-        await LoadPageCommand.ExecuteAsync(0);
+        await LoadPageCommand.ExecuteAsync(query.StartIndex);
     }
 
     [RelayCommand(CanExecute = nameof(CanLoadPage), IncludeCancelCommand = true)]

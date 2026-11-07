@@ -65,4 +65,21 @@ public sealed class ControllerGlyphsTests
             Assert.Equal(label, ControllerGlyphs.GetLabel(layout, action));
         }
     }
+
+    [Fact]
+    public void RemappedPromptsUseTheBoundPhysicalButton()
+    {
+        var profile = new ControllerProfile
+        {
+            Accept = ControllerButton.West,
+            Back = ControllerButton.North,
+        };
+
+        Assert.Equal(
+            "X",
+            ControllerGlyphs.GetLabel(ControllerLayout.Xbox, ControllerAction.Accept, profile));
+        Assert.Equal(
+            "Triangle",
+            ControllerGlyphs.GetLabel(ControllerLayout.PlayStation, ControllerAction.Back, profile));
+    }
 }

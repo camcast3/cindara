@@ -4,23 +4,39 @@ namespace Cindara.Desktop.Input;
 
 internal static class SdlGamepadAxisMapper
 {
-    private const short DeadZone = 16_000;
-
     public static bool TryMap(
         SDL.GamepadAxis axis,
         short value,
         out ControllerAction action)
+        => TryMap(axis, value, new ControllerProfile(), out action);
+
+    public static bool TryMap(
+        SDL.GamepadAxis axis,
+        short value,
+        ControllerProfile profile,
+        out ControllerAction action)
     {
-        action = (axis, value) switch
+        ArgumentNullException.ThrowIfNull(profile);
+        var adjustedValue = axis switch
         {
-            (SDL.GamepadAxis.LeftX, < -DeadZone) => ControllerAction.NavigateLeft,
-            (SDL.GamepadAxis.LeftX, > DeadZone) => ControllerAction.NavigateRight,
-            (SDL.GamepadAxis.LeftY, < -DeadZone) => ControllerAction.NavigateUp,
-            (SDL.GamepadAxis.LeftY, > DeadZone) => ControllerAction.NavigateDown,
+            SDL.GamepadAxis.LeftX when profile.InvertHorizontalAxis => -value,
+            SDL.GamepadAxis.LeftY when profile.InvertVerticalAxis => -value,
+            _ => value,
+        };
+        action = (axis, adjustedValue) switch
+        {
+            (SDL.GamepadAxis.LeftX, var axisValue) when axisValue < -profile.DeadZone
+                => ControllerAction.NavigateLeft,
+            (SDL.GamepadAxis.LeftX, var axisValue) when axisValue > profile.DeadZone
+                => ControllerAction.NavigateRight,
+            (SDL.GamepadAxis.LeftY, var axisValue) when axisValue < -profile.DeadZone
+                => ControllerAction.NavigateUp,
+            (SDL.GamepadAxis.LeftY, var axisValue) when axisValue > profile.DeadZone
+                => ControllerAction.NavigateDown,
             _ => default,
         };
 
         return axis is SDL.GamepadAxis.LeftX or SDL.GamepadAxis.LeftY
-            && Math.Abs((int)value) > DeadZone;
+            && Math.Abs((int)adjustedValue) > profile.DeadZone;
     }
 }

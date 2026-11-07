@@ -47,7 +47,7 @@ public sealed class GalleryNavigationMarkupTests
     }
 
     [Fact]
-    public void LibrariesAreSidebarShortcutsAndNeverAHomeRow()
+    public void LibrariesHavePrimaryDestinationAndOptionalShortcutsButNeverAHomeRow()
     {
         var gallery = LoadGallery();
         var libraries = Assert.Single(gallery.Descendants(Xaml + "ItemsControl"),
@@ -57,8 +57,9 @@ public sealed class GalleryNavigationMarkupTests
             element => (string?)element.Attribute("ItemsSource") == "{Binding Libraries}");
         Assert.DoesNotContain(gallery.Descendants(Xaml + "TextBlock"),
             element => (string?)element.Attribute("Text") == "{loc:Tr Nav.Libraries}");
-        Assert.DoesNotContain(gallery.Descendants(Xaml + "Button"),
+        var primary = Assert.Single(gallery.Descendants(Xaml + "Button"),
             element => (string?)element.Attribute("Click") == "OnLibrariesClicked");
+        Assert.Equal("GalleryLibrariesButton", (string?)primary.Attribute(Names + "Name"));
         Assert.Contains(gallery.Descendants(Xaml + "Button"),
             element => (string?)element.Attribute("Click") == "OnLibraryClicked");
         Assert.DoesNotContain(gallery.Descendants(Xaml + "Button"),

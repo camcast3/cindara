@@ -6,6 +6,79 @@ namespace Cindara.Desktop.Tests.Input;
 
 public sealed class SdlGamepadInputSourceTests
 {
+    [Theory]
+    [InlineData("{\"Profiles\":null}")]
+    [InlineData("{\"Profiles\":{\"Xbox:TEST\":null}}")]
+    public void NullProfileFileFallsBackWithoutPreventingInitialization(string json)
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, json);
+            var backend = new FakeSdlGamepadBackend();
+            backend.Add(1, ControllerLayout.Xbox);
+            using var input = new SdlGamepadInputSource(backend, new ManualInputTimeProvider(),
+                profileStore: new ControllerProfileStore(path));
+            input.Initialize();
+            Assert.True(input.IsAvailable);
+            Assert.NotNull(input.ConfigurationError);
+            Assert.Equal(new ControllerProfile(), input.ActiveProfile);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void IdenticalControllersHaveIndependentProfiles(bool persistent)
+    {
+        var path = Path.GetTempFileName();
+        File.Delete(path);
+        try
+        {
+            var backend = new FakeSdlGamepadBackend();
+            backend.Add(1, ControllerLayout.Xbox);
+            backend.Add(2, ControllerLayout.Xbox);
+            backend.Controllers[1] = new(1, "Identical pad", ControllerLayout.Xbox)
+            { PersistentId = persistent ? "serial:first" : null };
+            backend.Controllers[2] = new(2, "Identical pad", ControllerLayout.Xbox)
+            { PersistentId = persistent ? "serial:second" : null };
+            var store = new ControllerProfileStore(path);
+            using (var input = new SdlGamepadInputSource(backend, new ManualInputTimeProvider(), profileStore: store))
+            {
+                input.Initialize();
+                input.SetApplicationActive(true);
+                input.UpdateActiveProfile(new ControllerProfile { Accept = ControllerButton.West });
+                backend.Button(2, SDL.GamepadButton.South, true);
+                input.Poll();
+                Assert.Equal(2u, input.ActiveController!.Id);
+                Assert.Equal(ControllerButton.South, input.ActiveProfile.Accept);
+                input.UpdateActiveProfile(new ControllerProfile { Back = ControllerButton.North });
+            }
+            Assert.Equal(persistent ? 2 : 0, store.Load().Count);
+            if (persistent)
+            {
+                backend.Controllers[1] = backend.Controllers[1] with { Id = 3 };
+                backend.Controllers[3] = backend.Controllers[1];
+                backend.Controllers.Remove(1);
+                using var restored = new SdlGamepadInputSource(backend, new ManualInputTimeProvider(), profileStore: store);
+                restored.Initialize();
+                restored.SetApplicationActive(true);
+                backend.Button(3, SDL.GamepadButton.West, true);
+                restored.Poll();
+                Assert.Equal(3u, restored.ActiveController!.Id);
+                Assert.Equal(ControllerButton.West, restored.ActiveProfile.Accept);
+            }
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void DiagnosticsCaptureNativeFailureWithoutExceptionTextOrDeviceNames()
     {

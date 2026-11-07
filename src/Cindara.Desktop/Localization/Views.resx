@@ -51,13 +51,17 @@
   <data name="Nav.Libraries" xml:space="preserve"><value>Libraries</value></data>
   <data name="Nav.Search" xml:space="preserve"><value>Search</value></data>
   <data name="Nav.Downloads" xml:space="preserve"><value>Downloads</value></data>
+  <data name="Nav.Favorites" xml:space="preserve"><value>Favorites</value></data>
+  <data name="Nav.Sync" xml:space="preserve"><value>Sync</value></data>
+  <data name="Navigation.FavoritesUnavailable" xml:space="preserve"><value>Favorites browsing is not available yet. Favorites can be filtered within a library.</value></data>
+  <data name="Library.Overview.Help" xml:space="preserve"><value>Choose a library, then browse all titles or open a filtered view.</value></data>
+  <data name="Library.Overview.Empty" xml:space="preserve"><value>No movie or TV libraries are available for this account.</value></data>
+  <data name="Library.Overview.Browse" xml:space="preserve"><value>Browse titles</value></data>
   <data name="Nav.Settings" xml:space="preserve"><value>Settings</value></data>
   <data name="Nav.ReturnHome" xml:space="preserve"><value>Return to Home</value></data>
   <data name="Nav.BackHome" xml:space="preserve"><value>Back to Home</value></data>
   <data name="State.Selected" xml:space="preserve"><value>Selected</value></data>
   <data name="State.Busy" xml:space="preserve"><value>Working. Please wait.</value></data>
-  <data name="State.On" xml:space="preserve"><value>On</value></data>
-  <data name="State.Off" xml:space="preserve"><value>Off</value></data>
   <data name="Home.Tagline" xml:space="preserve"><value>Your media. Your space.</value></data>
   <data name="Home.Ready" xml:space="preserve"><value>Your account is ready. Home rails arrive with library browsing; the approved design preview is available now.</value></data>
   <data name="Home.Preview" xml:space="preserve"><value>Preview my media</value></data>
@@ -79,6 +83,8 @@
   <data name="Search.Group.Movie" xml:space="preserve"><value>Movies</value></data>
   <data name="Search.Group.Series" xml:space="preserve"><value>Series</value></data>
   <data name="Placeholder.Downloads" xml:space="preserve"><value>Offline media is not available yet. Downloads keeps its place in your navigation.</value></data>
+  <data name="Placeholder.Favorites" xml:space="preserve"><value>Favorites will collect the movies, series, seasons, and episodes you marked on Jellyfin.</value></data>
+  <data name="Placeholder.Sync" xml:space="preserve"><value>Synced and offline media is not available yet. This destination will retain downloads, progress, and offline playback state.</value></data>
   <data name="Settings.Account" xml:space="preserve"><value>Account</value></data>
   <data name="Settings.Preferences" xml:space="preserve"><value>Preferences</value></data>
   <data name="Settings.Application" xml:space="preserve"><value>Application</value></data>
@@ -94,6 +100,28 @@
   <data name="Settings.WindowOptions" xml:space="preserve"><value>Window and exit options</value></data>
   <data name="Settings.ControlsHeading" xml:space="preserve"><value>Controller, keyboard, and mouse</value></data>
   <data name="Settings.ControlsHelp" xml:space="preserve"><value>D-pad / left stick or arrow keys move focus. Accept or Enter selects. Back or Escape returns. Tab cycles actions. Controller Accept on a text field opens the on-screen keyboard. Mouse clicks and scrolling remain available.</value></data>
+  <data name="Controller.NotConnected" xml:space="preserve"><value>Connect a controller to edit its profile.</value></data>
+  <data name="Controller.SessionOnly" xml:space="preserve"><value>This controller has no stable device identifier; its profile is kept only for this connection.</value></data>
+  <data name="Controller.BindingCanceled" xml:space="preserve"><value>The controller changed. Reopen button bindings for the connected controller.</value></data>
+  <data name="Controller.ProfileSummary" xml:space="preserve"><value>Editing the controller profile for {0}.</value></data>
+  <data name="Controller.DeadZoneSummary" xml:space="preserve"><value>Left-stick dead zone: {0}%</value></data>
+  <data name="Controller.DeadZoneDecrease" xml:space="preserve"><value>Decrease dead zone</value></data>
+  <data name="Controller.DeadZoneIncrease" xml:space="preserve"><value>Increase dead zone</value></data>
+  <data name="Controller.InvertHorizontal" xml:space="preserve"><value>Invert horizontal axis: {0}</value></data>
+  <data name="Controller.InvertVertical" xml:space="preserve"><value>Invert vertical axis: {0}</value></data>
+  <data name="Controller.Bindings" xml:space="preserve"><value>Button bindings</value></data>
+  <data name="Controller.BindingSummary" xml:space="preserve"><value>{0}: {1}</value></data>
+  <data name="Controller.ChooseBinding" xml:space="preserve"><value>Choose a button for {0}</value></data>
+  <data name="Controller.Reset" xml:space="preserve"><value>Reset controller profile</value></data>
+  <data name="Controller.Action.NavigateUp" xml:space="preserve"><value>Navigate up</value></data>
+  <data name="Controller.Action.NavigateDown" xml:space="preserve"><value>Navigate down</value></data>
+  <data name="Controller.Action.NavigateLeft" xml:space="preserve"><value>Navigate left</value></data>
+  <data name="Controller.Action.NavigateRight" xml:space="preserve"><value>Navigate right</value></data>
+  <data name="Controller.Action.Accept" xml:space="preserve"><value>Accept</value></data>
+  <data name="Controller.Action.Back" xml:space="preserve"><value>Back</value></data>
+  <data name="Controller.Action.Menu" xml:space="preserve"><value>Menu</value></data>
+  <data name="State.On" xml:space="preserve"><value>On</value></data>
+  <data name="State.Off" xml:space="preserve"><value>Off</value></data>
   <data name="Window.Options" xml:space="preserve"><value>Window / exit</value></data>
   <data name="Window.Title" xml:space="preserve"><value>Window and exit</value></data>
   <data name="Window.Return" xml:space="preserve"><value>Return to Cindara</value></data>

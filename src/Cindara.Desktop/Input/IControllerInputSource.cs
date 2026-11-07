@@ -10,9 +10,13 @@ public interface IControllerInputSource : IDisposable
 
     string? InitializationError { get; }
 
+    string? ConfigurationError => null;
+
     int ConnectedGamepads { get; }
 
     ControllerInfo? ActiveController => null;
+
+    ControllerProfile ActiveProfile => new();
 
     event EventHandler? ActiveControllerChanged
     {
@@ -26,4 +30,8 @@ public interface IControllerInputSource : IDisposable
     void Initialize();
 
     void Poll();
+
+    void UpdateActiveProfile(ControllerProfile profile) { }
+
+    void ResetActiveProfile() { }
 }

@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Cindara.Desktop.ViewModels"
+             xmlns:core="using:Cindara.Core.Jellyfin"
+             xmlns:loc="using:Cindara.Desktop.Localization"
+             x:Class="Cindara.Desktop.Views.LibraryLandingView"
+             x:DataType="vm:MainViewModel">
+    <ScrollViewer x:Name="OverviewScroll"
+                  HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="24">
+            <TextBlock Classes="secondary" Text="{loc:Tr Library.Overview.Help}" TextWrapping="Wrap" />
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="LibrarySelector" ItemsSource="{Binding LibraryBrowser.Libraries}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="12" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="core:MediaLibrary">
+                            <Button Classes="settings-action" Content="{Binding Name}"
+                                    AutomationProperties.Name="{Binding Name}" Click="OnLibrarySelected" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <TextBlock x:Name="EmptyMessage" Classes="secondary"
+                       Text="{loc:Tr Library.Overview.Empty}" TextWrapping="Wrap" />
+            <StackPanel x:Name="LibraryOverview" Spacing="24" IsVisible="False">
+                <TextBlock x:Name="SelectedLibraryTitle" Classes="title" TextWrapping="Wrap" />
+                <WrapPanel>
+                    <Button x:Name="BrowseLibraryButton" Classes="primary" Margin="0,0,12,12"
+                            Content="{loc:Tr Library.Overview.Browse}" Click="OnBrowseClicked" />
+                    <Button x:Name="LibraryFavoritesButton" Margin="0,0,12,12"
+                            Content="{loc:Tr Nav.Favorites}" Click="OnFavoritesClicked" />
+                    <Button x:Name="LibraryUnwatchedButton" Margin="0,0,12,12"
+                            Content="{loc:Tr Library.Filter.Unwatched}" Click="OnUnwatchedClicked" />
+                </WrapPanel>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

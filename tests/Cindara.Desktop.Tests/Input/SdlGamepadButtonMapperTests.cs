@@ -38,4 +38,37 @@ public sealed class SdlGamepadButtonMapperTests
 
         Assert.False(mapped);
     }
+
+    [Fact]
+    public void ProfileCanRemapActionsWithoutChangingPhysicalLayoutSemantics()
+    {
+        var profile = new ControllerProfile
+        {
+            Accept = ControllerButton.West,
+            Back = ControllerButton.North,
+        };
+
+        Assert.True(SdlGamepadButtonMapper.TryMap(
+            SDL.GamepadButton.West,
+            profile,
+            out var accept));
+        Assert.Equal(ControllerAction.Accept, accept);
+        Assert.True(SdlGamepadButtonMapper.TryMap(
+            SDL.GamepadButton.North,
+            profile,
+            out var back));
+        Assert.Equal(ControllerAction.Back, back);
+        Assert.False(SdlGamepadButtonMapper.TryMap(
+            SDL.GamepadButton.South,
+            profile,
+            out _));
+    }
+
+    [Fact]
+    public void ProfileRejectsConflictingBindings()
+    {
+        var profile = new ControllerProfile { Back = ControllerButton.South };
+
+        Assert.Throws<ArgumentException>(() => profile.Validate());
+    }
 }

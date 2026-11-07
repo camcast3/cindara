@@ -70,15 +70,6 @@
                 <ScrollViewer Grid.Row="1" VerticalAlignment="Center"
                               HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Hidden">
                 <StackPanel Spacing="{DynamicResource Gallery.NavigationSpacing}">
-                    <Button Width="{DynamicResource Gallery.NavigationButtonSize}"
-                            AutomationProperties.Name="{loc:Tr Nav.Search}"
-                            Click="OnSearchClicked"
-                            Classes="nav"
-                            ToolTip.Tip="{loc:Tr Nav.Search}">
-                        <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
-                                 Height="{DynamicResource Gallery.NavigationIconSize}"
-                                 Data="M9.5,3 A6.5,6.5 0 1 0 9.5,16 C11.1,16 12.6,15.4 13.7,14.4 L18.3,19 19,18.3 14.4,13.7 C15.4,12.6 16,11.1 16,9.5 A6.5,6.5 0 0 0 9.5,3 M9.5,5 A4.5,4.5 0 1 1 9.5,14 A4.5,4.5 0 0 1 9.5,5" />
-                    </Button>
                     <Button x:Name="SidebarHomeButton"
                             Width="{DynamicResource Gallery.NavigationButtonSize}"
                             Click="OnHomeClicked"
@@ -91,7 +82,30 @@
                                  Height="{DynamicResource Gallery.NavigationIconSize}"
                                  Data="M12,3 2,12 5,12 5,21 10,21 10,15 14,15 14,21 19,21 19,12 22,12 Z" />
                     </Button>
-                    <ItemsControl x:Name="GalleryLibraryShortcuts" ItemsSource="{Binding SidebarLibraries}">
+                    <Button x:Name="GalleryLibrariesButton"
+                            Width="{DynamicResource Gallery.NavigationButtonSize}"
+                            AutomationProperties.Name="{loc:Tr Nav.Libraries}"
+                            Click="OnLibrariesClicked"
+                            Classes="nav"
+                            ToolTip.Tip="{loc:Tr Nav.Libraries}">
+                        <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
+                                  Height="{DynamicResource Gallery.NavigationIconSize}"
+                                  Data="M 3,3 L 9,3 L 9,10 L 3,10 Z M 11,3 L 21,3 L 21,10 L 11,10 Z M 3,12 L 13,12 L 13,21 L 3,21 Z M 15,12 L 21,12 L 21,21 L 15,21 Z" />
+                    </Button>
+                    <Button x:Name="GalleryFavoritesButton"
+                            IsEnabled="False"
+                            Width="{DynamicResource Gallery.NavigationButtonSize}"
+                            AutomationProperties.Name="{loc:Tr Nav.Favorites}"
+                            Click="OnFavoritesClicked"
+                            Classes="nav"
+                            AutomationProperties.HelpText="{loc:Tr Navigation.FavoritesUnavailable}"
+                            ToolTip.Tip="{loc:Tr Navigation.FavoritesUnavailable}">
+                        <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
+                                  Height="{DynamicResource Gallery.NavigationIconSize}"
+                                  Data="M 12,21 L 10.55,19.68 C 5.4,15 2,11.91 2,8.5 C 2,5.69 4.19,3.5 7,3.5 C 8.59,3.5 10.12,4.24 11.12,5.41 L 12,6.45 L 12.88,5.41 C 13.88,4.24 15.41,3.5 17,3.5 C 19.81,3.5 22,5.69 22,8.5 C 22,11.91 18.6,15 13.45,19.68 Z" />
+                    </Button>
+                    <ItemsControl x:Name="GalleryLibraryShortcuts" ItemsSource="{Binding SidebarLibraries}"
+                                  IsEnabled="{Binding $parent[Window].((vm:MainViewModel)DataContext).LibraryBrowser.CanChooseLibrary, FallbackValue=False}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate><StackPanel Spacing="{DynamicResource Gallery.NavigationSpacing}" /></ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
@@ -109,18 +123,28 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <Button x:Name="GalleryDownloadsButton"
+                            IsVisible="False"
                             Width="{DynamicResource Gallery.NavigationButtonSize}"
-                            AutomationProperties.Name="{loc:Tr Nav.Downloads}"
-                            Click="OnDownloadsClicked"
+                            AutomationProperties.Name="{loc:Tr Nav.Sync}"
+                            Click="OnSyncClicked"
                             Classes="nav"
-                            ToolTip.Tip="{loc:Tr Nav.Downloads}">
+                            ToolTip.Tip="{loc:Tr Nav.Sync}">
                         <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
                                   Height="{DynamicResource Gallery.NavigationIconSize}"
                                   Data="M 10,2 L 14,2 L 14,12 L 20,12 L 12,20 L 4,12 L 10,12 Z M 2,22 L 22,22 L 22,24 L 2,24 Z" />
                     </Button>
                 </StackPanel>
                 </ScrollViewer>
-                <Button x:Name="GallerySettingsButton" Grid.Row="2"
+                <StackPanel Grid.Row="2" Spacing="{DynamicResource Gallery.NavigationSpacing}">
+                <Button x:Name="GallerySearchButton"
+                        Width="{DynamicResource Gallery.NavigationButtonSize}"
+                        AutomationProperties.Name="{loc:Tr Nav.Search}"
+                        Click="OnSearchClicked" Classes="nav" ToolTip.Tip="{loc:Tr Nav.Search}">
+                    <PathIcon Width="{DynamicResource Gallery.NavigationIconSize}"
+                              Height="{DynamicResource Gallery.NavigationIconSize}"
+                              Data="M9.5,3 A6.5,6.5 0 1 0 9.5,16 C11.1,16 12.6,15.4 13.7,14.4 L18.3,19 19,18.3 14.4,13.7 C15.4,12.6 16,11.1 16,9.5 A6.5,6.5 0 0 0 9.5,3 M9.5,5 A4.5,4.5 0 1 1 9.5,14 A4.5,4.5 0 0 1 9.5,5" />
+                </Button>
+                <Button x:Name="GallerySettingsButton"
                         Width="{DynamicResource Gallery.NavigationButtonSize}"
                         AutomationProperties.Name="{loc:Tr Nav.Settings}"
                         Classes="nav"
@@ -130,10 +154,11 @@
                              Height="{DynamicResource Gallery.NavigationIconSize}"
                              Data="M 2,5 L 22,5 L 22,7 L 2,7 Z M 2,17 L 22,17 L 22,19 L 2,19 Z M 6,2 L 10,2 L 10,10 L 6,10 Z M 15,14 L 19,14 L 19,22 L 15,22 Z" />
                 </Button>
+                </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Column="1">
+        <Grid x:Name="HomeContent" Grid.Column="1">
             <Grid x:Name="HeroPanel"
                   Background="{DynamicResource Cindara.Brush.Background}"
                   Height="{DynamicResource Gallery.HeroHeight}"

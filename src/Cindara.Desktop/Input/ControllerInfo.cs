@@ -8,4 +8,7 @@ public enum ControllerLayout
     Nintendo,
 }
 
-public sealed record ControllerInfo(uint Id, string Name, ControllerLayout Layout);
+public sealed record ControllerInfo(uint Id, string Name, ControllerLayout Layout)
+{
+    public string? PersistentId { get; init; }
+}
