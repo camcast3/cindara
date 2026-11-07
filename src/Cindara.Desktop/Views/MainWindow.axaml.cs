@@ -32,9 +32,13 @@ public partial class MainWindow : Window
     private bool _closed;
     private bool _openHomeOnReady;
     private readonly LocalDiagnostics? _diagnostics;
+    private readonly Dictionary<string, Control> _routeLaunchers = [];
+    private Control? _routeReturnFocus;
+    private Control? _pendingHomeFocus;
+    private ControllerInfo? _bindingController;
 
     public PresentationPreferences Preferences { get; }
-    private Control ActiveSurface => _viewModel?.IsDesignGalleryVisible is true ? GalleryView : ShellViewport;
+    private Control ActiveSurface => _viewModel?.IsAuthenticatedVisible is true ? ApplicationSurface : ShellViewport;
 
     public MainWindow() : this(new SdlGamepadInputSource())
     {
@@ -46,6 +50,11 @@ public partial class MainWindow : Window
         _controllerInput = controllerInput;
         _diagnostics = diagnostics;
         InitializeComponent();
+        if (Program.SafeModeActive)
+        {
+            WindowState = WindowState.Normal;
+            Title = $"{Loc.Get("Brand.Name")} - {Loc.Get("Startup.SafeMode")}";
+        }
         SizeChanged += (_, args) => ApplyAdaptiveLayout(args.NewSize);
         DiagnosticsButton.IsVisible = diagnostics is not null;
         Shell.HomeLoadingAction = CancelLoadingButton;
@@ -71,12 +80,22 @@ public partial class MainWindow : Window
             if (IsActive && !_closed)
             {
                 _navigation.EnsureFocus();
+                if (_pendingHomeFocus is { IsEffectivelyEnabled: true, IsEffectivelyVisible: true } pending
+                    && _navigation.Focus(pending))
+                    _pendingHomeFocus = null;
             }
         };
         AddHandler(GotFocusEvent, (_, _) => _navigation.Remember());
         AddHandler(KeyDownEvent, OnShellKeyDown, RoutingStrategies.Tunnel);
         Shell.DestinationChanged += (_, _) =>
         {
+            if (_viewModel is { } model)
+            {
+                var previousBrowser = model.LibraryBrowser;
+                model.SelectLibraryBrowser(Shell.Routes.Primary);
+                if (previousBrowser != model.LibraryBrowser)
+                    previousBrowser?.CancelLoading();
+            }
             if (Shell.Destination != "Libraries")
             {
                 _viewModel?.LibraryBrowser?.CancelLoading();
@@ -95,39 +114,45 @@ public partial class MainWindow : Window
             {
                 _viewModel.OpenHomeCommand.Execute(null);
             }
+            else if (Shell.Destination != "Home")
+            {
+                GalleryView.SuspendFocusMemory();
+                _viewModel?.HideDesignGalleryCommand.Execute(null);
+            }
 
+            GalleryView.SelectDestination(Shell.Routes.Primary);
             _screen = null;
             Dispatcher.UIThread.Post(RefreshScreen, DispatcherPriority.Loaded);
         };
+        Shell.BackRequested += (_, _) => GoBack();
         Shell.ExitRequested += (_, _) => Close();
         Shell.LanguageRequested += (_, _) => ShowLanguage();
         Shell.LibraryLayoutRequested += (_, _) => ShowLibraryLayout();
         Shell.LibrarySwitcherRequested += (_, _) => ShowLibrarySwitcher();
         Shell.DiagnosticsRequested += (_, _) => ShowDiagnostics();
-        GalleryView.SettingsRequested += (_, _) =>
-        {
-            GalleryView.SuspendFocusMemory();
-            Shell.Navigate("Settings");
-            _viewModel?.HideDesignGalleryCommand.Execute(null);
-        };
-        GalleryView.SearchRequested += (_, _) =>
-        {
-            GalleryView.SuspendFocusMemory();
-            Shell.Navigate("Search");
-            _viewModel?.HideDesignGalleryCommand.Execute(null);
-        };
-        GalleryView.DownloadsRequested += (_, _) =>
-        {
-            GalleryView.SuspendFocusMemory();
-            Shell.Navigate("Downloads");
-            _viewModel?.HideDesignGalleryCommand.Execute(null);
-        };
+        Shell.ControllerDeadZoneDecreaseRequested += (_, _) => AdjustControllerDeadZone(-2_000);
+        Shell.ControllerDeadZoneIncreaseRequested += (_, _) => AdjustControllerDeadZone(2_000);
+        Shell.ControllerInvertHorizontalRequested += (_, _) => UpdateControllerProfile(
+            profile => profile with { InvertHorizontalAxis = !profile.InvertHorizontalAxis });
+        Shell.ControllerInvertVerticalRequested += (_, _) => UpdateControllerProfile(
+            profile => profile with { InvertVerticalAxis = !profile.InvertVerticalAxis });
+        Shell.ControllerResetRequested += (_, _) => ResetControllerProfile();
+        Shell.ControllerBindingRequested += (_, args) => ShowControllerBinding(args.Action);
+        GalleryView.SettingsRequested += (_, _) => NavigateDesktop("Settings");
+        GalleryView.SearchRequested += (_, _) => NavigateDesktop("Search");
+        GalleryView.DashboardRequested += (_, _) => NavigateDesktop("Home");
+        GalleryView.LibrariesRequested += (_, _) => OpenLibraries();
+        GalleryView.FavoritesRequested += (_, _) => NavigateDesktop("Favorites");
         GalleryView.LibraryRequested += OnLibraryRequested;
+        Shell.LibraryLanding.BrowseRequested += OnLibraryBrowseRequested;
         GalleryView.ItemRequested += (_, item) => ShowMediaItem(item,
             _viewModel?.DesignGallery?.ContinueWatching.Contains(item) is true, fromHome: true);
-        Shell.LibraryView.ItemRequested += (_, item) => ShowMediaItem(item);
-        Shell.LibraryView.FilterRequested += (_, _) => ShowLibraryFilter();
-        Shell.LibraryView.SortRequested += (_, _) => ShowLibrarySort();
+        foreach (var libraryView in Shell.LibraryViews)
+        {
+            libraryView.ItemRequested += (_, item) => ShowMediaItem(item);
+            libraryView.FilterRequested += (_, _) => ShowLibraryFilter();
+            libraryView.SortRequested += (_, _) => ShowLibrarySort();
+        }
         Shell.SearchView.ItemRequested += (_, item) => ShowMediaItem(item);
         MovieDetails.BackRequested += (_, _) => CloseMovieDetails();
         MovieDetails.InformationRequested += (_, _) => ShowMovieInformation();
@@ -144,18 +169,49 @@ public partial class MainWindow : Window
 
     private void OpenLibraries()
     {
-        GalleryView.SuspendFocusMemory();
-        Shell.Navigate("Libraries");
-        _viewModel?.HideDesignGalleryCommand.Execute(null);
+        NavigateDesktop("LibraryLanding");
     }
 
     private async void OnLibraryRequested(object? sender, Cindara.Core.Jellyfin.MediaLibrary library)
     {
-        OpenLibraries();
+        if (!NavigateDesktop("Libraries"))
+            return;
         if (_viewModel?.LibraryBrowser is { } browser && browser.OpenLibraryCommand.CanExecute(library))
         {
             await browser.OpenLibraryCommand.ExecuteAsync(library);
         }
+    }
+
+    private async void OnLibraryBrowseRequested(object? sender, LibraryBrowseRequest request)
+    {
+        if (_viewModel?.LibraryBrowser is not { } browser || !browser.OpenLibraryCommand.CanExecute(request.Library))
+            return;
+        if (!NavigateDesktop("Libraries"))
+            return;
+        await browser.OpenQueryAsync(request.Library, new MediaLibraryQuery(Filter: request.Filter));
+    }
+
+    private bool NavigateDesktop(string destination)
+    {
+        if (ModalOverlay.IsVisible || _activeMovieDetails?.CanClose is false)
+            return false;
+        var launcher = FocusManager?.GetFocusedElement() as Control;
+        if (IsDetailsVisible)
+            CloseMovieDetails();
+        _pendingHomeFocus = null;
+        _navigation.Remember();
+        GalleryView.SuspendFocusMemory();
+        var previousPrimary = Shell.Routes.Primary;
+        Shell.Navigate(destination);
+        if (previousPrimary == Shell.Routes.Primary && destination is "Home" or "LibraryLanding" or "Favorites")
+        {
+            foreach (var key in _routeLaunchers.Keys
+                .Where(key => key.StartsWith($"{Shell.Routes.Primary}:", StringComparison.Ordinal)).ToArray())
+                _routeLaunchers.Remove(key);
+        }
+        if (launcher is not null && destination is "Search" or "Settings" or "Libraries")
+            _routeLaunchers.TryAdd(Shell.FocusKey, launcher);
+        return true;
     }
 
     private void ShowMediaSummary(MediaPreviewCardViewModel item)
@@ -287,6 +343,7 @@ public partial class MainWindow : Window
         if (!_closed)
         {
             RefreshScreen();
+            Program.MarkStartupSuccessful();
         }
     }
 
@@ -386,6 +443,8 @@ public partial class MainWindow : Window
         ShellViewport.IsVisible = !_viewModel.IsDesignGalleryVisible;
         Shell.IsVisible = _viewModel.IsAuthenticatedVisible;
         AuthenticationSurface.IsVisible = !Shell.IsVisible;
+        GalleryView.ShowDashboard(_viewModel.IsDesignGalleryVisible);
+        UpdateContentInsets();
         ShellFooter.IsVisible = !Shell.IsVisible || Shell.Destination == "Home";
         if (IsDetailsVisible)
         {
@@ -400,7 +459,7 @@ public partial class MainWindow : Window
         var screen = _viewModel.IsDesignGalleryVisible ? "gallery"
             : _viewModel.IsAuthenticatedVisible && Shell.Destination == "Home"
                 && _viewModel.ShowDesignGalleryCommand.IsRunning ? "shell:Home:loading"
-            : _viewModel.IsAuthenticatedVisible ? $"shell:{Shell.Destination}"
+            : _viewModel.IsAuthenticatedVisible ? $"shell:{Shell.FocusKey}"
             : _viewModel.IsSignInVisible ? "sign-in"
             : _viewModel.AreSavedSessionsVisible ? "accounts"
             : _viewModel.IsServerSelectionVisible ? "server-selection"
@@ -428,11 +487,14 @@ public partial class MainWindow : Window
         {
             _navigation.Reset();
             Shell.Reset();
+            _routeLaunchers.Clear();
+            _routeReturnFocus = null;
+            _pendingHomeFocus = null;
         }
 
         _screen = screen;
-        var contentFocus = Shell.ContentFocus;
         UpdateLayout();
+        var contentFocus = Shell.ContentFocus;
         AuthenticationProgress.Text = screen switch
         {
             "server-selection" or "server" => Loc.Get("Auth.StepServer"),
@@ -453,13 +515,15 @@ public partial class MainWindow : Window
             _ => Shell.InitialFocus,
         };
         _navigation.SetScope(ActiveSurface, initial, screen);
+        _pendingHomeFocus = Shell.Destination == "Home" && Shell.IsVisible
+            && !initial.IsEffectivelyEnabled ? initial : null;
         if (screen == "gallery")
         {
             GalleryView.RestoreHomeFocus();
         }
         else if (Shell.IsVisible)
         {
-            _navigation.Focus(contentFocus);
+            _navigation.Focus(Shell.Destination == "Home" ? Shell.InitialFocus : contentFocus);
             if (Shell.Destination == "Libraries")
             {
                 Shell.LibraryView.ResumeFocusMemory();
@@ -469,24 +533,135 @@ public partial class MainWindow : Window
                 Shell.SearchView.ResumeFocusMemory();
             }
         }
+        if (_routeReturnFocus is { } returnFocus)
+        {
+            _routeReturnFocus = null;
+            _navigation.Focus(returnFocus);
+        }
     }
 
     private void OnControllerConnectionChanged(object? sender, ControllerConnectionEventArgs args) =>
         UpdateControllerStatus();
 
-    private void OnActiveControllerChanged(object? sender, EventArgs args) => UpdateControllerStatus();
+    private void OnActiveControllerChanged(object? sender, EventArgs args)
+    {
+        if (_bindingController is not null && _controllerInput.ActiveController != _bindingController)
+            DismissModal();
+        UpdateControllerStatus();
+    }
 
     private void UpdateControllerStatus()
     {
         var controller = _controllerInput.ActiveController;
         var layout = controller?.Layout ?? ControllerLayout.Generic;
-        var accept = ControllerGlyphs.GetLabel(layout, ControllerAction.Accept);
-        var back = ControllerGlyphs.GetLabel(layout, ControllerAction.Back);
-        var menu = ControllerGlyphs.GetLabel(layout, ControllerAction.Menu);
+        var profile = _controllerInput.ActiveProfile;
+        var accept = ControllerGlyphs.GetLabel(layout, ControllerAction.Accept, profile);
+        var back = ControllerGlyphs.GetLabel(layout, ControllerAction.Back, profile);
+        var menu = ControllerGlyphs.GetLabel(layout, ControllerAction.Menu, profile);
         var name = controller?.Name ?? Loc.Get(_controllerInput.ConnectedGamepads > 0 ? "Input.Ready" : "Input.Connect");
-        _viewModel?.SetControllerStatus(_controllerInput.IsAvailable
+        var status = _controllerInput.IsAvailable
             ? Loc.Format("Input.Prompts", name, accept, back, menu)
-            : Loc.Get("Input.Unavailable"));
+            : Loc.Get("Input.Unavailable");
+        if (_controllerInput.ConfigurationError is { Length: > 0 } configurationError)
+        {
+            status = $"{status} {configurationError}";
+        }
+        if (controller is not null && string.IsNullOrEmpty(controller.PersistentId))
+            status = $"{status} {Loc.Get("Controller.SessionOnly")}";
+        if (Program.SafeModeActive)
+        {
+            status = $"{status} {Loc.Get("Startup.SafeModeHelp")}";
+        }
+        if (Program.StartupRecoveryError is { Length: > 0 } recoveryError)
+        {
+            status = $"{status} {recoveryError}";
+        }
+
+        _viewModel?.SetControllerStatus(status);
+        Shell.UpdateControllerSettings(controller, profile, _controllerInput.ConfigurationError);
+    }
+
+    private void AdjustControllerDeadZone(int delta) =>
+        UpdateControllerProfile(profile => profile with
+        {
+            DeadZone = Math.Clamp(
+                profile.DeadZone + delta,
+                ControllerProfile.MinimumDeadZone,
+                ControllerProfile.MaximumDeadZone),
+        });
+
+    private void ResetControllerProfile()
+    {
+        if (_controllerInput.ActiveController is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _controllerInput.ResetActiveProfile();
+        }
+        catch (InvalidOperationException)
+        {
+            // The input source exposes the save failure through ConfigurationError.
+        }
+
+        UpdateControllerStatus();
+    }
+
+    private void UpdateControllerProfile(Func<ControllerProfile, ControllerProfile> update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        if (_controllerInput.ActiveController is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _controllerInput.UpdateActiveProfile(update(_controllerInput.ActiveProfile).Validate());
+        }
+        catch (InvalidOperationException)
+        {
+            // The input source exposes the save failure through ConfigurationError.
+        }
+
+        UpdateControllerStatus();
+    }
+
+    private void ShowControllerBinding(ControllerAction action)
+    {
+        var controller = _controllerInput.ActiveController;
+        if (controller is null)
+        {
+            return;
+        }
+
+        var profile = _controllerInput.ActiveProfile;
+        _bindingController = controller;
+        var current = profile.GetBinding(action);
+        var usedByOtherActions = Enum.GetValues<ControllerAction>()
+            .Where(otherAction => otherAction != action)
+            .Select(profile.GetBinding)
+            .ToHashSet();
+        var choices = Enum.GetValues<ControllerButton>()
+            .Where(button => button == current || !usedByOtherActions.Contains(button));
+        ShowLibraryMenu(
+            Loc.Format("Controller.ChooseBinding", Loc.Get($"Controller.Action.{action}")),
+            choices,
+            button => ControllerGlyphs.GetButtonLabel(controller.Layout, button),
+            button => button == current,
+            button =>
+            {
+                if (_controllerInput.ActiveController != controller)
+                {
+                    BeginModal(Loc.Get("Controller.BindingCanceled"));
+                    FocusModal(AddModalButton(Loc.Get("Action.Back"), DismissModal));
+                    return Task.CompletedTask;
+                }
+                UpdateControllerProfile(existing => existing.WithBinding(action, button));
+                return Task.CompletedTask;
+            });
     }
 
     private void OnControllerActionPressed(object? sender, ControllerActionEventArgs args)
@@ -577,6 +752,18 @@ public partial class MainWindow : Window
     private void MoveFocus(NavigationDirection direction)
     {
         _navigation.EnsureFocus();
+        if (!ModalOverlay.IsVisible && FocusManager?.GetFocusedElement() is Control railControl
+            && railControl.GetVisualAncestors().Contains(GalleryView)
+            && !railControl.GetVisualAncestors().Contains(GalleryView.FindControl<Grid>("HomeContent"))
+            && direction == (FlowDirection == Avalonia.Media.FlowDirection.RightToLeft
+                ? NavigationDirection.Left : NavigationDirection.Right))
+        {
+            _navigation.Focus(IsDetailsVisible ? DetailsBackAction
+                : _viewModel?.IsDesignGalleryVisible is true ? GalleryView.HomeNavigation : Shell.ContentFocus);
+            if (!IsDetailsVisible && _viewModel?.IsDesignGalleryVisible is true)
+                GalleryView.FocusHomeContent();
+            return;
+        }
         if (!ModalOverlay.IsVisible && SeriesOverview.IsVisible && SeriesOverview.TryMove(direction))
         {
             return;
@@ -676,7 +863,8 @@ public partial class MainWindow : Window
         }
         else if (_viewModel?.IsAuthenticatedVisible is true && Shell.Destination != "Home")
         {
-            Shell.Navigate("Home");
+            _routeLaunchers.Remove(Shell.FocusKey, out _routeReturnFocus);
+            Shell.Back();
         }
         else
         {
@@ -769,6 +957,17 @@ public partial class MainWindow : Window
         var fontSize = 14 * GalleryView.UiScale * Preferences.TextScale;
         GalleryReadHelp.FontSize = fontSize;
         GalleryControllerPrompts.FontSize = fontSize;
+        UpdateContentInsets();
+    }
+
+    private void UpdateContentInsets()
+    {
+        var inset = _viewModel?.IsAuthenticatedVisible is true ? GalleryView.NavigationWidth : 0;
+        var margin = FlowDirection == Avalonia.Media.FlowDirection.RightToLeft
+            ? new Thickness(0, 0, inset, 0) : new Thickness(inset, 0, 0, 0);
+        ShellViewport.Margin = margin;
+        MovieDetails.Margin = margin;
+        SeriesOverview.Margin = margin;
     }
 
     private void OnChooseAccount(object? sender, RoutedEventArgs args)
@@ -873,6 +1072,7 @@ public partial class MainWindow : Window
 
     private void ClearModal()
     {
+        _bindingController = null;
         _creditsView = null;
         _diagnosticsOpen = false;
         ModalDialog.MaxWidth = 1200;
@@ -892,7 +1092,7 @@ public partial class MainWindow : Window
         MainSurface.IsEnabled = true;
         MovieDetails.IsEnabled = true;
         SeriesOverview.IsEnabled = true;
-        if (IsDetailsVisible) MainSurface.IsEnabled = false;
+        SetBrowseEnabled(!IsDetailsVisible);
         ModalActions.IsEnabled = true;
         _navigation.Forget("modal");
     }
@@ -902,13 +1102,19 @@ public partial class MainWindow : Window
         var returnFocus = _modalReturnFocus;
         _modalReturnFocus = null;
         ClearModal();
-        _navigation.SetScope(IsDetailsVisible ? DetailsSurface : ActiveSurface,
+        _navigation.SetScope(ActiveSurface,
             IsDetailsVisible ? DetailsBackAction : null,
             SeriesOverview.IsVisible ? "series-overview" : MovieDetails.IsVisible ? "movie-details" : _screen ?? "server");
         if (returnFocus is not null)
         {
             _navigation.Focus(returnFocus);
         }
+    }
+
+    private void SetBrowseEnabled(bool enabled)
+    {
+        ShellViewport.IsEnabled = enabled;
+        GalleryView.EnableDashboard(enabled);
     }
 
     private void ShowKeyboard(TextBox target, bool fullScreen = false)

@@ -22,7 +22,22 @@
         <Thickness x:Key="Cindara.Media.GridCardMargin">12</Thickness>
     </Window.Resources>
     <Grid>
+      <Grid x:Name="ApplicationSurface">
         <Grid x:Name="MainSurface">
+            <Grid x:Name="GallerySurface" IsVisible="{Binding IsAuthenticatedVisible}">
+                <views:DesignGalleryView x:Name="GalleryView" DataContext="{Binding DesignGallery}" />
+                <Grid x:Name="GalleryFooter" VerticalAlignment="Bottom" ColumnDefinitions="96,*"
+                      IsVisible="{Binding IsDesignGalleryVisible}" IsHitTestVisible="False">
+                    <Border Grid.Column="1" Background="{DynamicResource Cindara.Brush.Background}" Padding="24,8">
+                        <StackPanel>
+                            <TextBlock x:Name="GalleryReadHelp" Classes="caption"
+                                       Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="GalleryControllerPrompts" Classes="caption"
+                                       Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
             <Grid x:Name="ShellViewport">
                     <Grid Margin="{DynamicResource Cindara.Adaptive.SafeMargin}" RowDefinitions="*,Auto"
                           RowSpacing="{DynamicResource Cindara.Adaptive.ContentSpacing}">
@@ -212,25 +227,12 @@
                         </Grid>
                     </Grid>
             </Grid>
-            <Grid x:Name="GallerySurface" IsVisible="{Binding IsDesignGalleryVisible}">
-                <views:DesignGalleryView x:Name="GalleryView" DataContext="{Binding DesignGallery}" />
-                <Grid x:Name="GalleryFooter" VerticalAlignment="Bottom" ColumnDefinitions="96,*"
-                      IsHitTestVisible="False">
-                    <Border Grid.Column="1" Background="{DynamicResource Cindara.Brush.Background}" Padding="24,8">
-                        <StackPanel>
-                            <TextBlock x:Name="GalleryReadHelp" Classes="caption"
-                                       Text="{loc:Tr Gallery.ReadHelp}" TextWrapping="Wrap" />
-                            <TextBlock x:Name="GalleryControllerPrompts" Classes="caption"
-                                       Text="{Binding ControllerStatus}" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </Border>
-                </Grid>
-            </Grid>
         </Grid>
         <views:MovieDetailsView x:Name="MovieDetails" IsVisible="False"
                                 DataContext="{Binding MovieDetails}" />
         <views:SeriesOverviewView x:Name="SeriesOverview" IsVisible="False"
                                   DataContext="{Binding SeriesOverview}" />
+      </Grid>
         <Border x:Name="ModalOverlay" IsVisible="False" Background="#B3080B12"
                 AutomationProperties.ControlTypeOverride="Group" AutomationProperties.AccessibilityView="Control">
             <Grid>

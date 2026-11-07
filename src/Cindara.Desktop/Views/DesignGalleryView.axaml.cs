@@ -28,6 +28,27 @@ public partial class DesignGalleryView : UserControl
 
     public void SuspendFocusMemory() => _rememberFocus = false;
 
+    public void ShowDashboard(bool visible) => HomeContent.IsVisible = visible;
+
+    public void EnableDashboard(bool enabled) => HomeContent.IsEnabled = enabled;
+
+    public void SelectDestination(Navigation.PrimaryDestination destination)
+    {
+        SetSelected(SidebarHomeButton, destination == Navigation.PrimaryDestination.Dashboard);
+        SetSelected(GalleryLibrariesButton, destination == Navigation.PrimaryDestination.Libraries);
+        SetSelected(GalleryFavoritesButton, destination == Navigation.PrimaryDestination.Favorites);
+    }
+
+    private static void SetSelected(Button button, bool selected)
+    {
+        button.Classes.Set("selected", selected);
+        Avalonia.Automation.AutomationProperties.SetItemStatus(
+            button, selected ? Localization.Loc.Get("State.Selected") : string.Empty);
+        if (button.IsEnabled)
+            Avalonia.Automation.AutomationProperties.SetHelpText(
+                button, selected ? Localization.Loc.Get("State.Selected") : string.Empty);
+    }
+
     public DesignGalleryView()
     {
         InitializeComponent();
@@ -206,8 +227,11 @@ public partial class DesignGalleryView : UserControl
     }
 
     public event EventHandler? SettingsRequested;
+    public event EventHandler? DashboardRequested;
     public event EventHandler? SearchRequested;
-    public event EventHandler? DownloadsRequested;
+    public event EventHandler? LibrariesRequested;
+    public event EventHandler? FavoritesRequested;
+    public event EventHandler? SyncRequested;
     public event EventHandler<MediaLibrary>? LibraryRequested;
     public event EventHandler<MediaPreviewCardViewModel>? ItemRequested;
 
@@ -257,31 +281,52 @@ public partial class DesignGalleryView : UserControl
         return focused;
     }
 
-    private void OnHomeClicked(object? sender, RoutedEventArgs args) => FocusHomeContent();
+    private void OnHomeClicked(object? sender, RoutedEventArgs args)
+    {
+        DashboardRequested?.Invoke(this, EventArgs.Empty);
+        if (HomeContent.IsVisible)
+            FocusHomeContent();
+    }
 
     private void OnSettingsClicked(object? sender, RoutedEventArgs args)
     {
-        _destinationReturnFocus = sender as Button;
+        if (HomeContent.IsVisible && HomeContent.IsEffectivelyEnabled)
+            _destinationReturnFocus = sender as Button;
         SettingsRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnSearchClicked(object? sender, RoutedEventArgs args)
     {
-        _destinationReturnFocus = sender as Button;
+        if (HomeContent.IsVisible && HomeContent.IsEffectivelyEnabled)
+            _destinationReturnFocus = sender as Button;
         SearchRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnDownloadsClicked(object? sender, RoutedEventArgs args)
+    private void OnLibrariesClicked(object? sender, RoutedEventArgs args)
+    {
+        if (HomeContent.IsVisible && HomeContent.IsEffectivelyEnabled)
+            _destinationReturnFocus = sender as Button;
+        LibrariesRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnFavoritesClicked(object? sender, RoutedEventArgs args)
     {
         _destinationReturnFocus = sender as Button;
-        DownloadsRequested?.Invoke(this, EventArgs.Empty);
+        FavoritesRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnSyncClicked(object? sender, RoutedEventArgs args)
+    {
+        _destinationReturnFocus = sender as Button;
+        SyncRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnLibraryClicked(object? sender, RoutedEventArgs args)
     {
         if (sender is Button { DataContext: MediaLibrary library })
         {
-            _libraryReturnFocus = (Button)sender;
+            if (HomeContent.IsVisible && HomeContent.IsEffectivelyEnabled)
+                _libraryReturnFocus = (Button)sender;
             LibraryRequested?.Invoke(this, library);
         }
     }
@@ -314,7 +359,7 @@ public partial class DesignGalleryView : UserControl
         }
 
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
-        if (ReferenceEquals(focused, SidebarHomeButton) && direction == NavigationDirection.Right)
+        if (HomeContent.IsVisible && ReferenceEquals(focused, SidebarHomeButton) && direction == NavigationDirection.Right)
         {
             return FocusHomeContent();
         }

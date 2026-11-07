@@ -95,7 +95,7 @@ public partial class MovieDetailsView : UserControl
 
     private void FitCopy()
     {
-        var compact = Bounds.Width < 1000 || Bounds.Height < 600;
+        var compact = IsCompact(Bounds.Size);
         var largeCompactText = compact && (SynopsisPreview.FontSize > 16 || MovieButtons.DesiredSize.Height > 72);
         GenrePreview.IsVisible = !largeCompactText;
         DirectorPreview.IsVisible = !largeCompactText;
@@ -129,7 +129,7 @@ public partial class MovieDetailsView : UserControl
             Math.Max(0, contentHeight - castHeight - 12) * 2 / 3);
         Resources["Cindara.Details.PosterWidth"] = posterWidth;
         Resources["Cindara.Details.PosterHeight"] = posterWidth * 1.5;
-        var compact = size.Width < 1000 || size.Height < 600;
+        var compact = IsCompact(size);
         MovieHeading.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "Auto,*");
         MovieHeading.ColumnSpacing = compact ? 0 : 32;
         MoviePoster.IsVisible = !compact;
@@ -154,4 +154,7 @@ public partial class MovieDetailsView : UserControl
         PlaybackNotice.IsVisible = !compact;
         WatchedPreview.IsVisible = !compact;
     }
+
+    private bool IsCompact(Size size) =>
+        size.Width < 1000 * Math.Max(1, SynopsisPreview.FontSize / 14) || size.Height < 600;
 }

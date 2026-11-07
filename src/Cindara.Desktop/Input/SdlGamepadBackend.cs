@@ -16,8 +16,16 @@ internal sealed class SdlGamepadBackend : ISdlGamepadBackend
 
     public void CloseGamepad(nint gamepad) => SDL.CloseGamepad(gamepad);
 
-    public ControllerInfo GetInfo(uint controllerId, nint gamepad) =>
-        new(controllerId, SDL.GetGamepadName(gamepad) ?? "Gamepad", GetLayout(SDL.GetGamepadType(gamepad)));
+    public ControllerInfo GetInfo(uint controllerId, nint gamepad)
+    {
+        var serial = SDL.GetGamepadSerial(gamepad);
+        var path = SDL.GetGamepadPath(gamepad);
+        return new(controllerId, SDL.GetGamepadName(gamepad) ?? "Gamepad", GetLayout(SDL.GetGamepadType(gamepad)))
+        {
+            PersistentId = !string.IsNullOrWhiteSpace(serial) ? $"serial:{serial}"
+                : !string.IsNullOrWhiteSpace(path) ? $"path:{path}" : null,
+        };
+    }
 
     public bool GetButton(nint gamepad, SDL.GamepadButton button) => SDL.GetGamepadButton(gamepad, button);
 

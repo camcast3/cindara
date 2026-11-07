@@ -1,8 +1,9 @@
 # Cindara
 
 Cindara is a premium-feeling, native [Jellyfin](https://jellyfin.org/) client
-for Linux, Windows, and macOS. Linux and couch-first systems such as Bazzite are
-the primary target. It is early-stage, public, and licensed under the
+for Windows, Linux, and macOS. Windows 11 x64 is the first release target; the
+same couch-first UX will then ship on Linux/Bazzite and macOS. It is early-stage,
+public, and licensed under the
 [MIT License](LICENSE).
 
 ## Current vertical slice
@@ -15,15 +16,23 @@ persisted. Access tokens are stored with Secret Service on Linux, DPAPI on
 Windows, or Keychain on macOS; rejected tokens remove only the affected
 account and return it to sign-in.
 
-The controller-first shell exposes Home, Libraries, Search, Downloads, and
-Settings. Home keeps its existing sidebar, hero, and rows. Selecting any other
-destination opens a dedicated full-screen surface with one explicit Back path;
-non-Home surfaces do not repeat the Home sidebar. All screens share Home's capped
+The controller-first shell keeps one persistent navigation rail across Home,
+Libraries, Search, Settings, and media details. Home and Libraries are primary
+sections; Search and Settings nest inside the current section. Switching sections
+retains their route stacks, and reselecting the active section returns to its root.
+Back/Escape dismisses a modal, closes details, cancels active loading, or pops the
+current route; Back from the Libraries root returns to Home. Favorites is visibly
+disabled until its global view is implemented; Sync and Discover are not exposed.
+All screens share Home's capped
 logical-viewport density model for typography, poster sizing, gutters, forms, and
 navigation actions; OS DPI is not applied twice. Home includes a single Continue
 Watching row and recently added media
-from the selected libraries, with no generic Libraries shortcut row. Open libraries
-from the sidebar or library chooser. Fresh Home loads keep each row at its first
+from the selected libraries, with no generic Libraries shortcut row. The primary
+Libraries action opens a local overview: select a library, then Browse titles,
+Favorites, or Unwatched. Selecting a library alone makes no title request; each
+browse action starts with the requested filter. Recommendation/genre sections
+are not implemented yet. Configured sidebar library shortcuts still open results
+directly. Fresh Home loads keep each row at its first
 card: loading-screen focus recovery cannot briefly select and scroll a card in
 the incoming Home screen. Returning to existing content still preserves its position.
 Home library shortcuts use aligned TV, Movie,
@@ -47,8 +56,14 @@ restoration. The first series overview batch is awaiting owner acceptance;
 season/episode browsing and downloads remain deferred. Signing in opens media Home directly, without
 a preview launcher, top tab bar, or redundant Home-screen back button. The Home sidebar's
 Settings action opens the in-app settings.
-Settings uses a controller-first category/detail layout while retaining only
-**Language: English**, **Library layout**, **Exit**, and **Back to Home**.
+Settings uses a controller-first category/detail layout for
+**Language: English**, **Library layout**, **Controls**, **Exit**, and **Back to Home**,
+plus diagnostics when enabled. Returning restores the category/action rather than
+resetting the page. Search retains one account-scoped query/result set across
+sections; separate search histories per section are not implemented.
+Library results, unlike Search, keep separate library/filter/item, loaded batches,
+scroll, and focus state for Home and Libraries. **Back to Home** always opens the
+Home root; selecting Home in the rail restores its retained route.
 Library layout has independent ordered selections for sidebar shortcuts and Home
 libraries. Use each library's Hide/Show and Move up/Move down buttons, then Save layout; Cancel
 discards the draft. Defaults are TV libraries, Movies, then Anime. Choices are
@@ -61,8 +76,10 @@ selection (including Anime libraries using the TV-show type). Unsupported views
 such as Collections and People are omitted, and no latest-media requests are made
 for them. Previously saved selections cannot bring unsupported views back.
 Minimal account switching, logout, and fullscreen/windowed controls are tracked
-separately in [the settings feature request](https://github.com/camcast3/cindara/issues/27);
-expanded settings categories, input, and appearance preferences remain deferred.
+separately in [the settings feature request](https://github.com/camcast3/cindara/issues/27).
+Settings now includes a controller category for per-device button bindings,
+left-stick dead-zone adjustment, axis inversion, and reset. Appearance preferences
+remain deferred.
 The pre-login **Diagnostics** action and the signed-in Settings category open the
 same full-screen local technical view with sanitized errors and an explicit
 support-bundle preview/export.
@@ -213,8 +230,24 @@ without resetting focus. Input received while the window is inactive is
 discarded; controller input resumes when the window regains focus, and held
 controls must return to neutral after reactivation. Xbox uses
 A/B, PlayStation Cross/Circle, and Nintendo B/A for the same physical
-south/east accept/back positions. Keyboard and mouse remain available without
-a controller.
+south/east accept/back positions by default. Per-device profiles can remap every
+navigation/action button, calibrate the left-stick dead zone, and invert either
+axis; prompts follow the saved physical binding. Profiles use the device serial,
+or its SDL device path when no serial is available, so identical models can have
+separate settings. A path-based profile may need reconfiguration after a port or
+transport change. If neither identity is available, the UI explains that mappings
+last only for that connection; they are not saved or shared with other pads.
+Earlier name-only profile entries are not reused because they cannot identify
+which physical controller owns them. Reconfigure those mappings once.
+Changing/disconnecting the active controller closes an open binding picker.
+Malformed profile files, including null entries, fall back to default mappings
+with a visible configuration warning. Keyboard and mouse remain
+available without a controller.
+
+Windows startup records only whether the previous startup reached a stable UI.
+Two consecutive incomplete starts enable a software-rendered, windowed safe mode;
+`--safe-mode` requests it immediately. Safe mode and recovery-state failures are
+shown in the app and recorded in sanitized local diagnostics.
 
 Credential-bearing requests require HTTPS. Plain HTTP is accepted only for
 loopback development servers.
@@ -251,8 +284,9 @@ Cindara.sln
   hotplug events, D-pad/left-stick navigation, and controller actions across
   Linux, Windows, and macOS.
 
-Xbox-native support is out of scope. A compact Bazzite or SteamOS device
-connected to a TV is the reference ten-foot experience.
+Platform-specific Xbox APIs are out of scope; SDL3 remains the shared controller
+layer. Windows 11 x64 is the first release and stability gate. A compact Bazzite
+or SteamOS device connected to a TV remains the subsequent ten-foot target.
 
 The shared ten-foot visual tokens, reusable Avalonia component styles, viewport
 scaling rules, screen wireframes, and controller focus graphs are documented in
@@ -300,5 +334,6 @@ report. It does not edit code or publish a GitHub review.
 2. Build a ten-foot library browser with complete controller navigation,
    hotplug handling, focus recovery, and controller glyphs.
 3. Negotiate desktop playback through LibVLCSharp or libmpv.
-4. Package and test on Bazzite/SteamOS, including Flatpak and Steam shortcuts.
-5. Add accessibility, localization, and release automation.
+4. Package and stability-test Windows 11 x64 with an MSI and portable ZIP.
+5. Package and test on Bazzite/SteamOS, including Flatpak and Steam shortcuts.
+6. Add accessibility, localization, and release automation.

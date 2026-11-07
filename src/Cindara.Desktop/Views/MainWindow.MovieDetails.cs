@@ -25,10 +25,11 @@ public partial class MainWindow
             RememberDetailsSource();
             _activeMovieDetails = series.Summary;
             SeriesOverview.IsVisible = true;
-            MainSurface.IsEnabled = false;
+            SetBrowseEnabled(false);
             SeriesOverview.ResetPosition();
+            UpdateLayout();
             _navigation.Forget("series-overview");
-            _navigation.SetScope(SeriesOverview, SeriesOverview.BackAction, "series-overview");
+            _navigation.SetScope(ApplicationSurface, SeriesOverview.BackAction, "series-overview");
             await series.OpenAsync(seriesId, item.HeroName);
             return;
         }
@@ -41,10 +42,11 @@ public partial class MainWindow
         RememberDetailsSource();
         _activeMovieDetails = details;
         MovieDetails.IsVisible = true;
-        MainSurface.IsEnabled = false;
+        SetBrowseEnabled(false);
         MovieDetails.ResetPosition();
+        UpdateLayout();
         _navigation.Forget("movie-details");
-        _navigation.SetScope(MovieDetails, MovieDetails.BackAction, "movie-details");
+        _navigation.SetScope(ApplicationSurface, MovieDetails.BackAction, "movie-details");
         await details.OpenAsync(item.Id, item.Name);
     }
 
@@ -143,7 +145,7 @@ public partial class MainWindow
         MovieDetails.IsVisible = false;
         if (SeriesOverview.IsVisible) _viewModel?.SeriesOverview?.Close();
         SeriesOverview.IsVisible = false;
-        MainSurface.IsEnabled = true;
+        SetBrowseEnabled(true);
         var returnFocus = _detailsReturnFocus;
         _detailsReturnFocus = null;
         if (force) return;

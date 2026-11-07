@@ -75,9 +75,16 @@ Controller backend: {8} ({6}, {7} connected)</value></data>
   <data name="Controller.Cross" xml:space="preserve"><value>Cross</value></data>
   <data name="Controller.Circle" xml:space="preserve"><value>Circle</value></data>
   <data name="Controller.Options" xml:space="preserve"><value>Options</value></data>
+  <data name="Controller.Square" xml:space="preserve"><value>Square</value></data>
+  <data name="Controller.Triangle" xml:space="preserve"><value>Triangle</value></data>
   <data name="Controller.South" xml:space="preserve"><value>South</value></data>
   <data name="Controller.East" xml:space="preserve"><value>East</value></data>
+  <data name="Controller.West" xml:space="preserve"><value>West</value></data>
+  <data name="Controller.North" xml:space="preserve"><value>North</value></data>
   <data name="Controller.Start" xml:space="preserve"><value>Start</value></data>
+  <data name="Controller.Select" xml:space="preserve"><value>Select</value></data>
+  <data name="Startup.SafeMode" xml:space="preserve"><value>Safe mode</value></data>
+  <data name="Startup.SafeModeHelp" xml:space="preserve"><value>Safe mode is using software rendering and a desktop window after repeated startup failures. Restart Cindara normally after reviewing diagnostics.</value></data>
   <data name="Format.Session" xml:space="preserve"><value>{0} - {1} ({2})</value></data>
   <data name="Format.Duration.HoursMinutes" xml:space="preserve"><value>{0:0}h {1:0}m</value></data>
   <data name="Format.Duration.Minutes" xml:space="preserve"><value>{0:0}m</value></data>

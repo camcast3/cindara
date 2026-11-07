@@ -7,13 +7,17 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cindara.Desktop.DesignSystem;
+using Cindara.Desktop.Input;
 using Cindara.Desktop.Localization;
+using Cindara.Desktop.Navigation;
 
 namespace Cindara.Desktop.Views;
 
 public partial class ShellView : UserControl
 {
     private readonly Dictionary<string, Control> _contentMemory = [];
+    private readonly Dictionary<string, string> _settingsCategories = [];
+    public DesktopNavigationState Routes { get; } = new();
     private string _destination = "Home";
     private string _settingsCategory = "Preferences";
 
@@ -27,12 +31,23 @@ public partial class ShellView : UserControl
     }
 
     public event EventHandler? DestinationChanged;
+    public event EventHandler? BackRequested;
     public event EventHandler? ExitRequested;
     public event EventHandler? LanguageRequested;
     public event EventHandler? LibraryLayoutRequested;
     public event EventHandler? LibrarySwitcherRequested;
     public event EventHandler? DiagnosticsRequested;
+    public event EventHandler? ControllerDeadZoneDecreaseRequested;
+    public event EventHandler? ControllerDeadZoneIncreaseRequested;
+    public event EventHandler? ControllerInvertHorizontalRequested;
+    public event EventHandler? ControllerInvertVerticalRequested;
+    public event EventHandler? ControllerResetRequested;
+    public event EventHandler<ControllerBindingRequestedEventArgs>? ControllerBindingRequested;
     public string Destination => _destination;
+    public string FocusKey => Routes.FocusKey;
+    public LibraryBrowserView LibraryView => Routes.Primary == PrimaryDestination.Libraries
+        ? SectionLibraryView : DashboardLibraryView;
+    public IEnumerable<LibraryBrowserView> LibraryViews => [DashboardLibraryView, SectionLibraryView];
     public Control? HomeLoadingAction { get; set; }
 
     private bool IsHomeLoading => _destination == "Home"
@@ -43,6 +58,8 @@ public partial class ShellView : UserControl
         "Home" when IsHomeLoading => HomeLoadingAction!,
         "Home" => RetryHomeButton,
         "Settings" => SettingsPreferencesCategory,
+        "LibraryLanding" => LibraryLanding.InitialFocus is { Focusable: true } initial
+            ? initial : DestinationBackButton,
         "Libraries" => LibraryView.IsEffectivelyVisible && LibraryView.InitialFocus != LibraryView
             ? LibraryView.InitialFocus : DestinationBackButton,
         "Search" => SearchView.IsEffectivelyVisible ? SearchView.InitialFocus : DestinationBackButton,
@@ -50,7 +67,7 @@ public partial class ShellView : UserControl
     };
 
     public Control ContentFocus =>
-        _contentMemory.TryGetValue(_destination, out var control)
+        _contentMemory.TryGetValue(FocusKey, out var control)
         && control.IsEffectivelyVisible && control.IsEffectivelyEnabled
             ? control
             : InitialFocus;
@@ -58,21 +75,76 @@ public partial class ShellView : UserControl
     public void Reset()
     {
         _contentMemory.Clear();
-        Navigate("Home");
+        _settingsCategories.Clear();
+        Routes.Reset();
+        LibraryLanding.Reset();
+        ShowSettingsCategory("Preferences");
+        ApplyRoute();
     }
 
     public void Navigate(string destination)
     {
-        if (destination is not ("Home" or "Libraries" or "Search" or "Downloads" or "Settings"))
+        switch (destination)
         {
-            throw new ArgumentOutOfRangeException(nameof(destination));
+            case "Home":
+                Routes.Select(PrimaryDestination.Dashboard);
+                break;
+            case "LibraryLanding":
+                Routes.Select(PrimaryDestination.Libraries);
+                break;
+            case "Favorites":
+                Routes.Select(PrimaryDestination.Favorites);
+                break;
+            case "Libraries":
+                Routes.Push(DesktopPage.LibraryResults);
+                break;
+            case "Search":
+                Routes.Push(DesktopPage.Search);
+                break;
+            case "Settings":
+                Routes.Push(DesktopPage.Settings);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(destination));
         }
 
-        var resetSettingsFocus = destination == "Settings" && _destination != "Settings";
-        if (resetSettingsFocus)
+        ApplyRoute();
+    }
+
+    public bool Back()
+    {
+        if (!Routes.Back())
+            return false;
+        ApplyRoute();
+        return true;
+    }
+
+    private void GoHome()
+    {
+        Routes.GoHome();
+        ApplyRoute();
+    }
+
+    private void ApplyRoute()
+    {
+        DashboardLibraryView.SuspendFocusMemory();
+        SectionLibraryView.SuspendFocusMemory();
+        DashboardLibraryView.IsVisible = Routes.Primary != PrimaryDestination.Libraries;
+        SectionLibraryView.IsVisible = Routes.Primary == PrimaryDestination.Libraries;
+        var destination = Routes.Page switch
         {
-            ShowSettingsCategory("Preferences");
-            _contentMemory["Settings"] = SettingsPreferencesCategory;
+            DesktopPage.Dashboard => "Home",
+            DesktopPage.LibraryLanding => "LibraryLanding",
+            DesktopPage.LibraryResults => "Libraries",
+            DesktopPage.Favorites => "Favorites",
+            DesktopPage.Search => "Search",
+            DesktopPage.Settings => "Settings",
+            _ => throw new InvalidOperationException("Unknown desktop route."),
+        };
+        if (destination == "Settings")
+        {
+            ShowSettingsCategory(_settingsCategories.GetValueOrDefault(FocusKey, "Preferences"));
+            _contentMemory.TryAdd(FocusKey, SettingsPreferencesCategory);
         }
 
         if (destination != "Libraries")
@@ -90,16 +162,19 @@ public partial class ShellView : UserControl
         DestinationBackButton.IsVisible = destination != "Home";
         HomePage.IsVisible = destination == "Home";
         SettingsPage.IsVisible = destination == "Settings";
+        LibraryLanding.IsVisible = destination == "LibraryLanding";
         LibrariesPage.IsVisible = destination == "Libraries";
         SearchPage.IsVisible = destination == "Search";
-        PageScroll.IsVisible = destination is "Home" or "Downloads" or "Settings";
-        PlaceholderPage.IsVisible = destination == "Downloads";
-        DestinationTitle.Text = Loc.Get($"Nav.{destination}");
+        PageScroll.IsVisible = destination is "Home" or "Favorites" or "Settings";
+        PlaceholderPage.IsVisible = destination == "Favorites";
+        DestinationTitle.Text = Loc.Get(destination == "LibraryLanding" ? "Nav.Libraries" : $"Nav.{destination}");
         DestinationTitle.IsVisible = destination != "Libraries";
         LibrarySwitcher.IsVisible = destination == "Libraries";
-        DestinationMessage.Text = destination == "Downloads"
-            ? Loc.Get("Placeholder.Downloads")
-            : string.Empty;
+        DestinationMessage.Text = destination switch
+        {
+            "Favorites" => Loc.Get("Placeholder.Favorites"),
+            _ => string.Empty,
+        };
         DestinationChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -120,6 +195,9 @@ public partial class ShellView : UserControl
         {
             return true;
         }
+
+        if (_destination == "LibraryLanding" && LibraryLanding.TryMove(direction))
+            return true;
 
         if (_destination == "Libraries")
         {
@@ -168,12 +246,13 @@ public partial class ShellView : UserControl
     {
         if (args.Source is Control control && !ReferenceEquals(control, DestinationBackButton))
         {
-            _contentMemory[_destination] = control;
+            _contentMemory[FocusKey] = control;
         }
     }
 
-    private void OnBackClicked(object? sender, RoutedEventArgs args) => Navigate("Home");
-    private void OnHomeClicked(object? sender, RoutedEventArgs args) => Navigate("Home");
+    private void OnBackClicked(object? sender, RoutedEventArgs args) =>
+        BackRequested?.Invoke(this, EventArgs.Empty);
+    private void OnHomeClicked(object? sender, RoutedEventArgs args) => GoHome();
     private void OnExitClicked(object? sender, RoutedEventArgs args) =>
         ExitRequested?.Invoke(this, EventArgs.Empty);
     private void OnLanguageClicked(object? sender, RoutedEventArgs args) =>
@@ -184,6 +263,24 @@ public partial class ShellView : UserControl
         LibrarySwitcherRequested?.Invoke(this, EventArgs.Empty);
     private void OnDiagnosticsClicked(object? sender, RoutedEventArgs args) =>
         DiagnosticsRequested?.Invoke(this, EventArgs.Empty);
+    private void OnControllerDeadZoneDecreaseClicked(object? sender, RoutedEventArgs args) =>
+        ControllerDeadZoneDecreaseRequested?.Invoke(this, EventArgs.Empty);
+    private void OnControllerDeadZoneIncreaseClicked(object? sender, RoutedEventArgs args) =>
+        ControllerDeadZoneIncreaseRequested?.Invoke(this, EventArgs.Empty);
+    private void OnControllerInvertHorizontalClicked(object? sender, RoutedEventArgs args) =>
+        ControllerInvertHorizontalRequested?.Invoke(this, EventArgs.Empty);
+    private void OnControllerInvertVerticalClicked(object? sender, RoutedEventArgs args) =>
+        ControllerInvertVerticalRequested?.Invoke(this, EventArgs.Empty);
+    private void OnControllerResetClicked(object? sender, RoutedEventArgs args) =>
+        ControllerResetRequested?.Invoke(this, EventArgs.Empty);
+    private void OnControllerBindingClicked(object? sender, RoutedEventArgs args)
+    {
+        if (sender is Button { Tag: string actionName }
+            && Enum.TryParse<ControllerAction>(actionName, out var action))
+        {
+            ControllerBindingRequested?.Invoke(this, new ControllerBindingRequestedEventArgs(action));
+        }
+    }
 
     private void OnSettingsCategoryClicked(object? sender, RoutedEventArgs args)
     {
@@ -199,13 +296,17 @@ public partial class ShellView : UserControl
     private void ShowSettingsCategory(string category)
     {
         _settingsCategory = category;
+        if (Routes.Page == DesktopPage.Settings)
+            _settingsCategories[FocusKey] = category;
         SettingsPreferencesPanel.IsVisible = category == "Preferences";
         SettingsLibraryPanel.IsVisible = category == "Library";
         SettingsApplicationPanel.IsVisible = category == "Application";
+        SettingsControlsPanel.IsVisible = category == "Controls";
         SettingsDiagnosticsPanel.IsVisible = category == "Diagnostics";
         SetSelected(SettingsPreferencesCategory, category == "Preferences");
         SetSelected(SettingsLibraryCategory, category == "Library");
         SetSelected(SettingsApplicationCategory, category == "Application");
+        SetSelected(SettingsControlsCategory, category == "Controls");
         SetSelected(SettingsDiagnosticsCategory, category == "Diagnostics");
     }
 
@@ -236,6 +337,9 @@ public partial class ShellView : UserControl
                 return true;
             }
 
+            if (direction == NavigationDirection.Left)
+                return DestinationBackButton.Focus(NavigationMethod.Directional);
+
             return false;
         }
 
@@ -256,12 +360,68 @@ public partial class ShellView : UserControl
         {
             "Library" => SettingsLibraryPanel,
             "Application" => SettingsApplicationPanel,
+            "Controls" => SettingsControlsPanel,
             "Diagnostics" => SettingsDiagnosticsPanel,
             _ => SettingsPreferencesPanel,
         })
         .GetVisualDescendants().OfType<Button>()
         .Where(button => button.IsEffectivelyVisible && button.IsEffectivelyEnabled)
         .ToArray();
+
+    public void UpdateControllerSettings(
+        ControllerInfo? controller,
+        ControllerProfile profile,
+        string? configurationError)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var connected = controller is not null;
+        var layout = controller?.Layout ?? ControllerLayout.Generic;
+        ControllerProfileSummary.Text = connected
+            ? Loc.Format("Controller.ProfileSummary", controller!.Name)
+            : Loc.Get("Controller.NotConnected");
+        if (controller is not null && string.IsNullOrEmpty(controller.PersistentId))
+            ControllerProfileSummary.Text = $"{ControllerProfileSummary.Text} {Loc.Get("Controller.SessionOnly")}";
+        if (!string.IsNullOrWhiteSpace(configurationError))
+        {
+            ControllerProfileSummary.Text = $"{ControllerProfileSummary.Text} {configurationError}";
+        }
+
+        ControllerDeadZoneSummary.Text = Loc.Format(
+            "Controller.DeadZoneSummary",
+            Math.Round(profile.DeadZone / (double)short.MaxValue * 100));
+        ControllerInvertHorizontalButton.Content = Loc.Format(
+            "Controller.InvertHorizontal",
+            Loc.Get(profile.InvertHorizontalAxis ? "State.On" : "State.Off"));
+        ControllerInvertVerticalButton.Content = Loc.Format(
+            "Controller.InvertVertical",
+            Loc.Get(profile.InvertVerticalAxis ? "State.On" : "State.Off"));
+
+        foreach (var (button, action) in ControllerBindingButtons())
+        {
+            button.Content = Loc.Format(
+                "Controller.BindingSummary",
+                Loc.Get($"Controller.Action.{action}"),
+                ControllerGlyphs.GetLabel(layout, action, profile));
+            button.IsEnabled = connected;
+        }
+
+        ControllerDeadZoneDecreaseButton.IsEnabled = connected && profile.DeadZone > ControllerProfile.MinimumDeadZone;
+        ControllerDeadZoneIncreaseButton.IsEnabled = connected && profile.DeadZone < ControllerProfile.MaximumDeadZone;
+        ControllerInvertHorizontalButton.IsEnabled = connected;
+        ControllerInvertVerticalButton.IsEnabled = connected;
+        ControllerResetButton.IsEnabled = connected;
+    }
+
+    private (Button Button, ControllerAction Action)[] ControllerBindingButtons() =>
+    [
+        (ControllerNavigateUpButton, ControllerAction.NavigateUp),
+        (ControllerNavigateDownButton, ControllerAction.NavigateDown),
+        (ControllerNavigateLeftButton, ControllerAction.NavigateLeft),
+        (ControllerNavigateRightButton, ControllerAction.NavigateRight),
+        (ControllerAcceptButton, ControllerAction.Accept),
+        (ControllerBackButton, ControllerAction.Back),
+        (ControllerMenuButton, ControllerAction.Menu),
+    ];
 
     private void UpdateWorkspaceLayout(double width)
     {

@@ -5,6 +5,7 @@ using Cindara.Core.Jellyfin;
 using Cindara.Core.Models;
 using Cindara.Desktop.Libraries;
 using Cindara.Desktop.Localization;
+using Cindara.Desktop.Navigation;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -20,6 +21,18 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly LibraryLayoutSettingsStore? _libraryLayoutStore;
     private AuthenticatedSession? _currentSession;
     private bool _disposed;
+    private readonly Dictionary<PrimaryDestination, LibraryBrowserViewModel> _libraryBrowsers = [];
+
+    public LibraryBrowserViewModel? DashboardLibraryBrowser =>
+        _libraryBrowsers.GetValueOrDefault(PrimaryDestination.Dashboard);
+
+    public LibraryBrowserViewModel? SectionLibraryBrowser =>
+        _libraryBrowsers.GetValueOrDefault(PrimaryDestination.Libraries);
+
+    internal void SelectLibraryBrowser(PrimaryDestination primary)
+    {
+        LibraryBrowser = _libraryBrowsers.GetValueOrDefault(primary);
+    }
 
     public MainViewModel(
         IJellyfinServerClient serverClient,
@@ -476,8 +489,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
             ClearDesignGallery();
             DesignGallery = gallery;
-            LibraryBrowser = new LibraryBrowserViewModel(_mediaPreviewClient, session, home.Libraries,
-                exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
+            foreach (var primary in new[] { PrimaryDestination.Dashboard, PrimaryDestination.Libraries })
+                _libraryBrowsers.Add(primary, new LibraryBrowserViewModel(_mediaPreviewClient, session, home.Libraries,
+                    exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics));
+            OnPropertyChanged(nameof(DashboardLibraryBrowser));
+            OnPropertyChanged(nameof(SectionLibraryBrowser));
+            SelectLibraryBrowser(PrimaryDestination.Dashboard);
             SearchBrowser = new SearchBrowserViewModel(_mediaPreviewClient, session,
                 exception => HandleRejectedMediaSessionAsync(session, exception), _diagnostics);
             MovieDetails = new MediaDetailsViewModel(_mediaPreviewClient, session,
@@ -707,9 +724,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         var gallery = DesignGallery;
         DesignGallery = null;
         gallery?.Dispose();
-        var browser = LibraryBrowser;
         LibraryBrowser = null;
-        browser?.Dispose();
+        foreach (var browser in _libraryBrowsers.Values)
+            browser.Dispose();
+        _libraryBrowsers.Clear();
+        OnPropertyChanged(nameof(DashboardLibraryBrowser));
+        OnPropertyChanged(nameof(SectionLibraryBrowser));
         var search = SearchBrowser;
         SearchBrowser = null;
         search?.Dispose();
@@ -718,7 +738,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private void ApplyMediaUserState(string itemId, MediaUserState state)
     {
         DesignGallery?.ApplyUserState(itemId, state);
-        foreach (var card in (LibraryBrowser?.Items ?? []).Concat(SearchBrowser?.Items ?? [])
+        foreach (var card in _libraryBrowsers.Values.SelectMany(browser => browser.Items).Concat(SearchBrowser?.Items ?? [])
             .Where(card => card.Id == itemId))
         {
             card.ApplyUserState(state);

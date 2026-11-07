@@ -65,7 +65,11 @@ public partial class App : Application
                 sessionStore.Dispose();
             };
 
-            desktop.MainWindow = new MainWindow(new SdlGamepadInputSource(diagnostics), diagnostics: diagnostics)
+            desktop.MainWindow = new MainWindow(
+                new SdlGamepadInputSource(
+                    diagnostics,
+                    new ControllerProfileStore(Path.Combine(applicationData, "controller-profiles.json"))),
+                diagnostics: diagnostics)
             {
                 DataContext = viewModel,
             };

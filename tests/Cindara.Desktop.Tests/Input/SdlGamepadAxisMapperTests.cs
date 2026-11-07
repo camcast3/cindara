@@ -33,4 +33,33 @@ public sealed class SdlGamepadAxisMapperTests
 
         Assert.False(mapped);
     }
+
+    [Fact]
+    public void ProfileAppliesCalibratedDeadZoneAndAxisInversion()
+    {
+        var profile = new ControllerProfile
+        {
+            DeadZone = 10_000,
+            InvertHorizontalAxis = true,
+            InvertVerticalAxis = true,
+        };
+
+        Assert.True(SdlGamepadAxisMapper.TryMap(
+            SDL.GamepadAxis.LeftX,
+            12_000,
+            profile,
+            out var horizontal));
+        Assert.Equal(ControllerAction.NavigateLeft, horizontal);
+        Assert.True(SdlGamepadAxisMapper.TryMap(
+            SDL.GamepadAxis.LeftY,
+            -12_000,
+            profile,
+            out var vertical));
+        Assert.Equal(ControllerAction.NavigateDown, vertical);
+        Assert.False(SdlGamepadAxisMapper.TryMap(
+            SDL.GamepadAxis.LeftX,
+            9_999,
+            profile,
+            out _));
+    }
 }
